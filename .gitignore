@@ -1,0 +1,6 @@
+# Ignore data files
+/data/
+# Ignore compiled files across the repo
+**/__pycache__/
+# Ignore pycharm project files
+/.idea/
