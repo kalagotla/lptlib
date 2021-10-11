@@ -2,9 +2,9 @@
 
 
 def main(grid_file, flow_file):
-    from src.grid_io import GridIO
-    from src.flow_io import FlowIO
-    from src.grid_metrics import GridMetrics
+    from src.grid.io import GridIO
+    from src.flow.io import FlowIO
+    from src.grid.metrics import GridMetrics
 
     # Read-in the data and compute grid metrics
     grid = GridIO(grid_file)
