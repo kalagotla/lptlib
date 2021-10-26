@@ -1,27 +1,48 @@
+# This test is for the search algorithm using plate plot3d data
+
 # TODO: Need to develop this test case for search algorithm
 #  Convert the array data to p3d data. Then implement the search algorithm
+#  Most of the code is copied in Notion under "code samples"
 
-import numpy as np
-import matplotlib.pyplot as plt
+import unittest
 
-x = np.linspace(0, 1, 2)
-y = np.linspace(0, 1, 2)
-z = np.linspace(0, 1, 2)
 
-X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
-C = np.zeros(X.shape)
+class TestSearch(unittest.TestCase):
+    def test_search(self):
+        from src.io.plot3dio import GridIO
+        from src.streamlines.search import Search
 
-fig = plt.figure()
-ax = plt.axes(projection='3d')
-ax.scatter3D(X, Y, Z)
-ax.scatter3D(0.5, 0.75, 0.5, '.r')
-plt.grid()
-plt.show()
+        # Read the grid data
+        grid = GridIO('../data/plate_data/plate.sp.x')
+        grid.read_grid()
 
-K = np.array((X, Y))
-dist = np.sqrt((K[0, ...] - 2.5) ** 2 +
-               (K[1, ...] - 1.25) ** 2)
-print(X.shape)
-print(K.shape)
-print(dist)
-print(divmod(dist.argmin(), dist.shape[1]))
+        # Start test for search algorithm
+        # Check if distance and neighbors are working fine
+        idx = Search(grid, [8.5, 0.5, 0.01])
+        idx.compute()
+        self.assertEqual(idx.cell.shape, (8, 3))
+        self.assertEqual(idx.info, None)
+        # Check for out of domain point
+        idx = Search(grid, [-10, 0.5, 0.01])
+        idx.compute()
+        self.assertEqual(idx.cell, None)
+        self.assertEqual(idx.info,
+                         'Given point is not in the domain. The cell attribute will return "None"\n')
+        # Check for on the node case
+        # Used a Node from grid numbering
+        idx = Search(grid, grid.grd[0, 0, 0, :])
+        idx.compute()
+        self.assertEqual(idx.info, 'Given point is a node in the domain with a tol of 1e-6.\n'
+                                   'Interpolation will assign node properties for integration.\n'
+                                   'One of the surrounding cell nodes will be returned by cell attribute\n')
+        # Check for on the boundary case
+        # Point is created by averaging neighboring nodes
+        idx = Search(grid, [sum(grid.grd[0:2, 0, 0, 0]) / 2, grid.grd[0, 0, 0, 1], grid.grd[0, 0, 0, 2]])
+        idx.compute()
+        self.assertEqual(idx.info, 'Given point is on a boundary of the cell with a tol of 1e-6.\n'
+                                   'Interpolation will take care of properties for integration.\n'
+                                   'One of the surrounding cell nodes will be returned by cell attribute\n')
+
+
+if __name__ == '__main__':
+    unittest.main()

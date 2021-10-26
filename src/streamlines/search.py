@@ -21,6 +21,8 @@ class Search:
             Indices of closest node to the given point
         cell: numpy.ndarray
             Indices of the cell in which the given point is present
+        info: str
+            Information about the point location
 
     Methods
     -------
@@ -45,10 +47,11 @@ class Search:
         self.point = point
         self.index = None
         self.cell = None
+        self.info = None
 
     def __str__(self):
-        doc = "This instance takes in the grid of shape " + self.grid.grd.shape + "\n" \
-              "and the searches for the point " + self.point + " in the grid. \n" \
+        doc = "This instance takes in the grid of shape " + self.grid.grd.shape + \
+              "\nand the searches for the point " + self.point + " in the grid.\n" \
               "Use method 'compute' to find (attributes) the closest 'index' and the nodes of the 'cell'.\n"
         return doc
 
@@ -66,17 +69,18 @@ class Search:
         """
 
         # Compute the distance from all nodes in the grid
-        dist = np.sqrt((self.grid.grd[..., 0] - self.point[0]) ** 2 +
-                       (self.grid.grd[..., 1] - self.point[1]) ** 2 +
-                       (self.grid.grd[..., 2] - self.point[2]) ** 2)
+        _dist = np.sqrt((self.grid.grd[..., 0] - self.point[0]) ** 2 +
+                        (self.grid.grd[..., 1] - self.point[1]) ** 2 +
+                        (self.grid.grd[..., 2] - self.point[2]) ** 2)
 
         # Find the closest node to the point
-        self.index = np.array(np.unravel_index(dist.argmin(), dist.shape))
+        self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
 
         # Find if the given point is in the domain
         for i in range(3):
             if not self.grid.grd[..., i].min() <= self.point[i] <= self.grid.grd[..., i].max():
-                print('Given point is not in the domain. The neighbors method will return "None"\n')
+                self.info = 'Given point is not in the domain. The cell attribute will return "None"\n'
+                print(self.info)
                 return
 
         # Look for neighboring nodes
@@ -98,43 +102,45 @@ class Search:
         # Transform to found node to find the location of point
         # Basically looking at which quadrant the point is located
         # to find the nodes of the respective cell
-        point_trans = self.point - _node
+        _point_transform = self.point - _node
         # Check if point is a node in the domain
-        if np.all(abs(point_trans) <= 1e-6):
+        if np.all(abs(_point_transform) <= 1e-6):
             self.cell = _cell_nodes(i, j, k)
-            print('Given point is a node in the domain with a tol of 1e-6.\n'
-                  'Interpolation will assign node properties for integration.\n'
-                  'One of the surrounding cell nodes will be returned by cell attribute\n')
+            self.info = 'Given point is a node in the domain with a tol of 1e-6.\n' \
+                        'Interpolation will assign node properties for integration.\n' \
+                        'One of the surrounding cell nodes will be returned by cell attribute\n'
+            print(self.info)
             return
         # Check if point is on the boundary of a cell
-        if np.any(abs(point_trans) <= 1e-6):
+        if np.any(abs(_point_transform) <= 1e-6):
             self.cell = _cell_nodes(i, j, k)
-            print('Given point is on a boundary of the cell with a tol of 1e-6.\n'
-                  'Interpolation will take care of properties for integration.\n'
-                  'One of the surrounding cell nodes will be returned by cell attribute\n')
+            self.info = 'Given point is on a boundary of the cell with a tol of 1e-6.\n' \
+                        'Interpolation will take care of properties for integration.\n' \
+                        'One of the surrounding cell nodes will be returned by cell attribute\n'
+            print(self.info)
             return
         # Start the main cell modes code
-        if np.all(point_trans) > 0:
+        if np.all(_point_transform) > 0:
             self.cell = _cell_nodes(i, j, k)
             return
-        if point_trans[0] < 0 and point_trans[1] > 0 and point_trans[2] > 0:
+        if _point_transform[0] < 0 and _point_transform[1] > 0 and _point_transform[2] > 0:
             self.cell = _cell_nodes(i - 1, j, k)
             return
-        if point_trans[0] < 0 and point_trans[1] < 0 and point_trans[2] > 0:
+        if _point_transform[0] < 0 and _point_transform[1] < 0 and _point_transform[2] > 0:
             self.cell = _cell_nodes(i - 1, j - 1, k)
             return
-        if point_trans[0] > 0 and point_trans[1] < 0 and point_trans[2] > 0:
+        if _point_transform[0] > 0 and _point_transform[1] < 0 and _point_transform[2] > 0:
             self.cell = _cell_nodes(i, j - 1, k)
             return
-        if point_trans[0] > 0 and point_trans[1] > 0 and point_trans[2] < 0:
+        if _point_transform[0] > 0 and _point_transform[1] > 0 and _point_transform[2] < 0:
             self.cell = _cell_nodes(i, j, k - 1)
             return
-        if point_trans[0] < 0 and point_trans[1] > 0 and point_trans[2] < 0:
+        if _point_transform[0] < 0 and _point_transform[1] > 0 and _point_transform[2] < 0:
             self.cell = _cell_nodes(i - 1, j, k - 1)
             return
-        if np.all(point_trans) < 0:
+        if np.all(_point_transform) < 0:
             self.cell = _cell_nodes(i - 1, j - 1, k - 1)
             return
-        if point_trans[0] > 0 and point_trans[1] < 0 and point_trans[2] < 0:
+        if _point_transform[0] > 0 and _point_transform[1] < 0 and _point_transform[2] < 0:
             self.cell = _cell_nodes(i, j - 1, k - 1)
             return

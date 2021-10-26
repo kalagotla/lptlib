@@ -1,9 +1,8 @@
 # This test case is for plate data plot3d file
+# TODO: Add the docstring test
 
 import unittest
 import doctest
-
-# TODO: Add the docstring test
 
 
 class TestIO(unittest.TestCase):
