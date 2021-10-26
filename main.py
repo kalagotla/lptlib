@@ -1,11 +1,14 @@
 # This is the main script. Run this and follow the steps
+# TODO: Use this to guide a user
+#  Ask for the filename, what to do? like get streamline data
+#  or compute some properties etc...
 
 
 def main(grid_file, flow_file):
-    from src.grid.io import GridIO
-    from src.flow.io import FlowIO
-    from src.grid.metrics import GridMetrics
-    from src.grid.search import Search
+    from src.io.plot3dio import GridIO
+    from src.io.plot3dio import FlowIO
+    from src.function.metrics import GridMetrics
+    from src.streamlines.search import Search
 
     # Read-in the data and compute grid metrics
     grid = GridIO(grid_file)

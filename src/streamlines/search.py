@@ -1,11 +1,31 @@
+# This file searches for the cell in which the given point is present in the grid
+# TODO: Implement KDTree or interpolation search for faster times
+
 import numpy as np
 
 
 class Search:
     """Module to search for the cell in which the given point is present
 
-        author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
-        date: 10-24/2021
+    ...
+
+    Attributes
+    ----------
+    Input :
+        grid : src.io.plot3dio.GridIO
+            Grid object created from GridIO
+        point: list
+            A float list of shape 3 -- Representing x, y, z of a point
+    Output :
+        index: numpy.ndarray
+            Indices of closest node to the given point
+        cell: numpy.ndarray
+            Indices of the cell in which the given point is present
+
+    Methods
+    -------
+    read_grid()
+        returns the output attributes
 
         Example:
             grid = GridIO('plate.sp.x')  # Assume file is in the path
@@ -15,6 +35,9 @@ class Search:
             # Instance attributes
             print(nodes.index)  # closest node in the grid to the given point
             print(nodes.cell)  # prints the nodes of the cell
+
+        author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
+        date: 10-24/2021
         """
 
     def __init__(self, grid, point):
@@ -24,15 +47,24 @@ class Search:
         self.cell = None
 
     def __str__(self):
-        doc = "This instance takes in the grid of shape " + self.grid.grd.shape + "\n" + \
-              "and the searches for the point " + self.point + " in the grid. \n" + \
-              "Use 'compute' method to find the closest 'index' and the nodes of the 'cell'."
+        doc = "This instance takes in the grid of shape " + self.grid.grd.shape + "\n" \
+              "and the searches for the point " + self.point + " in the grid. \n" \
+              "Use method 'compute' to find (attributes) the closest 'index' and the nodes of the 'cell'.\n"
         return doc
 
-    # TODO: Implement KDTree or interpolation search for faster times
-
     def compute(self):
-        # def distance(self):
+        """
+        Use the method to compute index and cell attributes
+
+        :parameter:
+
+        :return:
+        None
+
+        author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
+        date: 10-24/2021
+        """
+
         # Compute the distance from all nodes in the grid
         dist = np.sqrt((self.grid.grd[..., 0] - self.point[0]) ** 2 +
                        (self.grid.grd[..., 1] - self.point[1]) ** 2 +
@@ -41,11 +73,10 @@ class Search:
         # Find the closest node to the point
         self.index = np.array(np.unravel_index(dist.argmin(), dist.shape))
 
-        # def neighbors(self):
         # Find if the given point is in the domain
         for i in range(3):
             if not self.grid.grd[..., i].min() <= self.point[i] <= self.grid.grd[..., i].max():
-                print('Given point is not in the domain. The neighbors method will return "None"')
+                print('Given point is not in the domain. The neighbors method will return "None"\n')
                 return
 
         # Look for neighboring nodes
@@ -73,14 +104,14 @@ class Search:
             self.cell = _cell_nodes(i, j, k)
             print('Given point is a node in the domain with a tol of 1e-6.\n'
                   'Interpolation will assign node properties for integration.\n'
-                  'One of the surrounding cell nodes will be returned by cell attribute')
+                  'One of the surrounding cell nodes will be returned by cell attribute\n')
             return
         # Check if point is on the boundary of a cell
         if np.any(abs(point_trans) <= 1e-6):
             self.cell = _cell_nodes(i, j, k)
             print('Given point is on a boundary of the cell with a tol of 1e-6.\n'
                   'Interpolation will take care of properties for integration.\n'
-                  'One of the surrounding cell nodes will be returned by cell attribute')
+                  'One of the surrounding cell nodes will be returned by cell attribute\n')
             return
         # Start the main cell modes code
         if np.all(point_trans) > 0:
