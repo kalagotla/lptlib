@@ -120,7 +120,7 @@ class Search:
             print(self.info)
             return
         # Start the main cell modes code
-        if np.all(_point_transform) > 0:
+        if np.all(_point_transform > 0):
             self.cell = _cell_nodes(i, j, k)
             return
         if _point_transform[0] < 0 and _point_transform[1] > 0 and _point_transform[2] > 0:
@@ -138,7 +138,7 @@ class Search:
         if _point_transform[0] < 0 and _point_transform[1] > 0 and _point_transform[2] < 0:
             self.cell = _cell_nodes(i - 1, j, k - 1)
             return
-        if np.all(_point_transform) < 0:
+        if np.all(_point_transform < 0):
             self.cell = _cell_nodes(i - 1, j - 1, k - 1)
             return
         if _point_transform[0] > 0 and _point_transform[1] < 0 and _point_transform[2] < 0:
