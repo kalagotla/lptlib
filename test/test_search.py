@@ -34,14 +34,13 @@ class TestSearch(unittest.TestCase):
         idx.compute()
         self.assertEqual(idx.info, 'Given point is a node in the domain with a tol of 1e-6.\n'
                                    'Interpolation will assign node properties for integration.\n'
-                                   'One of the surrounding cell nodes will be returned by cell attribute\n')
+                                   'Index of the node will be returned by cell attribute\n')
         # Check for on the boundary case
         # Point is created by averaging neighboring nodes
         idx = Search(grid, [sum(grid.grd[0:2, 0, 0, 0]) / 2, grid.grd[0, 0, 0, 1], grid.grd[0, 0, 0, 2]])
         idx.compute()
-        self.assertEqual(idx.info, 'Given point is on a boundary of the cell with a tol of 1e-6.\n'
-                                   'Interpolation will take care of properties for integration.\n'
-                                   'One of the surrounding cell nodes will be returned by cell attribute\n')
+        self.assertEqual(idx.cell.shape, (8, 3))
+        self.assertEqual(idx.info, None)
 
 
 if __name__ == '__main__':

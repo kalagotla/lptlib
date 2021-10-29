@@ -108,39 +108,33 @@ class Search:
             self.cell = _cell_nodes(i, j, k)
             self.info = 'Given point is a node in the domain with a tol of 1e-6.\n' \
                         'Interpolation will assign node properties for integration.\n' \
-                        'One of the surrounding cell nodes will be returned by cell attribute\n'
+                        'Index of the node will be returned by cell attribute\n'
             print(self.info)
             return
-        # Check if point is on the boundary of a cell
-        if np.any(abs(_point_transform) <= 1e-6):
-            self.cell = _cell_nodes(i, j, k)
-            self.info = 'Given point is on a boundary of the cell with a tol of 1e-6.\n' \
-                        'Interpolation will take care of properties for integration.\n' \
-                        'One of the surrounding cell nodes will be returned by cell attribute\n'
-            print(self.info)
-            return
+        # ON BOUNDARY FOR A GENERALIZED HEXA IS SAME AS DEFAULT SEARCH
+        # Removed the code for on the boundary case
         # Start the main cell modes code
-        if np.all(_point_transform > 0):
+        if np.all(_point_transform >= 0):
             self.cell = _cell_nodes(i, j, k)
             return
-        if _point_transform[0] < 0 and _point_transform[1] > 0 and _point_transform[2] > 0:
+        if _point_transform[0] <= 0 and _point_transform[1] >= 0 and _point_transform[2] >= 0:
             self.cell = _cell_nodes(i - 1, j, k)
             return
-        if _point_transform[0] < 0 and _point_transform[1] < 0 and _point_transform[2] > 0:
+        if _point_transform[0] <= 0 and _point_transform[1] <= 0 and _point_transform[2] >= 0:
             self.cell = _cell_nodes(i - 1, j - 1, k)
             return
-        if _point_transform[0] > 0 and _point_transform[1] < 0 and _point_transform[2] > 0:
+        if _point_transform[0] >= 0 and _point_transform[1] <= 0 and _point_transform[2] >= 0:
             self.cell = _cell_nodes(i, j - 1, k)
             return
-        if _point_transform[0] > 0 and _point_transform[1] > 0 and _point_transform[2] < 0:
+        if _point_transform[0] >= 0 and _point_transform[1] >= 0 and _point_transform[2] <= 0:
             self.cell = _cell_nodes(i, j, k - 1)
             return
-        if _point_transform[0] < 0 and _point_transform[1] > 0 and _point_transform[2] < 0:
+        if _point_transform[0] <= 0 and _point_transform[1] >= 0 and _point_transform[2] <= 0:
             self.cell = _cell_nodes(i - 1, j, k - 1)
             return
-        if np.all(_point_transform < 0):
+        if np.all(_point_transform <= 0):
             self.cell = _cell_nodes(i - 1, j - 1, k - 1)
             return
-        if _point_transform[0] > 0 and _point_transform[1] < 0 and _point_transform[2] < 0:
+        if _point_transform[0] >= 0 and _point_transform[1] <= 0 and _point_transform[2] <= 0:
             self.cell = _cell_nodes(i, j - 1, k - 1)
             return
