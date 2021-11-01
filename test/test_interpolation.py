@@ -20,7 +20,10 @@ class TestInterpolation(unittest.TestCase):
         idx.compute()
         point_data.compute()
 
-        print(point_data.q)
+        self.assertEqual(
+            sum(abs(point_data.q - [9.99767442e-01, 1.02352604e-01, -5.38538464e-06, 6.40554753e-09, 1.79096631e+00]))
+            <= 1e-6,
+            True)
 
 
 if __name__ == '__main__':

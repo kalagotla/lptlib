@@ -21,6 +21,10 @@ class Interpolation:
     Output:
         q : ndarray
             Interpolated data at the given point
+        ng, ni, nj, nk: int
+            Dimensionless data from flow
+        mach, alpha, rey, time: float
+            Dimensionless data from flow
 
     Methods
     -------
@@ -47,8 +51,16 @@ class Interpolation:
         self.flow = flow
         self.idx = idx
         self.q = None
+        self.ng = None
+        self.ni, self.nj, self.nk = [None] * 3
+        self.mach, self.alpha, self.rey, self.time = [None] * 4
 
     def compute(self, method='linear'):
+
+        # Assign data from q file to keep the format for further computations
+        self.ng = self.flow.ng
+        self.ni, self.nj, self.nk = self.flow.ni, self.flow.nj, self.flow.nk
+        self.mach, self.alpha, self.rey, self.time = self.flow.mach, self.flow.alpha, self.flow.rey, self.flow.time
 
         # If out of domain return
         if self.idx.info == 'Given point is not in the domain. The cell attribute will return "None"\n':
