@@ -16,7 +16,7 @@ class TestIO(unittest.TestCase):
         grid.read_grid()
 
         # Simple assertion to test the import
-        self.assertEqual(grid.grd.shape, (grid.ni, grid.nj, grid.nk, 3))
+        self.assertEqual(grid.grd.shape, (grid.ni, grid.nj, grid.nk, 3, 1))
 
         return
 
@@ -30,7 +30,7 @@ class TestIO(unittest.TestCase):
         flow.read_flow()
 
         # Simple assertion to test the import
-        self.assertEqual(flow.q.shape, (flow.ni, flow.nj, flow.nk, 5))
+        self.assertEqual(flow.q.shape, (flow.ni, flow.nj, flow.nk, 5, 1))
 
 
 if __name__ == '__main__':

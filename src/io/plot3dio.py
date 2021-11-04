@@ -17,12 +17,12 @@ class GridIO:
         filename : str
             name of the grid file
     Output :
-        ng : int
-            number of domains in the grid
+        nb : int
+            number of blocks in the grid
         ni, nj, nk : int
             shape of the domain
         grd : numpy.ndarray
-            Grid data of shape (ni, nj, nk, 3)
+            Grid data of shape (ni, nj, nk, 3, nb)
 
     Methods
     -------
@@ -35,7 +35,7 @@ class GridIO:
         print(grid)  # prints the docstring for grid
         # Instance attributes
         print(grid.grd.shape)  # shape of the grid data
-        print(grid.ng)  # Number of blocks
+        print(grid.nb)  # Number of blocks
 
     author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
     date: 10-05/2021
@@ -43,14 +43,14 @@ class GridIO:
 
     def __init__(self, filename):
         self.filename = filename
-        self.ng = None
+        self.nb = None
         self.ni, self.nj, self.nk = None, None, None
         self.grd = None
 
     def __str__(self):
         doc = "This instance has the filename " + self.filename + "\n" + \
-              "grd attribute is of shape (ni, nj, nk, 3), rows representing x,y,z coordinates\n" \
-              "For example, x = grid.grd(...,0), grid being the object.\n" \
+              "grd attribute is of shape (ni, nj, nk, 3, nb), rows representing x,y,z coordinates for each block\n" \
+              "For example, x = grid.grd(...,0, 0), grid being the object.\n" \
               "Use method 'read_grid' to compute attributes:\n" \
               "ni, nj, nk, ng\n" \
               "grd -- The grid data\n"
@@ -66,26 +66,33 @@ class GridIO:
 
         author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
         credit: Paul Orkwis
-        date: 10-05/2021
+        date: 11-04/2021
         """
         with open(self.filename, 'r') as grid:
-            # Number of blocks
-            self.ng = np.fromfile(grid, dtype='i4', count=1)[0]
+            # Read-in number of blocks
+            self.nb = np.fromfile(grid, dtype='i4', count=1)[0]
 
-            # Should be looped for multiple blocks
-            # ni, nj, nk values for one block
-            self.ni, self.nj, self.nk = np.fromfile(grid, dtype='i4', count=3)
+            # Read-in i, j, k for all blocks
+            _temp = np.fromfile(grid, dtype='i4', count=3*self.nb)
+            self.ni, self.nj, self.nk = _temp[0::3], _temp[1::3], _temp[2::3]
 
-            # Read-in grid data
-            self.grd = np.zeros((self.ni, self.nj, self.nk, 3))
+            # length of grd data
+            _nt = self.ni * self.nj * self.nk * 3
+            # read the grd data from file to temp_array
+            _temp = np.fromfile(grid, dtype='f4', count=sum(_nt))
 
-            # These loops cannot be avoided due to fortran file formatting
-            # This is where the read-in is slow
-            # Could be made faster using hdf/cgns formats
-            for m in range(3):
-                for k in range(self.nk):
-                    for j in range(self.nj):
-                        self.grd[:, j, k, m] = np.fromfile(grid, dtype='f4', count=self.ni)
+            # read-in the first block
+            self.grd = _temp[0:_nt[0]].reshape((self.ni[0], self.nj[0], self.nk[0], 3, 1), order='F')
+            # pad the data for concatenate
+            _pad_i, _pad_j, _pad_k = max(self.ni) - self.ni, max(self.nj) - self.nj, max(self.nj) - self.nj
+            self.grd = np.pad(self.grd, [(0, _pad_i[0]), (0, _pad_j[0]), (0, _pad_k[0]), (0, 0), (0, 0)],
+                              mode='constant')
+            # Assign rest of the blocks to q; pad them; and concatenate
+            for _i in range(1, self.nb):
+                _temp1 = _temp[_nt[_i-1]:_nt[_i]].reshape((self.ni[_i], self.nj[_i], self.nk[_i], 3, 1), order='F')
+                _temp1 = np.pad(_temp1, [(0, _pad_i[_i]), (0, _pad_j[_i]), (0, _pad_k[_i]), (0, 0), (0, 0)],
+                                mode='constant')
+                self.grd = np.concatenate((self.grd, _temp1), axis=0)
 
             print("Grid data reading is successful for " + self.filename + "\n")
 
@@ -101,14 +108,14 @@ class FlowIO:
         filename : str
             name of the flow file
     Output :
-        ng : int
-            number of domains in the grid
+        nb : int
+            number of blocks in the grid
         ni, nj, nk : int
             shape of the domain
         mach, alpha, rey, time: float
             extra numerics needed for post-processing
         q : numpy.ndarray
-            Flow data of shape (ni, nj, nk, 5)
+            Flow data of shape (ni, nj, nk, 5, nb)
 
     Methods
     -------
@@ -130,7 +137,7 @@ class FlowIO:
 
     def __init__(self, filename):
         self.filename = filename
-        self.ng = None
+        self.nb = None
         self.ni, self.nj, self.nk = None, None, None
         self.mach = None
         self.alpha = None
@@ -140,10 +147,11 @@ class FlowIO:
 
     def __str__(self):
         doc = "This instance has the filename " + self.filename + "\n" + \
-              "q attribute is of shape (ni, nj, nk, 5), rows representing density, momentum[*3], energy\n" \
-              "For example, rho = flow.q(...,0), flow being the object.\n" \
+              "q attribute is of shape (ni, nj, nk, 5, nb), rows representing density, momentum[*3], energy" \
+              "for every block\n" \
+              "For example, rho = flow.q(...,0,0), flow being the object for block-1.\n" \
               "Use method 'read_flow' to compute attributes:\n" \
-              "ng, ni, nj, nk\n" \
+              "nb, ni, nj, nk\n" \
               "mach, alpha, rey, time\n" \
               "q -- The flow data\n"
         return doc
@@ -163,19 +171,41 @@ class FlowIO:
         date: 10-05/2021
         """
         with open(self.filename, 'r') as data:
-            self.ng = np.fromfile(data, dtype='i4', count=1)[0]
+            self.nb = np.fromfile(data, dtype='i4', count=1)[0]
 
-            # Should be looped for multiple blocks
-            self.ni, self.nj, self.nk = np.fromfile(data, dtype='i4', count=3)
+            # Read in the i, j, k values for blocks
+            _temp = np.fromfile(data, dtype='i4', count=3*self.nb)
+            self.ni, self.nj, self.nk = _temp[0::3], _temp[1::3], _temp[2::3]
 
-            self.mach, self.alpha, self.rey, self.time = np.fromfile(data, dtype='f4', count=4)
+            # Read-in flow data into a temp array
+            # Less use of fromfile is more speed
+            _nt = self.ni * self.nj * self.nk * 5
+            _temp = np.fromfile(data, dtype='f4', count=sum(_nt) + 4*self.nb)
 
-            # Read-in flow data
-            self.q = np.zeros((self.ni, self.nj, self.nk, 5))
+            # Create a mask to remove dimensionless quantities from q
+            # Indices of the first four dimensionless quantities
+            _index_array = np.array([0, 1, 2, 3])
+            for i in range(len(_nt)-1):
+                _term = sum(_temp[0:i]) + (i+1)*4
+                _index_array = np.concatenate((_index_array, np.arange(_term, _term+4)))
+            _mask = np.ones(len(_temp), dtype='bool')
+            _mask[_index_array] = 0
+            # Use the mask to remove dimensionless quantities
+            _temp = _temp[_mask]
 
-            for m in range(5):
-                for k in range(self.nk):
-                    for j in range(self.nj):
-                        self.q[:, j, k, m] = np.fromfile(data, dtype='f4', count=self.ni)
+            # Assign the dimensionless attributes
+            self.mach, self.alpha, self.rey, self.time = _temp[0:4]
+            # Reshape the read array to (ni, nj, nk, 5, nb)
+            # Assign first block to q
+            self.q = _temp[0:_nt[0]].reshape((self.ni[0], self.nj[0], self.nk[0], 5, 1), order='F')
+            # Pad the first block to concatenate
+            _pad_i, _pad_j, _pad_k = max(self.ni) - self.ni, max(self.nj) - self.nj, max(self.nj) - self.nj
+            self.q = np.pad(self.q, [(0, _pad_i[0]), (0, _pad_j[0]), (0, _pad_k[0]), (0, 0), (0, 0)], mode='constant')
+            # Assign rest of the blocks to q; pad them; and concatenate
+            for _i in range(1, self.nb):
+                _temp1 = _temp[_nt[_i - 1]:_nt[_i]].reshape((self.ni[_i], self.nj[_i], self.nk[_i], 5, 1), order='F')
+                _temp1 = np.pad(_temp1, [(0, _pad_i[_i]), (0, _pad_j[_i]), (0, _pad_k[_i]), (0, 0), (0, 0)],
+                                mode='constant')
+                self.q = np.concatenate((self.q, _temp1), axis=-1)
 
             print("Flow data reading is successful for " + self.filename + "\n")
