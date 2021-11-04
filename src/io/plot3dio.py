@@ -84,15 +84,16 @@ class GridIO:
             # read-in the first block
             self.grd = _temp[0:_nt[0]].reshape((self.ni[0], self.nj[0], self.nk[0], 3, 1), order='F')
             # pad the data for concatenate
-            _pad_i, _pad_j, _pad_k = max(self.ni) - self.ni, max(self.nj) - self.nj, max(self.nj) - self.nj
+            _pad_i, _pad_j, _pad_k = max(self.ni) - self.ni, max(self.nj) - self.nj, max(self.nk) - self.nk
             self.grd = np.pad(self.grd, [(0, _pad_i[0]), (0, _pad_j[0]), (0, _pad_k[0]), (0, 0), (0, 0)],
                               mode='constant')
             # Assign rest of the blocks to q; pad them; and concatenate
             for _i in range(1, self.nb):
-                _temp1 = _temp[_nt[_i-1]:_nt[_i]].reshape((self.ni[_i], self.nj[_i], self.nk[_i], 3, 1), order='F')
+                _temp1 = _temp[sum(_nt[0:_i]):sum(_nt[0:_i])+_nt[_i]]\
+                    .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 3, 1), order='F')
                 _temp1 = np.pad(_temp1, [(0, _pad_i[_i]), (0, _pad_j[_i]), (0, _pad_k[_i]), (0, 0), (0, 0)],
                                 mode='constant')
-                self.grd = np.concatenate((self.grd, _temp1), axis=0)
+                self.grd = np.concatenate((self.grd, _temp1), axis=-1)
 
             print("Grid data reading is successful for " + self.filename + "\n")
 
@@ -199,11 +200,12 @@ class FlowIO:
             # Assign first block to q
             self.q = _temp[0:_nt[0]].reshape((self.ni[0], self.nj[0], self.nk[0], 5, 1), order='F')
             # Pad the first block to concatenate
-            _pad_i, _pad_j, _pad_k = max(self.ni) - self.ni, max(self.nj) - self.nj, max(self.nj) - self.nj
+            _pad_i, _pad_j, _pad_k = max(self.ni) - self.ni, max(self.nj) - self.nj, max(self.nk) - self.nk
             self.q = np.pad(self.q, [(0, _pad_i[0]), (0, _pad_j[0]), (0, _pad_k[0]), (0, 0), (0, 0)], mode='constant')
             # Assign rest of the blocks to q; pad them; and concatenate
             for _i in range(1, self.nb):
-                _temp1 = _temp[_nt[_i - 1]:_nt[_i]].reshape((self.ni[_i], self.nj[_i], self.nk[_i], 5, 1), order='F')
+                _temp1 = _temp[sum(_nt[0:_i]):sum(_nt[0:_i])+_nt[_i]]\
+                    .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 5, 1), order='F')
                 _temp1 = np.pad(_temp1, [(0, _pad_i[_i]), (0, _pad_j[_i]), (0, _pad_k[_i]), (0, 0), (0, 0)],
                                 mode='constant')
                 self.q = np.concatenate((self.q, _temp1), axis=-1)
