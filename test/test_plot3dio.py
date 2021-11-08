@@ -58,7 +58,7 @@ class TestIO(unittest.TestCase):
         from src.io.plot3dio import GridIO
 
         # Testing with a multi-block plate grid
-        grid = GridIO('../data/multi_block/plate/plate.mb.x')
+        grid = GridIO('../data/multi_block/plate/plate.mb.dp.x')
         # Print the doc string
         print(grid)
         grid.read_grid(data_type='f8')

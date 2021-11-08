@@ -196,8 +196,8 @@ class FlowIO:
             self.q = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), 5, self.nb))
 
             # Reshape and assign data to q
-            for _i in range(1, self.nb):
-                self.q[self.ni[_i], self.nj[_i], self.nk[_i], 5, _i] = \
+            for _i in range(self.nb):
+                self.q[0:self.ni[_i], 0:self.nj[_i], 0:self.nk[_i], 0:5, _i] = \
                     _temp[sum(_nt[0:_i]):sum(_nt[0:_i]) + _nt[_i]] \
                     .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 5), order='F')
 
