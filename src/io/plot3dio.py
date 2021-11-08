@@ -73,7 +73,7 @@ class GridIO:
             self.nb = np.fromfile(grid, dtype='i4', count=1)[0]
 
             # Read-in i, j, k for all blocks
-            _temp = np.fromfile(grid, dtype='i4', count=3*self.nb)
+            _temp = np.fromfile(grid, dtype='i4', count=3 * self.nb)
             self.ni, self.nj, self.nk = _temp[0::3], _temp[1::3], _temp[2::3]
 
             # length of grd data
@@ -81,19 +81,14 @@ class GridIO:
             # read the grd data from file to temp_array
             _temp = np.fromfile(grid, dtype=data_type, count=sum(_nt))
 
-            # read-in the first block
-            self.grd = _temp[0:_nt[0]].reshape((self.ni[0], self.nj[0], self.nk[0], 3, 1), order='F')
-            # pad the data for concatenate
-            _pad_i, _pad_j, _pad_k = max(self.ni) - self.ni, max(self.nj) - self.nj, max(self.nk) - self.nk
-            self.grd = np.pad(self.grd, [(0, _pad_i[0]), (0, _pad_j[0]), (0, _pad_k[0]), (0, 0), (0, 0)],
-                              mode='constant')
-            # Assign rest of the blocks to q; pad them; and concatenate
-            for _i in range(1, self.nb):
-                _temp1 = _temp[sum(_nt[0:_i]):sum(_nt[0:_i])+_nt[_i]]\
-                    .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 3, 1), order='F')
-                _temp1 = np.pad(_temp1, [(0, _pad_i[_i]), (0, _pad_j[_i]), (0, _pad_k[_i]), (0, 0), (0, 0)],
-                                mode='constant')
-                self.grd = np.concatenate((self.grd, _temp1), axis=-1)
+            # pre-define grd to reduce calling pad and concatenate
+            self.grd = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), 3, self.nb))
+
+            # Reshape and assign data to grd
+            for _i in range(self.nb):
+                self.grd[0:self.ni[_i], 0:self.nj[_i], 0:self.nk[_i], 0:3, _i] = \
+                    _temp[sum(_nt[0:_i]):sum(_nt[0:_i]) + _nt[_i]] \
+                    .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 3), order='F')
 
             print("Grid data reading is successful for " + self.filename + "\n")
 
@@ -175,20 +170,20 @@ class FlowIO:
             self.nb = np.fromfile(data, dtype='i4', count=1)[0]
 
             # Read in the i, j, k values for blocks
-            _temp = np.fromfile(data, dtype='i4', count=3*self.nb)
+            _temp = np.fromfile(data, dtype='i4', count=3 * self.nb)
             self.ni, self.nj, self.nk = _temp[0::3], _temp[1::3], _temp[2::3]
 
             # Read-in flow data into a temp array
             # Less use of fromfile is more speed
             _nt = self.ni * self.nj * self.nk * 5
-            _temp = np.fromfile(data, dtype=data_type, count=sum(_nt) + 4*self.nb)
+            _temp = np.fromfile(data, dtype=data_type, count=sum(_nt) + 4 * self.nb)
 
             # Create a mask to remove dimensionless quantities from q
             # Indices of the first four dimensionless quantities
             _index_array = np.array([0, 1, 2, 3])
-            for i in range(len(_nt)-1):
-                _term = sum(_temp[0:i]) + (i+1)*4
-                _index_array = np.concatenate((_index_array, np.arange(_term, _term+4)))
+            for i in range(len(_nt) - 1):
+                _term = sum(_temp[0:i]) + (i + 1) * 4
+                _index_array = np.concatenate((_index_array, np.arange(_term, _term + 4)))
             _mask = np.ones(len(_temp), dtype='bool')
             _mask[_index_array] = 0
             # Use the mask to remove dimensionless quantities
@@ -196,18 +191,14 @@ class FlowIO:
 
             # Assign the dimensionless attributes
             self.mach, self.alpha, self.rey, self.time = _temp[0:4]
-            # Reshape the read array to (ni, nj, nk, 5, nb)
-            # Assign first block to q
-            self.q = _temp[0:_nt[0]].reshape((self.ni[0], self.nj[0], self.nk[0], 5, 1), order='F')
-            # Pad the first block to concatenate
-            _pad_i, _pad_j, _pad_k = max(self.ni) - self.ni, max(self.nj) - self.nj, max(self.nk) - self.nk
-            self.q = np.pad(self.q, [(0, _pad_i[0]), (0, _pad_j[0]), (0, _pad_k[0]), (0, 0), (0, 0)], mode='constant')
-            # Assign rest of the blocks to q; pad them; and concatenate
+
+            # Pre-define q array
+            self.q = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), 5, self.nb))
+
+            # Reshape and assign data to q
             for _i in range(1, self.nb):
-                _temp1 = _temp[sum(_nt[0:_i]):sum(_nt[0:_i])+_nt[_i]]\
-                    .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 5, 1), order='F')
-                _temp1 = np.pad(_temp1, [(0, _pad_i[_i]), (0, _pad_j[_i]), (0, _pad_k[_i]), (0, 0), (0, 0)],
-                                mode='constant')
-                self.q = np.concatenate((self.q, _temp1), axis=-1)
+                self.q[self.ni[_i], self.nj[_i], self.nk[_i], 5, _i] = \
+                    _temp[sum(_nt[0:_i]):sum(_nt[0:_i]) + _nt[_i]] \
+                    .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 5), order='F')
 
             print("Flow data reading is successful for " + self.filename + "\n")
