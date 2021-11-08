@@ -48,6 +48,7 @@ class Search:
         self.index = None
         self.cell = None
         self.info = None
+        self.block = None
 
     def __str__(self):
         doc = "This instance takes in the grid of shape " + self.grid.grd.shape + \
@@ -84,8 +85,8 @@ class Search:
                 return
 
         # Look for neighboring nodes
-        i, j, k, b = self.index[0], self.index[1], self.index[2], self.index[3]
-        _node = self.grid.grd[i, j, k, :, b]
+        i, j, k, self.block = self.index[0], self.index[1], self.index[2], self.index[3]
+        _node = self.grid.grd[i, j, k, :, self.block]
 
         def _cell_nodes(_i, _j, _k):
             # _Internal method to get the nodes of a cell

@@ -47,7 +47,7 @@ class TestSearch(unittest.TestCase):
         from src.streamlines.search import Search
 
         # Read the grid data
-        grid = GridIO('../data/multi_block/plate/plate.mb.x')
+        grid = GridIO('../data/multi_block/plate/plate.mb.dp.x')
         grid.read_grid(data_type='f8')
 
         # Start test for search algorithm
