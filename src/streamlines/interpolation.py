@@ -21,7 +21,7 @@ class Interpolation:
     Output:
         q : ndarray
             Interpolated data at the given point
-        ng, ni, nj, nk: int
+        nb, ni, nj, nk: int
             Dimensionless data from flow
         mach, alpha, rey, time: float
             Dimensionless data from flow
@@ -51,14 +51,14 @@ class Interpolation:
         self.flow = flow
         self.idx = idx
         self.q = None
-        self.ng = None
+        self.nb = None
         self.ni, self.nj, self.nk = [None] * 3
         self.mach, self.alpha, self.rey, self.time = [None] * 4
 
     def compute(self, method='linear'):
 
         # Assign data from q file to keep the format for further computations
-        self.ng = self.flow.ng
+        self.nb = self.flow.nb
         self.ni, self.nj, self.nk = self.flow.ni, self.flow.nj, self.flow.nk
         self.mach, self.alpha, self.rey, self.time = self.flow.mach, self.flow.alpha, self.flow.rey, self.flow.time
 
@@ -70,11 +70,11 @@ class Interpolation:
 
         # Obtain grid data from nodes found from the search method
         _cell_grd = np.zeros(self.idx.cell.shape)
-        _cell_grd = self.grid.grd[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :]
+        _cell_grd = self.grid.grd[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, self.idx.block]
 
         # Obtain flow data from nodes found
         _cell_q = np.zeros((self.idx.cell.shape[0], 5))
-        _cell_q = self.flow.q[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :]
+        _cell_q = self.flow.q[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, self.idx.block]
 
         # "Tri"Linear interpolation
         if method == 'linear':
