@@ -56,7 +56,7 @@ class GridIO:
               "grd -- The grid data\n"
         return doc
 
-    def read_grid(self):
+    def read_grid(self, data_type='f4'):
         """Reads in the grid file and changes the instance attributes
 
         :parameter
@@ -79,7 +79,7 @@ class GridIO:
             # length of grd data
             _nt = self.ni * self.nj * self.nk * 3
             # read the grd data from file to temp_array
-            _temp = np.fromfile(grid, dtype='f4', count=sum(_nt))
+            _temp = np.fromfile(grid, dtype=data_type, count=sum(_nt))
 
             # read-in the first block
             self.grd = _temp[0:_nt[0]].reshape((self.ni[0], self.nj[0], self.nk[0], 3, 1), order='F')
@@ -157,7 +157,7 @@ class FlowIO:
               "q -- The flow data\n"
         return doc
 
-    def read_flow(self):
+    def read_flow(self, data_type='f4'):
         """Reads in the flow file and changes the instance attributes
 
         Parameters
@@ -181,7 +181,7 @@ class FlowIO:
             # Read-in flow data into a temp array
             # Less use of fromfile is more speed
             _nt = self.ni * self.nj * self.nk * 5
-            _temp = np.fromfile(data, dtype='f4', count=sum(_nt) + 4*self.nb)
+            _temp = np.fromfile(data, dtype=data_type, count=sum(_nt) + 4*self.nb)
 
             # Create a mask to remove dimensionless quantities from q
             # Indices of the first four dimensionless quantities

@@ -61,7 +61,7 @@ class TestIO(unittest.TestCase):
         grid = GridIO('../data/multi_block/plate/plate.mb.x')
         # Print the doc string
         print(grid)
-        grid.read_grid()
+        grid.read_grid(data_type='f8')
 
         # Simple assertion to test the import
         self.assertEqual(grid.grd.shape, (grid.ni.max(), grid.nj.max(), grid.nk.max(), 3, grid.nb))

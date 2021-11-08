@@ -69,23 +69,23 @@ class Search:
         """
 
         # Compute the distance from all nodes in the grid
-        _dist = np.sqrt((self.grid.grd[..., 0] - self.point[0]) ** 2 +
-                        (self.grid.grd[..., 1] - self.point[1]) ** 2 +
-                        (self.grid.grd[..., 2] - self.point[2]) ** 2)
+        _dist = np.sqrt((self.grid.grd[..., 0, :] - self.point[0]) ** 2 +
+                        (self.grid.grd[..., 1, :] - self.point[1]) ** 2 +
+                        (self.grid.grd[..., 2, :] - self.point[2]) ** 2)
 
-        # Find the closest node to the point
+        # Find the closest node to the point --> index.ndim = 4
         self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
 
         # Find if the given point is in the domain
         for i in range(3):
-            if not self.grid.grd[..., i].min() <= self.point[i] <= self.grid.grd[..., i].max():
+            if not self.grid.grd[..., i, :].min() <= self.point[i] <= self.grid.grd[..., i, :].max():
                 self.info = 'Given point is not in the domain. The cell attribute will return "None"\n'
                 print(self.info)
                 return
 
         # Look for neighboring nodes
-        i, j, k = self.index[0], self.index[1], self.index[2]
-        _node = self.grid.grd[i, j, k]
+        i, j, k, b = self.index[0], self.index[1], self.index[2], self.index[3]
+        _node = self.grid.grd[i, j, k, :, b]
 
         def _cell_nodes(_i, _j, _k):
             # _Internal method to get the nodes of a cell
