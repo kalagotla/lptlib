@@ -81,6 +81,7 @@ class Search:
         for i in range(3):
             if not self.grid.grd[..., i, :].min() <= self.point[i] <= self.grid.grd[..., i, :].max():
                 self.info = 'Given point is not in the domain. The cell attribute will return "None"\n'
+                self.cell = None
                 print(self.info)
                 return
 
