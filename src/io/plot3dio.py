@@ -46,6 +46,7 @@ class GridIO:
         self.nb = None
         self.ni, self.nj, self.nk = None, None, None
         self.grd = None
+        self.grd_min, self.grd_max = [], []
 
     def __str__(self):
         doc = "This instance has the filename " + self.filename + "\n" + \
@@ -91,6 +92,15 @@ class GridIO:
                     .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 3), order='F')
 
             print("Grid data reading is successful for " + self.filename + "\n")
+
+            # Find out the min and max of each block
+            for _i, _j, _k, _b in zip(self.ni, self.nj, self.nk, range(self.nb)):
+                self.grd_min.append(np.amin(self.grd[:_i, :_j, :_k, :, _b], axis=(0, 1, 2)))
+                self.grd_max.append(np.amax(self.grd[:_i, :_j, :_k, :, _b], axis=(0, 1, 2)))
+
+            # Calculate in which block the point exists
+            self.grd_min = np.array(self.grd_min)
+            self.grd_max = np.array(self.grd_max)
 
 
 class FlowIO:

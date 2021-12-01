@@ -56,7 +56,7 @@ class Search:
               "Use method 'compute' to find (attributes) the closest 'index' and the nodes of the 'cell'.\n"
         return doc
 
-    def compute(self):
+    def compute(self, method='distance'):
         """
         Use the method to compute index and cell attributes
 
@@ -69,25 +69,41 @@ class Search:
         date: 10-24/2021
         """
 
-        # Compute the distance from all nodes in the grid
-        _dist = np.sqrt((self.grid.grd[..., 0, :] - self.point[0]) ** 2 +
-                        (self.grid.grd[..., 1, :] - self.point[1]) ** 2 +
-                        (self.grid.grd[..., 2, :] - self.point[2]) ** 2)
+        # Setup to compute block number in which the point is present
+        _bool_min = self.grid.grd_min <= self.point
+        _bool_max = self.grid.grd_max >= self.point
+        _bool = _bool_max == _bool_min
 
-        # Find the closest node to the point --> index.ndim = 4
-        self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
+        # Test if the given point is in domain or not
+        if np.all(_bool.all(axis=1) == False):
+            self.info = 'Given point is not in the domain. The cell attribute will return "None"\n'
+            self.cell = None
+            print(self.info)
+            return
+        # Assign the block number to the attribute
+        self.block = int(np.where(_bool.all(axis=1))[0][0])
 
-        # Find if the given point is in the domain
-        for i in range(3):
-            if not self.grid.grd[..., i, :].min() <= self.point[i] <= self.grid.grd[..., i, :].max():
-                self.info = 'Given point is not in the domain. The cell attribute will return "None"\n'
-                self.cell = None
-                print(self.info)
-                return
+        if method == 'distance':
+            # Compute the distance from all nodes in the grid
+            _dist = np.sqrt((self.grid.grd[..., 0, :] - self.point[0]) ** 2 +
+                            (self.grid.grd[..., 1, :] - self.point[1]) ** 2 +
+                            (self.grid.grd[..., 2, :] - self.point[2]) ** 2)
 
-        # Look for neighboring nodes
-        i, j, k, self.block = self.index[0], self.index[1], self.index[2], self.index[3]
-        _node = self.grid.grd[i, j, k, :, self.block]
+            # Find the closest node to the point --> index.ndim = 4
+            self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
+            i, j, k, self.block = self.index[0], self.index[1], self.index[2], self.index[3]
+            _node = self.grid.grd[i, j, k, :, self.block]
+
+        if method == 'block_distance':
+            # Compute distance inside the block to get the nearest node
+            _i, _j, _k = self.grid.ni[self.block], self.grid.nj[self.block], self.grid.nk[self.block]
+            _dist = np.sqrt((self.grid.grd[:_i, :_j, :_k, 0, self.block] - self.point[0]) ** 2 +
+                            (self.grid.grd[:_i, :_j, :_k, 1, self.block] - self.point[1]) ** 2 +
+                            (self.grid.grd[:_i, :_j, :_k, 2, self.block] - self.point[2]) ** 2)
+
+            self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
+            i, j, k = self.index[0], self.index[1], self.index[2]
+            _node = self.grid.grd[i, j, k, :, self.block]
 
         def _cell_nodes(_i, _j, _k):
             # _Internal method to get the nodes of a cell
