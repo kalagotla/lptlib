@@ -2,6 +2,7 @@
 
 import unittest
 from parameterized import parameterized
+from src.function.timer import Timer
 
 # This setup only works with the plate data
 # Need to add assertions to parametrized and change them to variables in the function
@@ -16,6 +17,7 @@ class TestSearch(unittest.TestCase):
         ('mb_dp_distance', '../data/multi_block/plate/plate.mb.dp.x', 'f8', 'distance'),
         ('mb_dp_block_distance', '../data/multi_block/plate/plate.mb.dp.x', 'f8', 'block_distance')
     ])
+    @Timer()
     def test_search(self, name, filename='../data/plate_data/plate.sp.x', data_type='f4', method='binary'):
         from src.io.plot3dio import GridIO
         from src.streamlines.search import Search

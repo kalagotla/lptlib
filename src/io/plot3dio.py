@@ -93,6 +93,7 @@ class GridIO:
 
             print("Grid data reading is successful for " + self.filename + "\n")
 
+            # Setup some parameters for further processing
             # Find out the min and max of each block
             for _i, _j, _k, _b in zip(self.ni, self.nj, self.nk, range(self.nb)):
                 self.grd_min.append(np.amin(self.grd[:_i, :_j, :_k, :, _b], axis=(0, 1, 2)))
