@@ -23,6 +23,13 @@ class GridIO:
             shape of the domain
         grd : numpy.ndarray
             Grid data of shape (ni, nj, nk, 3, nb)
+        m1 : numpy.ndarray
+            xi, eta, zeta derivatives wrt x, y, z --> shape (ni, nj, nk, 3, 3, nb)
+        m2 : numpy.ndarray
+            x, y, z derivatives wrt xi, eta, zeta --> shape (ni, nj, nk, 3, 3, nb)
+        J : numpy.ndarray
+            Jacobian determinant of m1 --> shape (ni, nj, nk, nb)
+
 
     Methods
     -------
@@ -47,13 +54,17 @@ class GridIO:
         self.ni, self.nj, self.nk = None, None, None
         self.grd = None
         self.grd_min, self.grd_max = [], []
+        self.m1, self.m2 = None, None
+        self.J = None
 
     def __str__(self):
         doc = "This instance has the filename " + self.filename + "\n" + \
               "grd attribute is of shape (ni, nj, nk, 3, nb), rows representing x,y,z coordinates for each block\n" \
               "For example, x = grid.grd(...,0, 0), grid being the object.\n" \
-              "Use method 'read_grid' to compute attributes:\n" \
+              "Use method 'read_grid' to compute grd attributes:\n" \
               "ni, nj, nk, ng\n" \
+              "Use method 'compute_metrics' to compute grid metric attributes:\n" \
+              "m1, m2, J\n" \
               "grd -- The grid data\n"
         return doc
 
@@ -99,9 +110,62 @@ class GridIO:
                 self.grd_min.append(np.amin(self.grd[:_i, :_j, :_k, :, _b], axis=(0, 1, 2)))
                 self.grd_max.append(np.amax(self.grd[:_i, :_j, :_k, :, _b], axis=(0, 1, 2)))
 
-            # Calculate in which block the point exists
+            # Convert lists to arrays
             self.grd_min = np.array(self.grd_min)
             self.grd_max = np.array(self.grd_max)
+
+    def compute_metrics(self):
+        """Calculate grid metrics from grid data
+
+        :parameter
+        None
+
+        :return
+        None
+
+        Example:
+            grid = GridIO(filename)  # Assume grid is the object from GridIO
+            grid.read_grid()  # Call method to read-in grid data
+            grid.compute_metrics()  # Call method to compute grid metrics
+            print(grid)  # prints the docstring for grid metrics
+            # Instance attributes
+            print(grid.m1)  # derivatives xi, eta, zeta
+            print(grid.m2)  # derivatives x, y, z
+
+        author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
+        credit: Jacob Welsh for providing the code
+        date: 12-23/2021
+        """
+        self.m1 = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), 3, 3, self.nb))
+        self.m2 = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), 3, 3, self.nb))
+        self.J = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), self.nb))
+
+        #  The for loop is to compute x, y, z derivatives wrt xi, eta, zeta
+        for i in range(3):
+            self.m1[..., i, :] = np.gradient(self.grd[...], axis=i)
+
+        # compute Jacobian
+        self.J = self.m1[..., 0, 0, :] * (
+                    self.m1[..., 1, 1, :] * self.m1[..., 2, 2, :] - self.m1[..., 1, 2, :] * self.m1[..., 2, 1, :]) - \
+                 self.m1[..., 1, 0, :] * (
+                             self.m1[..., 0, 1, :] * self.m1[..., 2, 2, :] - self.m1[..., 0, 2, :] * self.m1[..., 2, 1, :]) + \
+                 self.m1[..., 2, 0, :] * (
+                             self.m1[..., 0, 1, :] * self.m1[..., 1, 2, :] - self.m1[..., 0, 2, :] * self.m1[..., 1, 1, :])
+
+        # x derivatives
+        self.m2[..., 0, 0, :] = (self.m1[..., 1, 1, :] * self.m1[..., 2, 2, :] - self.m1[..., 1, 2, :] * self.m1[..., 2, 1, :]) / self.J
+        self.m2[..., 1, 0, :] = (self.m1[..., 1, 2, :] * self.m1[..., 2, 0, :] - self.m1[..., 1, 0, :] * self.m1[..., 2, 2, :]) / self.J
+        self.m2[..., 2, 0, :] = (self.m1[..., 1, 0, :] * self.m1[..., 2, 1, :] - self.m1[..., 1, 1, :] * self.m1[..., 2, 0, :]) / self.J
+
+        # y derivative
+        self.m2[..., 0, 1, :] = (self.m1[..., 0, 2, :] * self.m1[..., 2, 1, :] - self.m1[..., 0, 1, :] * self.m1[..., 2, 2, :]) / self.J
+        self.m2[..., 1, 1, :] = (self.m1[..., 0, 0, :] * self.m1[..., 2, 2, :] - self.m1[..., 0, 2, :] * self.m1[..., 2, 0, :]) / self.J
+        self.m2[..., 2, 1, :] = (self.m1[..., 0, 1, :] * self.m1[..., 2, 0, :] - self.m1[..., 0, 0, :] * self.m1[..., 2, 1, :]) / self.J
+
+        # z derivatives
+        self.m2[..., 0, 2, :] = (self.m1[..., 0, 1, :] * self.m1[..., 1, 2, :] - self.m1[..., 0, 2, :] * self.m1[..., 1, 1, :]) / self.J
+        self.m2[..., 1, 2, :] = (self.m1[..., 0, 2, :] * self.m1[..., 1, 0, :] - self.m1[..., 0, 0, :] * self.m1[..., 1, 2, :]) / self.J
+        self.m2[..., 2, 2, :] = (self.m1[..., 0, 0, :] * self.m1[..., 1, 1, :] - self.m1[..., 0, 1, :] * self.m1[..., 1, 0, :]) / self.J
 
 
 class FlowIO:
