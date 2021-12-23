@@ -10,7 +10,7 @@ class TestVariables(unittest.TestCase):
     grid = GridIO('../data/plate_data/plate.sp.x')
     flow = FlowIO('../data/plate_data/sol-0000010.q')
     idx = Search(grid, [8.5, 0.5, 0.01])
-    point_data = Interpolation(grid, flow, idx)
+    point_data = Interpolation(flow, idx)
 
     grid.read_grid()
     flow.read_flow()
@@ -30,8 +30,8 @@ class TestVariables(unittest.TestCase):
         variables.compute_velocity()
         variables.compute_temperature()
 
-        self.assertEqual(variables.velocity.shape, (720, 152, 129, 3))
-        self.assertEqual(variables.temperature.shape, (720, 152, 129))
+        self.assertEqual(variables.velocity.shape, (720, 152, 129, 3, 1))
+        self.assertEqual(variables.temperature.shape, (720, 152, 129, 1))
 
     def test_variables_compute(self, flow=flow):
         """
@@ -44,8 +44,8 @@ class TestVariables(unittest.TestCase):
         variables = Variables(flow)
         variables.compute()
 
-        self.assertEqual(variables.velocity.shape, (720, 152, 129, 3))
-        self.assertEqual(variables.temperature.shape, (720, 152, 129))
+        self.assertEqual(variables.velocity.shape, (720, 152, 129, 3, 1))
+        self.assertEqual(variables.temperature.shape, (720, 152, 129, 1))
 
     def _test(self, point_variables):
         """
@@ -56,9 +56,9 @@ class TestVariables(unittest.TestCase):
         """
 
         self.assertEqual(
-            sum(abs(point_variables.velocity - [1.02376411e+00, -5.38663727e-05, 6.40703744e-08])) <= 1e-6,
+            sum(abs(point_variables.velocity.reshape(3) - [1.02420611e-01, -5.38896289e-06, 6.40980361e-09])) <= 1e-6,
             True)
-        self.assertEqual(abs(point_variables.temperature - 1.0003078917225714) <= 1e-6, True)
+        self.assertEqual(abs(point_variables.temperature.reshape(1) - 0.97452141) <= 1e-6, True)
 
     def test_point_variables(self, point_data=point_data):
         """

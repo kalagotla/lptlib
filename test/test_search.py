@@ -4,6 +4,7 @@ import unittest
 from parameterized import parameterized
 from src.function.timer import Timer
 
+
 # This setup only works with the plate data
 # Need to add assertions to parametrized and change them to variables in the function
 # to be able to implement
@@ -12,10 +13,12 @@ class TestSearch(unittest.TestCase):
     # sp: single precision; dp: double precision
     # Add more cases as a tuple below
     @parameterized.expand([
-        ('sb_sp_distance', '../data/plate_data/plate.sp.x', 'f4', 'distance'),
-        ('sb_sp_block_distance', '../data/plate_data/plate.sp.x', 'f4', 'block_distance'),
-        ('mb_dp_distance', '../data/multi_block/plate/plate.mb.dp.x', 'f8', 'distance'),
-        ('mb_dp_block_distance', '../data/multi_block/plate/plate.mb.dp.x', 'f8', 'block_distance')
+        # ('sb_sp_distance', '../data/plate_data/plate.sp.x', 'f4', 'distance'),
+        # ('sb_sp_block_distance', '../data/plate_data/plate.sp.x', 'f4', 'block_distance'),
+        # ('mb_dp_distance', '../data/multi_block/plate/plate.mb.dp.x', 'f8', 'distance'),
+        # ('mb_dp_block_distance', '../data/multi_block/plate/plate.mb.dp.x', 'f8', 'block_distance'),
+        ('mb_dp_block_distance', '../data/multi_block/plate/plate.mb.dp.x', 'f8', 'c-space')
+
     ])
     @Timer()
     def test_search(self, name, filename='../data/plate_data/plate.sp.x', data_type='f4', method='binary'):
@@ -25,6 +28,8 @@ class TestSearch(unittest.TestCase):
         # Read the grid data
         grid = GridIO(filename)
         grid.read_grid(data_type=data_type)
+        grid.compute_metrics()
+        flow = None
 
         # Start test for search algorithm
         # Check if distance and neighbors are working fine
@@ -37,7 +42,8 @@ class TestSearch(unittest.TestCase):
         idx.compute(method=method)
         self.assertEqual(idx.cell, None)
         self.assertEqual(idx.info,
-                         'Given point is not in the domain. The cell attribute will return "None"\n')
+                         'Given point is not in the domain. The cell attribute will return "None"'
+                         ' in search algorithm\n')
         # Check for on the node case
         # Used a Node from grid numbering
         idx = Search(grid, grid.grd[0, 0, 0, :, 0])

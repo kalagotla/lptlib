@@ -46,8 +46,7 @@ class Interpolation:
     date: 10-29/2021
     """
 
-    def __init__(self, grid, flow, idx):
-        self.grid = grid
+    def __init__(self, flow, idx):
         self.flow = flow
         self.idx = idx
         self.q = None
@@ -63,14 +62,15 @@ class Interpolation:
         self.mach, self.alpha, self.rey, self.time = self.flow.mach, self.flow.alpha, self.flow.rey, self.flow.time
 
         # If out of domain return
-        if self.idx.info == 'Given point is not in the domain. The cell attribute will return "None"\n':
+        if self.idx.info == 'Given point is not in the domain. The cell attribute will return "None"' \
+                            ' in search algorithm\n':
             print('Cannot run interpolation. The given point is out of domain.\n')
             self.q = None
             return
 
         # Obtain grid data from nodes found from the search method
         _cell_grd = np.zeros(self.idx.cell.shape)
-        _cell_grd = self.grid.grd[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, self.idx.block]
+        _cell_grd = self.idx.grid.grd[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, self.idx.block]
 
         # Obtain flow data from nodes found
         _cell_q = np.zeros((self.idx.cell.shape[0], 5))
@@ -135,9 +135,30 @@ class Interpolation:
                 # Doing data interpolation to the given point based on the face points
                 self.q = _f(2, 2, _cell_grd_0123, _cell_grd_4567, None, 2,
                             [None, None, _cell_q_0123], [None, None, _cell_q_4567])
+                self.q = self.q.reshape((1, 1, 1, -1, 1))
 
             # if the point is node return node data
             if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
                                 'Interpolation will assign node properties for integration.\n'\
                                 'Index of the node will be returned by cell attribute\n':
                 self.q = _cell_q
+                self.q = self.q.reshape((1, 1, 1, -1, 1))
+
+        if method == 'c-space':
+            _alpha, _beta, _gamma = self.idx.point - self.idx.cell[0]
+            self.q = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_q[0] + \
+                          _alpha  * (1 - _beta) * (1 - _gamma) * _cell_q[1] + \
+                          _alpha  *      _beta  * (1 - _gamma) * _cell_q[2] + \
+                     (1 - _alpha) *      _beta  * (1 - _gamma) * _cell_q[3] + \
+                     (1 - _alpha) * (1 - _beta) *      _gamma  * _cell_q[4] + \
+                          _alpha  * (1 - _beta) *      _gamma  * _cell_q[5] + \
+                          _alpha  *      _beta *       _gamma  * _cell_q[6] + \
+                     (1 - _alpha) *      _beta  *      _gamma  * _cell_q[7]
+            self.q = self.q.reshape((1, 1, 1, -1, 1))
+
+            # if the point is node return node data
+            if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
+                                'Interpolation will assign node properties for integration.\n' \
+                                'Index of the node will be returned by cell attribute\n':
+                self.q = _cell_q
+                self.q = self.q.reshape((1, 1, 1, -1, 1))
