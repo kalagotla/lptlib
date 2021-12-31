@@ -24,18 +24,18 @@ def main(grid_file, flow_file, point):
     flow.read_flow()
     grid.compute_metrics()
 
-    streamline = [point]
+    # streamline = [point]
     # while True:
     #     with Timer(text="Elapsed time for loop number " + str(len(streamline)) + ": {:.8f}"):
-    #         idx = Search(grid, metrics, point)
-    #         interp = Interpolation(grid, flow, metrics, idx)
-    #         intg = Integration(grid, flow, idx, interp)
+    #         idx = Search(grid, point)
+    #         interp = Interpolation(flow, idx)
+    #         intg = Integration(interp)
     #         t = Timer(text="Elapsed time for search number " + str(len(streamline)) + ": {:.8f} seconds")
     #         t.start()
     #         idx.compute(method='block_distance')
     #         t.stop()
     #         interp.compute()
-    #         new_point = intg.compute(time_step=1e-1)
+    #         new_point = intg.compute(method='pRK4', time_step=1e-1)
     #         if new_point is None:
     #             print('Integration complete!')
     #             break
@@ -50,7 +50,7 @@ def main(grid_file, flow_file, point):
             interp = Interpolation(flow, idx)
             interp.compute(method='c-space')
             intg = Integration(interp)
-            new_point = intg.compute(method='c-space', time_step=1e-2)
+            new_point = intg.compute(method='cRK4', time_step=1e-2)
             if new_point is None:
                 print('Integration complete!')
                 break
@@ -75,6 +75,8 @@ if __name__ == '__main__':
 
     ax = plt.axes(projection='3d')
     ax.plot3D(x, y, z, 'r')
+    # plt.figure()
+    # ax1 = plt.axes(projection='3d')
     ax.plot3D(x1, y1, z1, 'b')
     # ax.scatter3D(x, y, z)
     # ax.scatter3D(x1, y1, z1)
