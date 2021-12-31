@@ -167,6 +167,8 @@ class GridIO:
         self.m2[..., 1, 2, :] = (self.m1[..., 0, 2, :] * self.m1[..., 1, 0, :] - self.m1[..., 0, 0, :] * self.m1[..., 1, 2, :]) / self.J
         self.m2[..., 2, 2, :] = (self.m1[..., 0, 0, :] * self.m1[..., 1, 1, :] - self.m1[..., 0, 1, :] * self.m1[..., 1, 0, :]) / self.J
 
+        print("Grid metrics computed successfully!")
+
 
 class FlowIO:
     """Module to read-in a flow file and output flow parameters

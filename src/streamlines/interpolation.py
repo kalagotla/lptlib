@@ -30,6 +30,7 @@ class Interpolation:
     -------
     compute(method='linear')
         Interpolates the data onto a given point
+        linear or c-space can be specified
 
     Example:
         grid = GridIO('../data/plate_data/plate.sp.x')
@@ -55,6 +56,18 @@ class Interpolation:
         self.mach, self.alpha, self.rey, self.time = [None] * 4
 
     def compute(self, method='linear'):
+        """
+        Find interpolated plot3d data at a given point
+        Args:
+            method: Available methods for interpolation
+            1. linear: Tri-linear interpolation in physical co-ordinates
+            2. c-space: Tri-linear interpolation in c-space. Must-use for the c-space algo
+
+        Returns:
+            q --> Attribute with the interpolated flow data.
+            Has same ndim as q attribute from flow object
+
+        """
 
         # Assign data from q file to keep the format for further computations
         self.nb = self.flow.nb
@@ -62,8 +75,7 @@ class Interpolation:
         self.mach, self.alpha, self.rey, self.time = self.flow.mach, self.flow.alpha, self.flow.rey, self.flow.time
 
         # If out of domain return
-        if self.idx.info == 'Given point is not in the domain. The cell attribute will return "None"' \
-                            ' in search algorithm\n':
+        if self.idx.point is None:
             print('Cannot run interpolation. The given point is out of domain.\n')
             self.q = None
             return
@@ -145,6 +157,11 @@ class Interpolation:
                 self.q = self.q.reshape((1, 1, 1, -1, 1))
 
         if method == 'c-space':
+            """
+            Point from idx is in c-space. Tri-linear interpolation is performed.
+            Equation can be found in Sadarjoen et al.
+            """
+
             _alpha, _beta, _gamma = self.idx.point - self.idx.cell[0]
             self.q = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_q[0] + \
                           _alpha  * (1 - _beta) * (1 - _gamma) * _cell_q[1] + \

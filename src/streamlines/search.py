@@ -117,7 +117,7 @@ class Search:
 
         return
 
-    def compute(self, method='distance'):
+    def compute(self, method='block_distance'):
         """
         Use the method to compute index and cell attributes
 
@@ -141,6 +141,7 @@ class Search:
         if np.all(_bool.all(axis=1) == False):
             self.info = 'Given point is not in the domain. The cell attribute will return "None" in search algorithm\n'
             self.cell = None
+            self.point = None
             print(self.info)
             return
         # Assign the block number to the attribute
@@ -164,6 +165,7 @@ class Search:
                             (self.grid.grd[:_i, :_j, :_k, 1, self.block] - self.point[1]) ** 2 +
                             (self.grid.grd[:_i, :_j, :_k, 2, self.block] - self.point[2]) ** 2)
 
+            # Other methods to calculate distance. The above method is faster
             # _grd_min_point = self.grid.grd[:_i, :_j, :_k, :, self.block] - self.point
             # # _dist = np.linalg.norm(_grd_min_point, axis=-1)
             # _dist = np.sqrt(np.einsum("ijkl,ijkl->ijk", _grd_min_point, _grd_min_point))
@@ -212,6 +214,7 @@ class Search:
     def p2c(self, point):
         """
         Method to convert p-space point to c-space
+        As there is no direct analytical equation. We use Newton-Raphson
         Args:
             point: p-space co-ordinates
 
