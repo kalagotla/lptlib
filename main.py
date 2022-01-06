@@ -8,7 +8,7 @@ import numpy as np
 
 
 @Timer(text="Elapsed time for main program: {:.4f} seconds")
-def main(grid_file, flow_file, point):
+def main(grid_file, flow_file, point, method='c-space'):
     from src.io.plot3dio import GridIO
     from src.io.plot3dio import FlowIO
     from src.streamlines.search import Search
@@ -24,61 +24,62 @@ def main(grid_file, flow_file, point):
     flow.read_flow()
     grid.compute_metrics()
 
-    # streamline = [point]
-    # while True:
-    #     with Timer(text="Elapsed time for loop number " + str(len(streamline)) + ": {:.8f}"):
-    #         idx = Search(grid, point)
-    #         interp = Interpolation(flow, idx)
-    #         intg = Integration(interp)
-    #         t = Timer(text="Elapsed time for search number " + str(len(streamline)) + ": {:.8f} seconds")
-    #         t.start()
-    #         idx.compute(method='block_distance')
-    #         t.stop()
-    #         interp.compute()
-    #         new_point = intg.compute(method='pRK4', time_step=1e-1)
-    #         if new_point is None:
-    #             print('Integration complete!')
-    #             break
-    #         streamline.append(new_point)
-    #         point = new_point
-
     streamline = [point]
-    idx = Search(grid, point)
-    idx.compute(method='c-space')
-    while True:
-        with Timer(text="Elapsed time for loop number " + str(len(streamline)) + ": {:.8f}"):
-            interp = Interpolation(flow, idx)
-            interp.compute(method='c-space')
-            intg = Integration(interp)
-            new_point = intg.compute(method='cRK4', time_step=1e-2)
-            if new_point is None:
-                print('Integration complete!')
-                break
-            save_point = idx.c2p(new_point)
-            streamline.append(save_point)
-            idx.point = new_point
+    if method == 'p-space':
+        while True:
+            with Timer(text="Elapsed time for loop number " + str(len(streamline)) + ": {:.8f}"):
+                idx = Search(grid, point)
+                interp = Interpolation(flow, idx)
+                intg = Integration(interp)
+                t = Timer(text="Elapsed time for search number " + str(len(streamline)) + ": {:.8f} seconds")
+                t.start()
+                idx.compute(method='block_distance')
+                t.stop()
+                interp.compute()
+                new_point = intg.compute(method='pRK4', time_step=1e-2)
+                if new_point is None:
+                    print('Integration complete!')
+                    break
+                streamline.append(new_point)
+                point = new_point
+
+    if method == 'c-space':
+        idx = Search(grid, point)
+        idx.compute(method='c-space')
+        while True:
+            with Timer(text="Elapsed time for loop number " + str(len(streamline)) + ": {:.8f}"):
+                interp = Interpolation(flow, idx)
+                interp.compute(method='c-space')
+                intg = Integration(interp)
+                new_point = intg.compute(method='cRK4', time_step=1e-2)
+                if new_point is None:
+                    print('Integration complete!')
+                    break
+                save_point = idx.c2p(new_point)
+                streamline.append(save_point)
+                idx.point = new_point
 
     return np.array(streamline)
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    sl = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [8.5, 0.5, 0.01])
+    slc = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [8.5, 0.5, 0.01], method='c-space')
+    slp = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [8.5, 0.5, 0.01], method='p-space')
+    # slc = main('data/cylinder_data/cylinder.sp.x', 'data/cylinder_data/sol-0010000.q', [0.5, 0.5, 0.5], method='c-space')
+    # slp = main('data/cylinder_data/cylinder.sp.x', 'data/cylinder_data/sol-0010000.q', [0.5, 0.5, 0.5], method='p-space')
     # main('data/multi_block/test/test.mb.sp.x', 'data/multi_block/test/test.mb.sp.q', [-0.5, -0.5, -0.5])
-    sl1 = main('data/multi_block/plate/plate.mb.sp.x', 'data/multi_block/plate/plate.mb.sp.q', [8.5, 0.5, 0.01])
+    # slc = main('data/multi_block/plate/plate.mb.sp.x', 'data/multi_block/plate/plate.mb.sp.q', [8.5, 0.5, 0.01])
 
-    x, y, z = sl[:, 0], sl[:, 1], sl[:, 2]
-    x1, y1, z1 = sl1[:, 0], sl1[:, 1], sl1[:, 2]
+    xc, yc, zc = slc[:, 0], slc[:, 1], slc[:, 2]
+    xp, yp, zp = slp[:, 0], slp[:, 1], slp[:, 2]
 
     import matplotlib.pyplot as plt
     import random
 
     ax = plt.axes(projection='3d')
-    ax.plot3D(x, y, z, 'r')
+    ax.plot3D(xc, yc, zc, 'r')
     # plt.figure()
-    # ax1 = plt.axes(projection='3d')
-    ax.plot3D(x1, y1, z1, 'b')
-    # ax.scatter3D(x, y, z)
-    # ax.scatter3D(x1, y1, z1)
+    ax.plot3D(xp, yp, zp, 'b')
     plt.show()
 

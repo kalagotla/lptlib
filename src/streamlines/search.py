@@ -138,7 +138,7 @@ class Search:
         _bool = _bool_max == _bool_min
 
         # Test if the given point is in domain or not
-        if np.all(_bool.all(axis=1) == False):
+        if np.all(_bool.all(axis=1) == False) or np.all(_bool_min == False) or np.all(_bool_max == False):
             self.info = 'Given point is not in the domain. The cell attribute will return "None" in search algorithm\n'
             self.cell = None
             self.point = None
