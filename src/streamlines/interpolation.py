@@ -54,6 +54,7 @@ class Interpolation:
         self.nb = None
         self.ni, self.nj, self.nk = [None] * 3
         self.mach, self.alpha, self.rey, self.time = [None] * 4
+        self.J_inv = None
 
     def compute(self, method='linear'):
         """
@@ -162,6 +163,7 @@ class Interpolation:
             Equation can be found in Sadarjoen et al.
             """
 
+            _cell_J_inv = self.idx.grid.m2[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :, self.idx.block]
             _alpha, _beta, _gamma = self.idx.point - self.idx.cell[0]
             self.q = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_q[0] + \
                           _alpha  * (1 - _beta) * (1 - _gamma) * _cell_q[1] + \
@@ -171,6 +173,14 @@ class Interpolation:
                           _alpha  * (1 - _beta) *      _gamma  * _cell_q[5] + \
                           _alpha  *      _beta *       _gamma  * _cell_q[6] + \
                      (1 - _alpha) *      _beta  *      _gamma  * _cell_q[7]
+            self.J_inv = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_J_inv[0] + \
+                              _alpha  * (1 - _beta) * (1 - _gamma) * _cell_J_inv[1] + \
+                              _alpha  *      _beta  * (1 - _gamma) * _cell_J_inv[2] + \
+                         (1 - _alpha) *      _beta  * (1 - _gamma) * _cell_J_inv[3] + \
+                         (1 - _alpha) * (1 - _beta) *      _gamma  * _cell_J_inv[4] + \
+                              _alpha  * (1 - _beta) *      _gamma  * _cell_J_inv[5] + \
+                              _alpha  *      _beta *       _gamma  * _cell_J_inv[6] + \
+                         (1 - _alpha) *      _beta  *      _gamma  * _cell_J_inv[7]
             self.q = self.q.reshape((1, 1, 1, -1, 1))
 
             # if the point is node return node data

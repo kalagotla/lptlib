@@ -117,6 +117,26 @@ class Search:
 
         return
 
+    @staticmethod
+    def _find_block(self):
+        # Setup to compute block number in which the point is present
+        _bool_min = self.grid.grd_min <= self.point
+        _bool_max = self.grid.grd_max >= self.point
+        _bool = _bool_max == _bool_min
+
+        # Test if the given point is in domain or not
+        if np.all(_bool.all(axis=1) == False) or np.all(_bool_min == False) or np.all(_bool_max == False):
+            self.info = 'Given point is not in the domain. The cell attribute will return "None" in search algorithm\n'
+            self.cell = None
+            self.point = None
+            self.block = None
+            print(self.info)
+            return
+        # Assign the block number to the attribute
+        self.block = int(np.where(_bool.all(axis=1))[0][0])
+
+        return self.block
+
     def compute(self, method='block_distance'):
         """
         Use the method to compute index and cell attributes
@@ -132,20 +152,11 @@ class Search:
         date: 10-24/2021
         """
 
-        # Setup to compute block number in which the point is present
-        _bool_min = self.grid.grd_min <= self.point
-        _bool_max = self.grid.grd_max >= self.point
-        _bool = _bool_max == _bool_min
-
-        # Test if the given point is in domain or not
-        if np.all(_bool.all(axis=1) == False) or np.all(_bool_min == False) or np.all(_bool_max == False):
-            self.info = 'Given point is not in the domain. The cell attribute will return "None" in search algorithm\n'
-            self.cell = None
-            self.point = None
-            print(self.info)
+        # Find the block number
+        self.block = self._find_block(self)
+        # To check for point out-of-domain case
+        if self.block is None:
             return
-        # Assign the block number to the attribute
-        self.block = int(np.where(_bool.all(axis=1))[0][0])
 
         if method == 'distance':
             # Compute the distance from all nodes in the grid
@@ -245,6 +256,7 @@ class Search:
                 return
 
             # Currently, using one Jacobian per cell
+            # TODO: Need to use tri-linear interpolation to get Jacobian
             _eps0, _eps1, _eps2 = _eps.astype(int)
             _J_inv = self.grid.m2[_eps0, _eps1, _eps2, :, :, self.block]
 

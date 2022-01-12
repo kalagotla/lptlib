@@ -10,7 +10,7 @@ class Integration:
 
     def compute(self, method='p-space', time_step=1e-6):
         from src.function.variables import Variables
-
+        # TODO add switch case
         if method == 'p-space':
             # For p-space algos; the point -in-domain check was done in search
             if self.interp.idx.point is None:
@@ -107,8 +107,7 @@ class Integration:
             from src.streamlines.search import Search
 
             x0 = self.interp.idx.point
-            _J_inv = self.interp.idx.grid.m2[self.interp.idx.cell[0][0], self.interp.idx.cell[0][1],
-                     self.interp.idx.cell[0][2], :, :, self.interp.idx.block]
+            _J_inv = self.interp.J_inv
 
             q_interp = Variables(self.interp)
             q_interp.compute_velocity()
@@ -116,20 +115,21 @@ class Integration:
             c_velocity = np.matmul(_J_inv, p_velocity)
             k0 = time_step * c_velocity
             x1 = x0 + 0.5 * k0
-            # For c-spce the point in-domain check is done after integration
+            # For c-space the point in-domain check is done after integration
             if not np.all([0, 0, 0] <= x1) or not np.all(
                     x1 + 1 < [self.interp.idx.grid.ni[self.interp.idx.block],
                               self.interp.idx.grid.nj[self.interp.idx.block],
                               self.interp.idx.grid.nk[self.interp.idx.block]]):
                 self.point = None
+                print('Cannot run integration. The given point is out of domain\n')
                 return self.point
 
             idx = Search(self.interp.idx.grid, x1)
-            idx.c2p(x1)  # This will change cell attribute
+            idx.block = self.interp.idx.block
+            idx.c2p(x1)  # This will change cell, point attributes
             interp = Interpolation(self.interp.flow, idx)
             interp.compute(method='c-space')
-            _J_inv = self.interp.idx.grid.m2[self.interp.idx.cell[0][0], self.interp.idx.cell[0][1],
-                     self.interp.idx.cell[0][2], :, :, self.interp.idx.block]
+            _J_inv = interp.J_inv
 
             q_interp = Variables(interp)
             q_interp.compute_velocity()
@@ -137,20 +137,21 @@ class Integration:
             c_velocity = np.matmul(_J_inv, p_velocity)
             k1 = time_step * c_velocity
             x2 = x0 + 0.5 * k1
-            # For c-spce the point in-domain check is done after integration
+            # For c-space the point in-domain check is done after integration
             if not np.all([0, 0, 0] <= x2) or not np.all(
-                    x2 + 1 < [self.interp.idx.grid.ni[self.interp.idx.block],
-                              self.interp.idx.grid.nj[self.interp.idx.block],
-                              self.interp.idx.grid.nk[self.interp.idx.block]]):
+                    x2 + 1 < [self.interp.idx.grid.ni[idx.block],
+                              self.interp.idx.grid.nj[idx.block],
+                              self.interp.idx.grid.nk[idx.block]]):
                 self.point = None
+                print('Cannot run integration. The given point is out of domain\n')
                 return self.point
 
             idx = Search(self.interp.idx.grid, x2)
+            idx.block = self.interp.idx.block
             idx.c2p(x2)  # This will change cell attribute
             interp = Interpolation(self.interp.flow, idx)
             interp.compute(method='c-space')
-            _J_inv = self.interp.idx.grid.m2[self.interp.idx.cell[0][0], self.interp.idx.cell[0][1],
-                     self.interp.idx.cell[0][2], :, :, self.interp.idx.block]
+            _J_inv = interp.J_inv
 
             q_interp = Variables(interp)
             q_interp.compute_velocity()
@@ -158,20 +159,21 @@ class Integration:
             c_velocity = np.matmul(_J_inv, p_velocity)
             k2 = time_step * c_velocity
             x3 = x0 + k2
-            # For c-spce the point in-domain check is done after integration
+            # For c-space the point in-domain check is done after integration
             if not np.all([0, 0, 0] <= x3) or not np.all(
-                    x3 + 1 < [self.interp.idx.grid.ni[self.interp.idx.block],
-                              self.interp.idx.grid.nj[self.interp.idx.block],
-                              self.interp.idx.grid.nk[self.interp.idx.block]]):
+                    x3 + 1 < [self.interp.idx.grid.ni[idx.block],
+                              self.interp.idx.grid.nj[idx.block],
+                              self.interp.idx.grid.nk[idx.block]]):
                 self.point = None
+                print('Cannot run integration. The given point is out of domain\n')
                 return self.point
 
             idx = Search(self.interp.idx.grid, x3)
+            idx.block = self.interp.idx.block
             idx.c2p(x3)  # This will change cell attribute
             interp = Interpolation(self.interp.flow, idx)
             interp.compute(method='c-space')
-            _J_inv = self.interp.idx.grid.m2[self.interp.idx.cell[0][0], self.interp.idx.cell[0][1],
-                     self.interp.idx.cell[0][2], :, :, self.interp.idx.block]
+            _J_inv = interp.J_inv
 
             q_interp = Variables(interp)
             q_interp.compute_velocity()
@@ -181,10 +183,11 @@ class Integration:
             x4 = x0 + 1/6 * (k0 + 2*k1 + 2*k2 + k3)
             # For c-spce the point in-domain check is done after integration
             if not np.all([0, 0, 0] <= x4) or not np.all(
-                    x4 + 1 < [self.interp.idx.grid.ni[self.interp.idx.block],
-                              self.interp.idx.grid.nj[self.interp.idx.block],
-                              self.interp.idx.grid.nk[self.interp.idx.block]]):
+                    x4 + 1 < [self.interp.idx.grid.ni[idx.block],
+                              self.interp.idx.grid.nj[idx.block],
+                              self.interp.idx.grid.nk[idx.block]]):
                 self.point = None
+                print('Cannot run integration. The given point is out of domain\n')
                 return self.point
 
             self.point = x4
