@@ -141,31 +141,143 @@ class GridIO:
         self.J = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), self.nb))
 
         #  The for loop is to compute x, y, z derivatives wrt xi, eta, zeta
-        for i in range(3):
-            self.m1[..., i, :] = np.gradient(self.grd[...], axis=i)
+        # for i in range(3):
+        #     self.m1[..., i, :] = np.gradient(self.grd, axis=i)
+
+        for b in range(self.nb):
+            for i in range(3):
+                self.m1[:self.ni[b], :self.nj[b], :self.nk[b], :, i, b] = \
+                    np.gradient(self.grd[:self.ni[b], :self.nj[b], :self.nk[b], :, b], axis=i)
+
+        # for i in range(3):
+        #     self.m1[..., :, i, 0] = np.gradient(self.grd[..., 0], axis=i)
+        #
+        # for i in range(3):
+        #     self.m1[:self.ni[1], :self.nj[1], :self.nk[1], :, i, 1] = np.gradient(self.grd[:self.ni[1], :self.nj[1], :self.nk[1], :, 1], axis=i)
+
+        # xi derivatives
+        # for b in range(self.nb):
+        #     for k in range(self.nk[b]):
+        #         for j in range(self.nj[b]):
+        #             self.m1[0, j, k, 0, 0, b] = self.grd[1, j, k, 0, b] - self.grd[0, j, k, 0, b]
+        #             self.m1[0, j, k, 1, 0, b] = self.grd[1, j, k, 1, b] - self.grd[0, j, k, 1, b]
+        #             self.m1[0, j, k, 2, 0, b] = self.grd[1, j, k, 2, b] - self.grd[0, j, k, 2, b]
+        #             # for i in range(1, self.ni[b] - 1):
+        #             #     self.m1[i, j, k, 0, 0, b] = 0.5 * (self.grd[i + 1, j, k, 0, b] - self.grd[i - 1, j, k, 0, b])
+        #             #     self.m1[i, j, k, 1, 0, b] = 0.5 * (self.grd[i + 1, j, k, 1, b] - self.grd[i - 1, j, k, 1, b])
+        #             #     self.m1[i, j, k, 2, 0, b] = 0.5 * (self.grd[i + 1, j, k, 2, b] - self.grd[i - 1, j, k, 2, b])
+        #             self.m1[self.ni[b] - 1, j, k, 0, 0, b] = self.grd[self.ni[b] - 1, j, k, 0, b] - self.grd[self.ni[b] - 2, j, k, 0, b]
+        #             self.m1[self.ni[b] - 1, j, k, 1, 0, b] = self.grd[self.ni[b] - 1, j, k, 1, b] - self.grd[self.ni[b] - 2, j, k, 1, b]
+        #             self.m1[self.ni[b] - 1, j, k, 2, 0, b] = self.grd[self.ni[b] - 1, j, k, 2, b] - self.grd[self.ni[b] - 2, j, k, 2, b]
+        #     print('xi derivatives computed')
+        #     # eta derivatives
+        #     for k in range(self.nk[b]):
+        #         for i in range(self.ni[b]):
+        #             self.m1[i, 0, k, 0, 1, b] = self.grd[i, 1, k, 0, b] - self.grd[i, 0, k, 0, b]
+        #             self.m1[i, 0, k, 1, 1, b] = self.grd[i, 1, k, 1, b] - self.grd[i, 0, k, 1, b]
+        #             self.m1[i, 0, k, 2, 1, b] = self.grd[i, 1, k, 2, b] - self.grd[i, 0, k, 2, b]
+        #             # for j in range(1, self.nj[b] - 1):
+        #             #     self.m1[i, j, k, 0, 1, b] = 0.5 * (self.grd[i, j + 1, k, 0, b] - self.grd[i, j - 1, k, 0, b])
+        #             #     self.m1[i, j, k, 1, 1, b] = 0.5 * (self.grd[i, j + 1, k, 1, b] - self.grd[i, j - 1, k, 1, b])
+        #             #     self.m1[i, j, k, 2, 1, b] = 0.5 * (self.grd[i, j + 1, k, 2, b] - self.grd[i, j - 1, k, 2, b])
+        #             self.m1[i, self.nj[b] - 1, k, 0, 1, b] = self.grd[i, self.nj[b] - 1, k, 0, b] - self.grd[i, self.nj[b] - 2, k, 0, b]
+        #             self.m1[i, self.nj[b] - 1, k, 1, 1, b] = self.grd[i, self.nj[b] - 1, k, 1, b] - self.grd[i, self.nj[b] - 2, k, 1, b]
+        #             self.m1[i, self.nj[b] - 1, k, 2, 1, b] = self.grd[i, self.nj[b] - 1, k, 2, b] - self.grd[i, self.nj[b] - 2, k, 2, b]
+        #     print('eta derivatives computed')
+        #     # zeta derivatives
+        #     for j in range(self.nj[b]):
+        #         for i in range(self.ni[b]):
+        #             self.m1[i, j, 0, 0, 2, b] = self.grd[i, j, 1, 0, b] - self.grd[i, j, 0, 0, b]
+        #             self.m1[i, j, 0, 1, 2, b] = self.grd[i, j, 1, 1, b] - self.grd[i, j, 0, 1, b]
+        #             self.m1[i, j, 0, 2, 2, b] = self.grd[i, j, 1, 2, b] - self.grd[i, j, 0, 2, b]
+        #             # for k in range(1, self.nk[b] - 1):
+        #             #     self.m1[i, j, k, 0, 2, b] = 0.5 * (self.grd[i, j, k + 1, 0, b] - self.grd[i, j, k - 1, 0, b])
+        #             #     self.m1[i, j, k, 1, 2, b] = 0.5 * (self.grd[i, j, k + 1, 1, b] - self.grd[i, j, k - 1, 1, b])
+        #             #     self.m1[i, j, k, 2, 2, b] = 0.5 * (self.grd[i, j, k + 1, 2, b] - self.grd[i, j, k - 1, 2, b])
+        #             self.m1[i, j, self.nk[b] - 1, 0, 2, b] = self.grd[i, j, self.nk[b] - 1, 0, b] - self.grd[i, j, self.nk[b] - 2, 0, b]
+        #             self.m1[i, j, self.nk[b] - 1, 1, 2, b] = self.grd[i, j, self.nk[b] - 1, 1, b] - self.grd[i, j, self.nk[b] - 2, 1, b]
+        #             self.m1[i, j, self.nk[b] - 1, 2, 2, b] = self.grd[i, j, self.nk[b] - 1, 2, b] - self.grd[i, j, self.nk[b] - 2, 2, b]
+        #     print('zeta derivatives')
 
         # compute Jacobian
-        self.J = self.m1[..., 0, 0, :] * (
-                    self.m1[..., 1, 1, :] * self.m1[..., 2, 2, :] - self.m1[..., 1, 2, :] * self.m1[..., 2, 1, :]) - \
-                 self.m1[..., 1, 0, :] * (
-                             self.m1[..., 0, 1, :] * self.m1[..., 2, 2, :] - self.m1[..., 0, 2, :] * self.m1[..., 2, 1, :]) + \
-                 self.m1[..., 2, 0, :] * (
-                             self.m1[..., 0, 1, :] * self.m1[..., 1, 2, :] - self.m1[..., 0, 2, :] * self.m1[..., 1, 1, :])
+        for b in range(self.nb):
+            self.J[:self.ni[b], :self.nj[b], :self.nk[b], b] = \
+                self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 0, b] * \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 1, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 2, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 2, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 1, b]) - \
+                self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 0, b] * \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 1, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 2, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 2, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 1, b]) + \
+                self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 0, b] * \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 1, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 2, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 2, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 1, b])
 
         # x derivatives
-        self.m2[..., 0, 0, :] = (self.m1[..., 1, 1, :] * self.m1[..., 2, 2, :] - self.m1[..., 1, 2, :] * self.m1[..., 2, 1, :]) / self.J
-        self.m2[..., 1, 0, :] = (self.m1[..., 1, 2, :] * self.m1[..., 2, 0, :] - self.m1[..., 1, 0, :] * self.m1[..., 2, 2, :]) / self.J
-        self.m2[..., 2, 0, :] = (self.m1[..., 1, 0, :] * self.m1[..., 2, 1, :] - self.m1[..., 1, 1, :] * self.m1[..., 2, 0, :]) / self.J
+        for b in range(self.nb):
+            self.m2[:self.ni[b], :self.nj[b], :self.nk[b], 0, 0, b] = \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 1, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 2, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 2, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 1, b]) \
+                / self.J[:self.ni[b], :self.nj[b], :self.nk[b], b]
+            self.m2[:self.ni[b], :self.nj[b], :self.nk[b], 1, 0, b] = \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 2, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 0, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 0, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 2, b]) \
+                / self.J[:self.ni[b], :self.nj[b], :self.nk[b], b]
+            self.m2[:self.ni[b], :self.nj[b], :self.nk[b], 2, 0, b] = \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 0, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 1, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 1, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 0, b]) \
+                / self.J[:self.ni[b], :self.nj[b], :self.nk[b], b]
 
-        # y derivative
-        self.m2[..., 0, 1, :] = (self.m1[..., 0, 2, :] * self.m1[..., 2, 1, :] - self.m1[..., 0, 1, :] * self.m1[..., 2, 2, :]) / self.J
-        self.m2[..., 1, 1, :] = (self.m1[..., 0, 0, :] * self.m1[..., 2, 2, :] - self.m1[..., 0, 2, :] * self.m1[..., 2, 0, :]) / self.J
-        self.m2[..., 2, 1, :] = (self.m1[..., 0, 1, :] * self.m1[..., 2, 0, :] - self.m1[..., 0, 0, :] * self.m1[..., 2, 1, :]) / self.J
+            # y derivative
+            self.m2[:self.ni[b], :self.nj[b], :self.nk[b], 0, 1, b] = \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 2, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 1, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 1, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 2, b]) \
+                / self.J[:self.ni[b], :self.nj[b], :self.nk[b], b]
+            self.m2[:self.ni[b], :self.nj[b], :self.nk[b], 1, 1, b] = \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 0, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 2, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 2, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 0, b]) \
+                / self.J[:self.ni[b], :self.nj[b], :self.nk[b], b]
+            self.m2[:self.ni[b], :self.nj[b], :self.nk[b], 2, 1, b] = \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 1, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 0, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 0, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 1, b]) \
+                / self.J[:self.ni[b], :self.nj[b], :self.nk[b], b]
 
-        # z derivatives
-        self.m2[..., 0, 2, :] = (self.m1[..., 0, 1, :] * self.m1[..., 1, 2, :] - self.m1[..., 0, 2, :] * self.m1[..., 1, 1, :]) / self.J
-        self.m2[..., 1, 2, :] = (self.m1[..., 0, 2, :] * self.m1[..., 1, 0, :] - self.m1[..., 0, 0, :] * self.m1[..., 1, 2, :]) / self.J
-        self.m2[..., 2, 2, :] = (self.m1[..., 0, 0, :] * self.m1[..., 1, 1, :] - self.m1[..., 0, 1, :] * self.m1[..., 1, 0, :]) / self.J
+            # z derivatives
+            self.m2[:self.ni[b], :self.nj[b], :self.nk[b], 0, 2, b] = \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 1, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 2, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 2, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 1, b]) \
+                / self.J[:self.ni[b], :self.nj[b], :self.nk[b], b]
+            self.m2[:self.ni[b], :self.nj[b], :self.nk[b], 1, 2, b] = \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 2, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 0, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 0, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 2, b]) \
+                / self.J[:self.ni[b], :self.nj[b], :self.nk[b], b]
+            self.m2[:self.ni[b], :self.nj[b], :self.nk[b], 2, 2, b] = \
+                (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 0, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 1, b] -
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 1, b] *
+                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 0, b]) \
+                / self.J[:self.ni[b], :self.nj[b], :self.nk[b], b]
 
         print("Grid metrics computed successfully!")
 

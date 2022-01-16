@@ -46,6 +46,7 @@ def main(grid_file, flow_file, point, method='c-space'):
     if method == 'c-space':
         # Use c-space search to convert and find the location of given point
         # All the idx attributes are converted to c-space -- point, cell, block
+        save_point = point
         idx = Search(grid, point)
         idx.compute(method='c-space')
         while True:
@@ -57,7 +58,7 @@ def main(grid_file, flow_file, point, method='c-space'):
                 if new_point is None:
                     # For multi-block case if the point is out-of-block
                     # Use previous point and run one-step of p-space algo
-                    print('inside loop')
+                    print('Point exited the block! Searching for new position...')
                     idx = Search(grid, save_point)
                     interp = Interpolation(flow, idx)
                     intg = Integration(interp)
@@ -65,37 +66,45 @@ def main(grid_file, flow_file, point, method='c-space'):
                     interp.compute()
                     new_point = intg.compute(method='pRK4', time_step=1e-1)
                     if new_point is None:
-                        print('Integration complete!')
+                        print('No location found. Point out-of-domain. Integration complete!')
                         break
                     else:
-                        new_point = idx.p2c(new_point)  # Move point obtained to c-space
-                save_point = idx.c2p(new_point)
-                streamline.append(save_point)
-                idx.point = new_point
+                        # Update the block in idx
+                        idx = Search(grid, new_point)
+                        idx.compute(method='c-space')
+                        streamline.append(new_point)
+                        # new_point = idx.p2c(new_point)  # Move point obtained to c-space
+                else:
+                    save_point = idx.c2p(new_point)
+                    streamline.append(save_point)
+                    idx.point = new_point
 
     return np.array(streamline)
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    # slc = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [8.5, 0.5, 0.01], method='c-space')
-    # slp = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [8.5, 0.5, 0.01], method='p-space')
+    slc = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [5.5, 0.5, 0.01], method='c-space')
+    # slp = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [5.5, 0.5, 0.01], method='p-space')
     # slc = main('data/cylinder_data/cylinder.sp.x', 'data/cylinder_data/sol-0010000.q', [0.5, 0.5, 0.5], method='c-space')
     # slp = main('data/cylinder_data/cylinder.sp.x', 'data/cylinder_data/sol-0010000.q', [0.5, 0.5, 0.5], method='p-space')
     # main('data/multi_block/test/test.mb.sp.x', 'data/multi_block/test/test.mb.sp.q', [-0.5, -0.5, -0.5])
-    slmb = main('data/multi_block/plate/plate.mb.sp.x', 'data/multi_block/plate/plate.mb.sp.q', [8.5, 0.5, 0.01])
+    slmbc = main('data/multi_block/plate/plate.mb.sp.x', 'data/multi_block/plate/plate.mb.sp.q', [5.5, 0.5, 0.01], method='c-space')
+    # slmbp = main('data/multi_block/plate/plate.mb.sp.x', 'data/multi_block/plate/plate.mb.sp.q', [5.4, 0.5, 0.01], method='p-space')
 
-    # xc, yc, zc = slc[:, 0], slc[:, 1], slc[:, 2]
+
+    xc, yc, zc = slc[:, 0], slc[:, 1], slc[:, 2]
     # xp, yp, zp = slp[:, 0], slp[:, 1], slp[:, 2]
-    xmb, ymb, zmb = slmb[:-2, 0], slmb[:-2, 1], slmb[:-2, 2]
+    xmbc, ymbc, zmbc = slmbc[:, 0], slmbc[:, 1], slmbc[:, 2]
+    # xmbp, ymbp, zmbp = slmbp[:, 0], slmbp[:, 1], slmbp[:, 2]
 
     import matplotlib.pyplot as plt
-    import random
 
     ax = plt.axes(projection='3d')
-    # ax.plot3D(xc, yc, zc, 'r')
-    # plt.figure()
+    ax.plot3D(xc, yc, zc, 'r')
     # ax.plot3D(xp, yp, zp, 'b')
-    ax.plot3D(xmb, ymb, zmb, 'g')
+    ax.plot3D(xmbc, ymbc, zmbc, 'g')
+    # ax.scatter(xmbc, ymbc, zmbc, '.-')
+    # ax.plot3D(xmbp, ymbp, zmbp, 'k')
     plt.show()
 

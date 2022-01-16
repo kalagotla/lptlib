@@ -212,12 +212,12 @@ class Search:
         _cell_grd = self.grid.grd[self.cell[:, 0], self.cell[:, 1], self.cell[:, 2], :, self.block]
 
         point = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_grd[0] + \
-                     _alpha  * (1 - _beta) * (1 - _gamma) * _cell_grd[1] + \
-                     _alpha  *      _beta  * (1 - _gamma) * _cell_grd[2] + \
+                _alpha  * (1 - _beta) * (1 - _gamma) * _cell_grd[1] + \
+                _alpha  *      _beta  * (1 - _gamma) * _cell_grd[2] + \
                 (1 - _alpha) *      _beta  * (1 - _gamma) * _cell_grd[3] + \
                 (1 - _alpha) * (1 - _beta) *      _gamma  * _cell_grd[4] + \
-                     _alpha  * (1 - _beta) *      _gamma  * _cell_grd[5] + \
-                     _alpha  *      _beta *       _gamma  * _cell_grd[6] + \
+                _alpha  * (1 - _beta) *      _gamma  * _cell_grd[5] + \
+                _alpha  *      _beta *       _gamma  * _cell_grd[6] + \
                 (1 - _alpha) *      _beta  *      _gamma  * _cell_grd[7]
 
         return point
@@ -233,6 +233,7 @@ class Search:
             eps: c-space co-ordinates
         """
 
+        self.point = point
         self.compute(method='block_distance')
         # Setup initial variables
         _cell_grd = self.grid.grd[self.cell[:, 0], self.cell[:, 1], self.cell[:, 2], :, self.block]
@@ -252,13 +253,30 @@ class Search:
         while True:
             # Check if taking too long
             if _iter >= 1e3:
-                print('Newton-Raphson did not converge. Try again!')
+                print('Newton-Raphson did not converge. Try again!\n'
+                      'Possible reason might be the point might be too close to the end of a domain')
                 return
 
             # Currently, using one Jacobian per cell
-            # TODO: Need to use tri-linear interpolation to get Jacobian
+            # TODO: Need to fix the print statements when switching blocks
             _eps0, _eps1, _eps2 = _eps.astype(int)
-            _J_inv = self.grid.m2[_eps0, _eps1, _eps2, :, :, self.block]
+            _alpha, _beta, _gamma = np.modf(_eps)[0]
+            if _eps0 + 1 >= self.grid.ni[self.block]:
+                _eps[0] = self.grid.ni[self.block] - 1 - _alpha
+            if _eps1 + 1 >= self.grid.nj[self.block]:
+                _eps[1] = self.grid.nj[self.block] - 1 - _beta
+            if _eps2 + 1 >= self.grid.nk[self.block]:
+                _eps[2] = self.grid.nk[self.block] - 1 - _gamma
+
+            _cell_J_inv = self.grid.m2[self.cell[:, 0], self.cell[:, 1], self.cell[:, 2], :, :, self.block]
+            _J_inv = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_J_inv[0] + \
+                     _alpha * (1 - _beta) * (1 - _gamma) * _cell_J_inv[1] + \
+                     _alpha * _beta * (1 - _gamma) * _cell_J_inv[2] + \
+                     (1 - _alpha) * _beta * (1 - _gamma) * _cell_J_inv[3] + \
+                     (1 - _alpha) * (1 - _beta) * _gamma * _cell_J_inv[4] + \
+                     _alpha * (1 - _beta) * _gamma * _cell_J_inv[5] + \
+                     _alpha * _beta * _gamma * _cell_J_inv[6] + \
+                     (1 - _alpha) * _beta * _gamma * _cell_J_inv[7]
 
             # Transform from c to p-space
             _pred_point = self.c2p(_eps)
@@ -270,14 +288,15 @@ class Search:
             if sum(abs(_delta_point)) <= 1e-6:
                 _eps0, _eps1, _eps2 = _eps.astype(int)
                 self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
+                self.point = _eps
                 return _eps
 
             # Transform from p to c-space
             _delta_eps = np.matmul(_J_inv, _delta_point)
-            if sum(abs(_delta_eps)) <= 1e-6:
-                _eps0, _eps1, _eps2 = _eps.astype(int)
-                self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
-                return _eps
+            # if sum(abs(_delta_eps)) <= 1e-6:
+            #     _eps0, _eps1, _eps2 = _eps.astype(int)
+            #     self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
+            #     return _eps
 
             # New point
             _eps += _delta_eps

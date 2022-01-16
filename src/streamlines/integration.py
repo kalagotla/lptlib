@@ -24,8 +24,8 @@ class Integration:
             return self.point
 
         if method == 'c-space':
-            _J_inv = self.interp.idx.grid.m2[self.interp.idx.cell[0][0], self.interp.idx.cell[0][1],
-                                             self.interp.idx.cell[0][2], :, :, self.interp.idx.block]
+            _J_inv = self.interp.idx.grid.m2[self.interp.idx.cell[0, 0], self.interp.idx.cell[0, 1],
+                                             self.interp.idx.cell[0, 2], :, :, self.interp.idx.block]
 
             q_interp = Variables(self.interp)
             q_interp.compute_velocity()
@@ -103,6 +103,13 @@ class Integration:
             return self.point
 
         if method == 'cRK4':
+            '''
+            This is a block-wise integration. Everytime the point gets out
+            a pRK4 is run to find the new block the point is located in.
+            That particular step is done in streamlines algorithm.
+            
+            All the points, x0, x1... are in c-space
+            '''
             from src.streamlines.interpolation import Interpolation
             from src.streamlines.search import Search
 
@@ -126,7 +133,7 @@ class Integration:
 
             idx = Search(self.interp.idx.grid, x1)
             idx.block = self.interp.idx.block
-            idx.c2p(x1)  # This will change cell, point attributes
+            idx.c2p(x1)  # This will change the cell attribute
             interp = Interpolation(self.interp.flow, idx)
             interp.compute(method='c-space')
             _J_inv = interp.J_inv
@@ -148,7 +155,7 @@ class Integration:
 
             idx = Search(self.interp.idx.grid, x2)
             idx.block = self.interp.idx.block
-            idx.c2p(x2)  # This will change cell attribute
+            idx.c2p(x2)  # This will change the cell attribute
             interp = Interpolation(self.interp.flow, idx)
             interp.compute(method='c-space')
             _J_inv = interp.J_inv
