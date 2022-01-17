@@ -44,7 +44,8 @@ class TestIO(unittest.TestCase):
         grid = GridIO('../data/multi_block/cube/cube.mb.x')
         # Print the doc string
         print(grid)
-        grid.read_grid()
+        grid.read_grid(data_type='f8')
+        grid.compute_metrics()
 
         # Simple assertion to test the import
         self.assertEqual(grid.grd.shape, (grid.ni.max(), grid.nj.max(), grid.nk.max(), 3, grid.nb))
@@ -62,6 +63,7 @@ class TestIO(unittest.TestCase):
         # Print the doc string
         print(grid)
         grid.read_grid(data_type='f8')
+        grid.compute_metrics()
 
         # Simple assertion to test the import
         self.assertEqual(grid.grd.shape, (grid.ni.max(), grid.nj.max(), grid.nk.max(), 3, grid.nb))
