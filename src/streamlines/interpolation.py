@@ -76,7 +76,7 @@ class Interpolation:
         self.mach, self.alpha, self.rey, self.time = self.flow.mach, self.flow.alpha, self.flow.rey, self.flow.time
 
         # If out of domain return
-        if self.idx.point is None:
+        if self.idx.ppoint is None and self.idx.cpoint is None:
             print('Cannot run interpolation. The given point is out of domain.\n')
             self.q = None
             return
@@ -93,7 +93,7 @@ class Interpolation:
         if method == 'linear':
             # If the node is found in a cell
             if self.idx.cell.shape == (8, 3) and self.idx.info is None:
-                def _f(_m, _n, _arr1, _arr2, _axis, _paxis, _data1, _data2):
+                def _f(self, _m, _n, _arr1, _arr2, _axis, _paxis, _data1, _data2):
                     """
                     Internal function used for linearly interpolating data
                     :param _m: int
@@ -117,36 +117,40 @@ class Interpolation:
                     author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
                     date: 10-29/2021
                     """
-                    _a = (_arr2[_n, _axis] - self.idx.point[_paxis]) / (_arr2[_n, _axis] - _arr1[_m, _axis]) * _data1[_m]
-                    _b = (self.idx.point[_paxis] - _arr1[_m, _axis]) / (_arr2[_n, _axis] - _arr1[_m, _axis]) * _data2[_n]
+                    _a = (_arr2[_n, _axis] - self.idx.ppoint[_paxis]) / (_arr2[_n, _axis] - _arr1[_m, _axis]) * _data1[_m]
+                    _b = (self.idx.ppoint[_paxis] - _arr1[_m, _axis]) / (_arr2[_n, _axis] - _arr1[_m, _axis]) * _data2[_n]
                     return _a + _b
 
                 # 0123 are vertices of quadrilateral
                 # Doing interpolation to x location in self.idx.point
                 # Values in the function help set the linear interpolation in x-direction
-                _cell_grd_01 = _f(0, 1, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
-                _cell_grd_32 = _f(3, 2, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
-                _cell_q_01 = _f(0, 1, _cell_grd, _cell_grd, 0, 0, _cell_q, _cell_q)
-                _cell_q_32 = _f(3, 2, _cell_grd, _cell_grd, 0, 0, _cell_q, _cell_q)
+                _cell_grd_01 = _f(self, 0, 1, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
+                _cell_grd_32 = _f(self, 3, 2, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
+                _cell_q_01 = _f(self, 0, 1, _cell_grd, _cell_grd, 0, 0, _cell_q, _cell_q)
+                _cell_q_32 = _f(self, 3, 2, _cell_grd, _cell_grd, 0, 0, _cell_q, _cell_q)
 
                 # Doing interpolation to the point projection on the face
-                _cell_grd_0123 = _f(1, 1, _cell_grd_01, _cell_grd_32, None, 1, [None, _cell_grd_01], [None, _cell_grd_32])
-                _cell_q_0123 = _f(1, 1, _cell_grd_01, _cell_grd_32, None, 1, [None, _cell_q_01], [None, _cell_q_32])
+                _cell_grd_0123 = _f(self, 1, 1, _cell_grd_01, _cell_grd_32, None, 1,
+                                    [None, _cell_grd_01], [None, _cell_grd_32])
+                _cell_q_0123 = _f(self, 1, 1, _cell_grd_01, _cell_grd_32, None, 1,
+                                  [None, _cell_q_01], [None, _cell_q_32])
 
                 # 4567 face
                 # Doing interpolation to x location in self.idx.point
                 # Values in the function help set the linear interpolation in y-direction
-                _cell_grd_45 = _f(4, 5, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
-                _cell_grd_76 = _f(7, 6, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
-                _cell_q_45 = _f(4, 5, _cell_grd, _cell_grd, 0, 0, _cell_q, _cell_q)
-                _cell_q_76 = _f(7, 6, _cell_grd, _cell_grd, 0, 0, _cell_q, _cell_q)
+                _cell_grd_45 = _f(self, 4, 5, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
+                _cell_grd_76 = _f(self, 7, 6, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
+                _cell_q_45 = _f(self, 4, 5, _cell_grd, _cell_grd, 0, 0, _cell_q, _cell_q)
+                _cell_q_76 = _f(self, 7, 6, _cell_grd, _cell_grd, 0, 0, _cell_q, _cell_q)
 
                 # Doing interpolation to the point projection on the face
-                _cell_grd_4567 = _f(1, 1, _cell_grd_45, _cell_grd_76, None, 1, [None, _cell_grd_45], [None, _cell_grd_76])
-                _cell_q_4567 = _f(1, 1, _cell_grd_45, _cell_grd_76, None, 1, [None, _cell_q_45], [None, _cell_q_76])
+                _cell_grd_4567 = _f(self, 1, 1, _cell_grd_45, _cell_grd_76, None, 1, [None, _cell_grd_45],
+                                    [None, _cell_grd_76])
+                _cell_q_4567 = _f(self, 1, 1, _cell_grd_45, _cell_grd_76, None, 1, [None, _cell_q_45],
+                                  [None, _cell_q_76])
 
                 # Doing data interpolation to the given point based on the face points
-                self.q = _f(2, 2, _cell_grd_0123, _cell_grd_4567, None, 2,
+                self.q = _f(self, 2, 2, _cell_grd_0123, _cell_grd_4567, None, 2,
                             [None, None, _cell_q_0123], [None, None, _cell_q_4567])
                 self.q = self.q.reshape((1, 1, 1, -1, 1))
 
@@ -164,7 +168,7 @@ class Interpolation:
             """
 
             _cell_J_inv = self.idx.grid.m2[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :, self.idx.block]
-            _alpha, _beta, _gamma = self.idx.point - self.idx.cell[0]
+            _alpha, _beta, _gamma = self.idx.cpoint - self.idx.cell[0]
             self.q = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_q[0] + \
                           _alpha  * (1 - _beta) * (1 - _gamma) * _cell_q[1] + \
                           _alpha  *      _beta  * (1 - _gamma) * _cell_q[2] + \
