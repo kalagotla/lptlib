@@ -22,7 +22,6 @@ def main(grid_file, flow_file, point, method='c-space'):
     # Read in the grid and flow data
     grid.read_grid()
     flow.read_flow()
-    grid.compute_metrics()
 
     streamline = [point]
     if method == 'p-space':
@@ -46,6 +45,7 @@ def main(grid_file, flow_file, point, method='c-space'):
     if method == 'c-space':
         # Use c-space search to convert and find the location of given point
         # All the idx attributes are converted to c-space -- point, cell, block
+        grid.compute_metrics()
         save_point = point
         idx = Search(grid, point)
         idx.compute(method='c-space')
@@ -79,32 +79,40 @@ def main(grid_file, flow_file, point, method='c-space'):
                     streamline.append(save_point)
                     idx.point = new_point
 
-    return np.array(streamline)
+    return np.array(streamline), grid
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    slc = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [5.5, 0.5, 0.01], method='c-space')
-    # slp = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [5.5, 0.5, 0.01], method='p-space')
-    # slc = main('data/cylinder_data/cylinder.sp.x', 'data/cylinder_data/sol-0010000.q', [0.5, 0.5, 0.5], method='c-space')
-    # slp = main('data/cylinder_data/cylinder.sp.x', 'data/cylinder_data/sol-0010000.q', [0.5, 0.5, 0.5], method='p-space')
-    # main('data/multi_block/test/test.mb.sp.x', 'data/multi_block/test/test.mb.sp.q', [-0.5, -0.5, -0.5])
-    slmbc = main('data/multi_block/plate/plate.mb.sp.x', 'data/multi_block/plate/plate.mb.sp.q', [5.5, 0.5, 0.01], method='c-space')
-    # slmbp = main('data/multi_block/plate/plate.mb.sp.x', 'data/multi_block/plate/plate.mb.sp.q', [5.4, 0.5, 0.01], method='p-space')
+    # slc, gridc = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [0.5, 0.5, 0.01], method='c-space')
+    # slp, gridp = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [0.5, 0.5, 0.01], method='p-space')
+    # slmbc, gridmbc = main('data/multi_block/plate/plate.mb.sp.x', 'data/multi_block/plate/plate.mb.sp.q',
+    #                       [0.5, 0.5, 0.01], method='c-space')
+    # slmbp, gridmbp = main('data/multi_block/plate/plate.mb.sp.x', 'data/multi_block/plate/plate.mb.sp.q',
+    #                       [0.5, 0.5, 0.01], method='p-space')
+    # Uncomment lines below to test cylinder grid
+    # slc, gridc = main('data/cylinder_data/cylinder.sp.x', 'data/cylinder_data/sol-0010000.q',
+    #                   [0.5, 1.5, 0.5], method='c-space')
+    slp, gridp = main('data/cylinder_data/cylinder.sp.x', 'data/cylinder_data/sol-0010000.q',
+                      [0.5, 1.5, 0.5], method='p-space')
 
 
-    xc, yc, zc = slc[:, 0], slc[:, 1], slc[:, 2]
-    # xp, yp, zp = slp[:, 0], slp[:, 1], slp[:, 2]
-    xmbc, ymbc, zmbc = slmbc[:, 0], slmbc[:, 1], slmbc[:, 2]
+    # xc, yc, zc = slc[:, 0], slc[:, 1], slc[:, 2]
+    xp, yp, zp = slp[:, 0], slp[:, 1], slp[:, 2]
+    # xmbc, ymbc, zmbc = slmbc[:, 0], slmbc[:, 1], slmbc[:, 2]
     # xmbp, ymbp, zmbp = slmbp[:, 0], slmbp[:, 1], slmbp[:, 2]
 
     import matplotlib.pyplot as plt
 
     ax = plt.axes(projection='3d')
-    ax.plot3D(xc, yc, zc, 'r')
-    # ax.plot3D(xp, yp, zp, 'b')
-    ax.plot3D(xmbc, ymbc, zmbc, 'g')
-    # ax.scatter(xmbc, ymbc, zmbc, '.-')
-    # ax.plot3D(xmbp, ymbp, zmbp, 'k')
+    # ax.plot3D(xc, yc, zc, 'r', label='SB-C')
+    ax.plot3D(xp, yp, zp, 'b', label='SB-P')
+    # ax.plot3D(xmbc, ymbc, zmbc, 'g', label='MB-C')
+    # ax.plot3D(xmbp, ymbp, zmbp, 'k', label='MB-P')
+    # ax.set_xlim([gridc.grd_min[0, 0], gridc.grd_max[0, 0]])
+    # ax.set_ylim([gridc.grd_min[0, 1], gridc.grd_max[0, 1]])
+    # ax.set_zlim([gridc.grd_min[0, 2], gridc.grd_max[0, 2]])
+    ax.set_title('Comparing different streamline algorithms')
+    ax.legend()
     plt.show()
 
