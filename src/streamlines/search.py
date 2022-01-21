@@ -3,6 +3,7 @@
 import numpy as np
 
 
+# noinspection SpellCheckingInspection
 class Search:
     """Module to search for the cell in which the given point is present
 
@@ -41,9 +42,10 @@ class Search:
         date: 10-24/2021
         """
 
-    def __init__(self, grid, point):
+    def __init__(self, grid, ppoint):
         self.grid = grid
-        self.point = point
+        self.ppoint = ppoint
+        self.cpoint = None
         self.index = None
         self.cell = None
         self.info = None
@@ -51,7 +53,7 @@ class Search:
 
     def __str__(self):
         doc = "This instance takes in the grid of shape " + self.grid.grd.shape + \
-              "\nand the searches for the point " + self.point + " in the grid.\n" \
+              "\nand the searches for the point " + self.ppoint + " in the grid.\n" \
               "Use method 'compute' to find (attributes) the closest 'index' and the nodes of the 'cell'.\n"
         return doc
 
@@ -65,7 +67,7 @@ class Search:
                           [_i, _j, _k + 1],
                           [_i + 1, _j, _k + 1],
                           [_i + 1, _j + 1, _k + 1],
-                          [_i, _j + 1, _k + 1]])
+                          [_i, _j + 1, _k + 1]], dtype=int)
         return _cell
 
     @staticmethod
@@ -76,7 +78,7 @@ class Search:
         # Basically looking at which quadrant the point is located
         # to find the nodes of the respective cell
         _node = self.grid.grd[i, j, k, :, self.block]
-        _point_transform = self.point - _node
+        _point_transform = self.ppoint - _node
 
         # Check if point is a node in the domain
         if np.all(abs(_point_transform) <= 1e-6):
@@ -89,29 +91,29 @@ class Search:
 
         # ON BOUNDARY FOR A GENERALIZED HEXA IS SAME AS DEFAULT SEARCH
         # Removed the code for on the boundary case
-        # Start the main cell modes code
-        if np.all(_point_transform >= 0):
+        # Start the main cell nodes code
+        if np.all(_point_transform >= 1e-6):
             self.cell = self._cell_nodes(i, j, k)
             return
-        if _point_transform[0] <= 0 and _point_transform[1] >= 0 and _point_transform[2] >= 0:
+        if _point_transform[0] <= 1e-6 and _point_transform[1] >= 1e-6 and _point_transform[2] >= 1e-6:
             self.cell = self._cell_nodes(i - 1, j, k)
             return
-        if _point_transform[0] <= 0 and _point_transform[1] <= 0 and _point_transform[2] >= 0:
+        if _point_transform[0] <= 1e-6 and _point_transform[1] <= 1e-6 and _point_transform[2] >= 1e-6:
             self.cell = self._cell_nodes(i - 1, j - 1, k)
             return
-        if _point_transform[0] >= 0 and _point_transform[1] <= 0 and _point_transform[2] >= 0:
+        if _point_transform[0] >= 1e-6 and _point_transform[1] <= 1e-6 and _point_transform[2] >= 1e-6:
             self.cell = self._cell_nodes(i, j - 1, k)
             return
-        if _point_transform[0] >= 0 and _point_transform[1] >= 0 and _point_transform[2] <= 0:
+        if _point_transform[0] >= 1e-6 and _point_transform[1] >= 1e-6 and _point_transform[2] <= 1e-6:
             self.cell = self._cell_nodes(i, j, k - 1)
             return
-        if _point_transform[0] <= 0 and _point_transform[1] >= 0 and _point_transform[2] <= 0:
+        if _point_transform[0] <= 1e-6 and _point_transform[1] >= 1e-6 and _point_transform[2] <= 1e-6:
             self.cell = self._cell_nodes(i - 1, j, k - 1)
             return
-        if np.all(_point_transform <= 0):
+        if np.all(_point_transform <= 1e-6):
             self.cell = self._cell_nodes(i - 1, j - 1, k - 1)
             return
-        if _point_transform[0] >= 0 and _point_transform[1] <= 0 and _point_transform[2] <= 0:
+        if _point_transform[0] >= 1e-6 and _point_transform[1] <= 1e-6 and _point_transform[2] <= 1e-6:
             self.cell = self._cell_nodes(i, j - 1, k - 1)
             return
 
@@ -119,16 +121,18 @@ class Search:
 
     @staticmethod
     def _find_block(self):
+        # Internal method to find the block
         # Setup to compute block number in which the point is present
-        _bool_min = self.grid.grd_min <= self.point
-        _bool_max = self.grid.grd_max >= self.point
+        _bool_min = self.grid.grd_min <= self.ppoint
+        _bool_max = self.grid.grd_max >= self.ppoint
         _bool = _bool_max == _bool_min
 
         # Test if the given point is in domain or not
         if np.all(_bool.all(axis=1) == False) or np.all(_bool_min == False) or np.all(_bool_max == False):
             self.info = 'Given point is not in the domain. The cell attribute will return "None" in search algorithm\n'
             self.cell = None
-            self.point = None
+            self.ppoint = None
+            self.cpoint = None
             self.block = None
             print(self.info)
             return
@@ -160,30 +164,46 @@ class Search:
 
         if method == 'distance':
             # Compute the distance from all nodes in the grid
-            _dist = np.sqrt((self.grid.grd[..., 0, :] - self.point[0]) ** 2 +
-                            (self.grid.grd[..., 1, :] - self.point[1]) ** 2 +
-                            (self.grid.grd[..., 2, :] - self.point[2]) ** 2)
+            _dist = np.sqrt((self.grid.grd[..., 0, :] - self.ppoint[0]) ** 2 +
+                            (self.grid.grd[..., 1, :] - self.ppoint[1]) ** 2 +
+                            (self.grid.grd[..., 2, :] - self.ppoint[2]) ** 2)
 
             # Find the closest node to the point --> index.ndim = 4
             self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
             i, j, k, self.block = self.index[0], self.index[1], self.index[2], self.index[3]
             self._cell_index(self, i, j, k)
+            # Check for the end of the domain case
+            if max(self.cell[:, 0]) > self.grid.ni[self.block] - 1 or \
+                    max(self.cell[:, 1]) > self.grid.nj[self.block] - 1 or \
+                    max(self.cell[:, 2]) > self.grid.nk[self.block] - 1:
+                self.cpoint = None
+                self.ppoint = None
+                return
 
         if method == 'block_distance':
             # Compute distance inside the block to get the nearest node
             _i, _j, _k = self.grid.ni[self.block], self.grid.nj[self.block], self.grid.nk[self.block]
-            _dist = np.sqrt((self.grid.grd[:_i, :_j, :_k, 0, self.block] - self.point[0]) ** 2 +
-                            (self.grid.grd[:_i, :_j, :_k, 1, self.block] - self.point[1]) ** 2 +
-                            (self.grid.grd[:_i, :_j, :_k, 2, self.block] - self.point[2]) ** 2)
+            _dist = np.sqrt((self.grid.grd[:_i, :_j, :_k, 0, self.block] - self.ppoint[0]) ** 2 +
+                            (self.grid.grd[:_i, :_j, :_k, 1, self.block] - self.ppoint[1]) ** 2 +
+                            (self.grid.grd[:_i, :_j, :_k, 2, self.block] - self.ppoint[2]) ** 2)
 
             # Other methods to calculate distance. The above method is faster
             # _grd_min_point = self.grid.grd[:_i, :_j, :_k, :, self.block] - self.point
-            # # _dist = np.linalg.norm(_grd_min_point, axis=-1)
+            # _dist = np.linalg.norm(_grd_min_point, axis=-1)
             # _dist = np.sqrt(np.einsum("ijkl,ijkl->ijk", _grd_min_point, _grd_min_point))
 
             self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
-            i, j, k = self.index[0], self.index[1], self.index[2]
+            i, j, k = self.index
             self._cell_index(self, i, j, k)
+            # Check for the end of the domain case
+            if max(self.cell[:, 0]) > self.grid.ni[self.block] - 1 or \
+                    max(self.cell[:, 1]) > self.grid.nj[self.block] - 1 or \
+                    max(self.cell[:, 2]) > self.grid.nk[self.block] - 1 or np.any(self.cell < 0):
+                print('Block search returned wrong cell! Point position lost.\n')
+                self.cpoint = None
+                self.ppoint = None
+                return
+
 
         if method == 'c-space':
             # To run c-space global point location is needed
@@ -192,26 +212,38 @@ class Search:
 
             # Transform given point from p-space to c-space using newton-raphson
             # This is only performed once to get the initial c-space point
-            self.point = self.p2c(self.point)
+            self.cpoint = self.p2c(self.ppoint)
 
-    def c2p(self, eps):
+    def c2p(self, _cpoint):
         """
         Method to convert c-space point to p-space
+        self.block is kept constant through the c-space algos
+        self.block is check and switched in streamlines algo
+        This method is commonly used to test point location
 
         Args:
-            eps: c-space co-ordinates
+            _cpoint: c-space co-ordinates
 
         Returns:
-            point: p-space co-ordinates
+            _ppoint: p-space co-ordinates
 
         """
-        _eps0, _eps1, _eps2 = eps.astype(int)
-        _alpha, _beta, _gamma = np.modf(eps)[0]  # same as eps % 1.0
+        self.cpoint = _cpoint
+        _eps0, _eps1, _eps2 = _cpoint.astype(int)
+        _alpha, _beta, _gamma = np.modf(_cpoint)[0]  # same as eps % 1.0
+
+        # Check if the given point is in the domain
+        if _eps0 >= self.grid.ni[self.block]-1 or _eps1 >= self.grid.nj[self.block]-1 or \
+                _eps2 >= self.grid.nk[self.block]-1:
+            self.cpoint = None
+            self.ppoint = None
+            return self.ppoint
+
 
         self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
         _cell_grd = self.grid.grd[self.cell[:, 0], self.cell[:, 1], self.cell[:, 2], :, self.block]
 
-        point = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_grd[0] + \
+        self.ppoint = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_grd[0] + \
                 _alpha  * (1 - _beta) * (1 - _gamma) * _cell_grd[1] + \
                 _alpha  *      _beta  * (1 - _gamma) * _cell_grd[2] + \
                 (1 - _alpha) *      _beta  * (1 - _gamma) * _cell_grd[3] + \
@@ -220,9 +252,9 @@ class Search:
                 _alpha  *      _beta *       _gamma  * _cell_grd[6] + \
                 (1 - _alpha) *      _beta  *      _gamma  * _cell_grd[7]
 
-        return point
+        return self.ppoint
 
-    def p2c(self, point):
+    def p2c(self, _ppoint):
         """
         Method to convert p-space point to c-space
         As there is no direct analytical equation. We use Newton-Raphson
@@ -233,22 +265,18 @@ class Search:
             eps: c-space co-ordinates
         """
 
-        self.point = point
-        self.compute(method='block_distance')
-        # Setup initial variables
-        _cell_grd = self.grid.grd[self.cell[:, 0], self.cell[:, 1], self.cell[:, 2], :, self.block]
+        self.ppoint = _ppoint
+
+        if self.block is None:
+            self.block = self._find_block(self)
 
         # Start Newton-Raphson
         _iter = 0
         # Initial guess
-        _eps = self.cell[0] + np.random.rand(3)
+        _cpoint = np.array([self.grid.ni[self.block], self.grid.nj[self.block], self.grid.nk[self.block]]) / 2 + \
+            np.random.randn(3)
 
         # TODO: Replace the compute method with a better initial guess to speed up
-        # Initial guess
-        # _eps0 = np.random.randint(0, self.grid.ni[self.block])
-        # _eps1 = np.random.randint(0, self.grid.nj[self.block])
-        # _eps2 = np.random.randint(0, self.grid.nk[self.block])
-        # _eps = np.array((_eps0, _eps1, _eps2))
 
         while True:
             # Check if taking too long
@@ -259,15 +287,17 @@ class Search:
 
             # Currently, using one Jacobian per cell
             # TODO: Need to fix the print statements when switching blocks
-            _eps0, _eps1, _eps2 = _eps.astype(int)
-            _alpha, _beta, _gamma = np.modf(_eps)[0]
+            _eps0, _eps1, _eps2 = _cpoint.astype(int)
+            _alpha, _beta, _gamma = np.modf(_cpoint)[0]
             if _eps0 + 1 >= self.grid.ni[self.block]:
-                _eps[0] = self.grid.ni[self.block] - 1 - _alpha
+                _cpoint[0] = self.grid.ni[self.block] - 1 - _alpha
             if _eps1 + 1 >= self.grid.nj[self.block]:
-                _eps[1] = self.grid.nj[self.block] - 1 - _beta
+                _cpoint[1] = self.grid.nj[self.block] - 1 - _beta
             if _eps2 + 1 >= self.grid.nk[self.block]:
-                _eps[2] = self.grid.nk[self.block] - 1 - _gamma
+                _cpoint[2] = self.grid.nk[self.block] - 1 - _gamma
 
+            _eps0, _eps1, _eps2 = _cpoint.astype(int)
+            self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
             _cell_J_inv = self.grid.m2[self.cell[:, 0], self.cell[:, 1], self.cell[:, 2], :, :, self.block]
             _J_inv = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_J_inv[0] + \
                      _alpha * (1 - _beta) * (1 - _gamma) * _cell_J_inv[1] + \
@@ -279,27 +309,29 @@ class Search:
                      (1 - _alpha) * _beta * _gamma * _cell_J_inv[7]
 
             # Transform from c to p-space
-            _pred_point = self.c2p(_eps)
+            _pred_ppoint = self.c2p(_cpoint)
 
             # Difference b/w predicted point to given point
-            _delta_point = point - _pred_point
+            _delta_ppoint = _ppoint - _pred_ppoint
 
             # End newton-raphson if condition is met
-            if sum(abs(_delta_point)) <= 1e-6:
-                _eps0, _eps1, _eps2 = _eps.astype(int)
+            if sum(abs(_delta_ppoint)) <= 1e-6:
+                _eps0, _eps1, _eps2 = _cpoint.astype(int)
                 self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
-                self.point = _eps
-                return _eps
+                self.cpoint = _cpoint
+                self.ppoint = _pred_ppoint
+                print('Point found in p-space! Continuing to interpolation...\n')
+                return _cpoint
 
             # Transform from p to c-space
-            _delta_eps = np.matmul(_J_inv, _delta_point)
-            # if sum(abs(_delta_eps)) <= 1e-6:
-            #     _eps0, _eps1, _eps2 = _eps.astype(int)
-            #     self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
-            #     return _eps
+            _delta_cpoint = np.matmul(_J_inv, _delta_ppoint)
 
-            # New point
-            _eps += _delta_eps
+            # Save old point
+            _cpoint_old = _cpoint
+
+            # Update point
+            _cpoint += _delta_cpoint
+            _cpoint = abs(_cpoint)
             _iter += 1
 
             pass
