@@ -6,15 +6,15 @@ from src.function.timer import Timer
 class TestIntegration(unittest.TestCase):
     @parameterized.expand([
         ('sb_sp_p_space', '../data/plate_data/plate.sp.x', '../data/plate_data/sol-0000010.q',
-         'f4', [8.5, 0.5, 0.01], 'block_distance', 'linear', 'p-space'),
+         'f4', [8.5, 0.5, 0.01], 'block_distance', 'p-space', 'p-space'),
         ('sb_sp_c_space', '../data/plate_data/plate.sp.x', '../data/plate_data/sol-0000010.q',
          'f4', [8.5, 0.5, 0.01], 'c-space', 'c-space', 'c-space'),
         ('sb_sp_p_space', '../data/plate_data/plate.sp.x', '../data/plate_data/sol-0000010.q',
-         'f4', [8.5, 0.5, 0.01], 'block_distance', 'linear', 'RK4'),
+         'f4', [8.5, 0.5, 0.01], 'block_distance', 'p-space', 'RK4'),
         ('sb_sp_c_space', '../data/plate_data/plate.sp.x', '../data/plate_data/sol-0000010.q',
          'f4', [8.5, 0.5, 0.01], 'c-space', 'c-space', 'cRK4'),
         ('mb_sp_p_space', '../data/multi_block/plate/plate.mb.sp.x', '../data/multi_block/plate/plate.mb.sp.q',
-         'f4', [8.5, 0.5, 0.01], 'block_distance', 'linear', 'RK4'),
+         'f4', [8.5, 0.5, 0.01], 'block_distance', 'p-space', 'RK4'),
         ('mb_sp_c_space', '../data/multi_block/plate/plate.mb.sp.x', '../data/multi_block/plate/plate.mb.sp.q',
          'f4', [8.5, 0.5, 0.01], 'c-space', 'c-space', 'cRK4')
 
@@ -22,7 +22,7 @@ class TestIntegration(unittest.TestCase):
     @Timer()
     def test_integration(self, name, gridfile='../data/plate_data/plate.sp.x',
                          flowfile='../data/plate_data/sol-0000010.q', data_type='f4', point=None,
-                         search_method='block_distance', interpolation_method='linear', integration_method='RK4'):
+                         search_method='block_distance', interpolation_method='p-space', integration_method='RK4'):
 
         from src.io.plot3dio import GridIO, FlowIO
         from src.streamlines.search import Search
