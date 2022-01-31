@@ -162,57 +162,65 @@ class Search:
         if self.block is None:
             return
 
-        if method == 'distance':
-            # Compute the distance from all nodes in the grid
-            _dist = np.sqrt((self.grid.grd[..., 0, :] - self.ppoint[0]) ** 2 +
-                            (self.grid.grd[..., 1, :] - self.ppoint[1]) ** 2 +
-                            (self.grid.grd[..., 2, :] - self.ppoint[2]) ** 2)
+        match method:
 
-            # Find the closest node to the point --> index.ndim = 4
-            self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
-            i, j, k, self.block = self.index[0], self.index[1], self.index[2], self.index[3]
-            self._cell_index(self, i, j, k)
-            # Check for the end of the domain case
-            if max(self.cell[:, 0]) > self.grid.ni[self.block] - 1 or \
-                    max(self.cell[:, 1]) > self.grid.nj[self.block] - 1 or \
-                    max(self.cell[:, 2]) > self.grid.nk[self.block] - 1:
-                self.cpoint = None
-                self.ppoint = None
-                return
+            case 'distance':
+                # Compute the distance from all nodes in the grid
+                _dist = np.sqrt((self.grid.grd[..., 0, :] - self.ppoint[0]) ** 2 +
+                                (self.grid.grd[..., 1, :] - self.ppoint[1]) ** 2 +
+                                (self.grid.grd[..., 2, :] - self.ppoint[2]) ** 2)
 
-        if method == 'block_distance':
-            # Compute distance inside the block to get the nearest node
-            _i, _j, _k = self.grid.ni[self.block], self.grid.nj[self.block], self.grid.nk[self.block]
-            _dist = np.sqrt((self.grid.grd[:_i, :_j, :_k, 0, self.block] - self.ppoint[0]) ** 2 +
-                            (self.grid.grd[:_i, :_j, :_k, 1, self.block] - self.ppoint[1]) ** 2 +
-                            (self.grid.grd[:_i, :_j, :_k, 2, self.block] - self.ppoint[2]) ** 2)
+                # Find the closest node to the point --> index.ndim = 4
+                self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
+                i, j, k, self.block = self.index[0], self.index[1], self.index[2], self.index[3]
+                self._cell_index(self, i, j, k)
+                # Check for the end of the domain case
+                if max(self.cell[:, 0]) > self.grid.ni[self.block] - 1 or \
+                        max(self.cell[:, 1]) > self.grid.nj[self.block] - 1 or \
+                        max(self.cell[:, 2]) > self.grid.nk[self.block] - 1:
+                    self.cpoint = None
+                    self.ppoint = None
+                    return
 
-            # Other methods to calculate distance. The above method is faster
-            # _grd_min_point = self.grid.grd[:_i, :_j, :_k, :, self.block] - self.point
-            # _dist = np.linalg.norm(_grd_min_point, axis=-1)
-            # _dist = np.sqrt(np.einsum("ijkl,ijkl->ijk", _grd_min_point, _grd_min_point))
+            case 'block_distance':
+                # Compute distance inside the block to get the nearest node
+                _i, _j, _k = self.grid.ni[self.block], self.grid.nj[self.block], self.grid.nk[self.block]
+                _dist = np.sqrt((self.grid.grd[:_i, :_j, :_k, 0, self.block] - self.ppoint[0]) ** 2 +
+                                (self.grid.grd[:_i, :_j, :_k, 1, self.block] - self.ppoint[1]) ** 2 +
+                                (self.grid.grd[:_i, :_j, :_k, 2, self.block] - self.ppoint[2]) ** 2)
 
-            self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
-            i, j, k = self.index
-            self._cell_index(self, i, j, k)
-            # Check for the end of the domain case
-            if max(self.cell[:, 0]) > self.grid.ni[self.block] - 1 or \
-                    max(self.cell[:, 1]) > self.grid.nj[self.block] - 1 or \
-                    max(self.cell[:, 2]) > self.grid.nk[self.block] - 1 or np.any(self.cell < 0):
-                print('Block search returned wrong cell! Point position lost.\n')
-                self.cpoint = None
-                self.ppoint = None
-                return
+                # Other methods to calculate distance. The above method is faster
+                # _grd_min_point = self.grid.grd[:_i, :_j, :_k, :, self.block] - self.point
+                # _dist = np.linalg.norm(_grd_min_point, axis=-1)
+                # _dist = np.sqrt(np.einsum("ijkl,ijkl->ijk", _grd_min_point, _grd_min_point))
 
+                self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
+                i, j, k = self.index
+                self._cell_index(self, i, j, k)
+                # Check for the end of the domain case
+                if max(self.cell[:, 0]) > self.grid.ni[self.block] - 1 or \
+                        max(self.cell[:, 1]) > self.grid.nj[self.block] - 1 or \
+                        max(self.cell[:, 2]) > self.grid.nk[self.block] - 1 or np.any(self.cell < 0):
+                    print('Block search returned wrong cell! Point position lost.\n')
+                    self.cpoint = None
+                    self.ppoint = None
+                    return
 
-        if method == 'c-space':
-            # To run c-space global point location is needed
-            # credit: Sadarjoen et al.
-            # title: Particle tracing algorithms for 3D Curvilinear grids
+            case 'p-space':
+                # Search for given point using newton-raphson
+                # credit: Sadarjoen et al.
+                # title: Particle tracing algorithms for 3D Curvilinear grids
+                # This search is performed every single time to find the given point
+                self.cpoint = self.p2c(self.ppoint)
 
-            # Transform given point from p-space to c-space using newton-raphson
-            # This is only performed once to get the initial c-space point
-            self.cpoint = self.p2c(self.ppoint)
+            case 'c-space':
+                # To run c-space global point location is needed
+                # credit: Sadarjoen et al.
+                # title: Particle tracing algorithms for 3D Curvilinear grids
+
+                # Transform given point from p-space to c-space using newton-raphson
+                # This is only performed once to get the initial c-space point
+                self.cpoint = self.p2c(self.ppoint)
 
     def c2p(self, _cpoint):
         """
@@ -320,7 +328,6 @@ class Search:
                 self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
                 self.cpoint = _cpoint
                 self.ppoint = _pred_ppoint
-                print('Point found in p-space! Continuing to interpolation...\n')
                 return _cpoint
 
             # Transform from p to c-space

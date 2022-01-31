@@ -23,6 +23,10 @@ class GridIO:
             shape of the domain
         grd : numpy.ndarray
             Grid data of shape (ni, nj, nk, 3, nb)
+        grd_min: numpy.ndarray
+            min co-ordinates of each block (3, nb)
+        grd_max: numpy.ndarray
+            max co-ordinates of each block (3, nb)
         m1 : numpy.ndarray
             xi, eta, zeta derivatives wrt x, y, z --> shape (ni, nj, nk, 3, 3, nb)
         m2 : numpy.ndarray
@@ -39,6 +43,7 @@ class GridIO:
     Example:
         grid = GridIO('plate.sp.x')  # Assume file is in the path
         grid.read_grid()  # Call method to read the data
+        grid.compute_metrics()  # Computes m1, m2, J arrays
         print(grid)  # prints the docstring for grid
         # Instance attributes
         print(grid.grd.shape)  # shape of the grid data
@@ -71,9 +76,15 @@ class GridIO:
     def read_grid(self, data_type='f4'):
         """Reads in the grid file and changes the instance attributes
 
-        :parameter
+        Parameters
+        -----------
+        data_type: str
+            Specify the data type of the grid file specified
+            Default is 'f4' for single-precision
+            For double-precision use 'f8'
 
-        :return
+        Returns
+        -------
         None
 
         author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
@@ -115,12 +126,14 @@ class GridIO:
             self.grd_max = np.array(self.grd_max)
 
     def compute_metrics(self):
-        """Calculate grid metrics from grid data
+        """Calculate grid metrics from grid data.
+        Need to call read_grid() before computing metrics
 
-        :parameter
-        None
+        Parameters
+        ----------
 
-        :return
+        Returns
+        -------
         None
 
         Example:
@@ -133,7 +146,7 @@ class GridIO:
             print(grid.m2)  # derivatives x, y, z
 
         author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
-        credit: Jacob Welsh for providing the code
+        credit: Jacob Welsh for providing the code for single block
         date: 12-23/2021
         """
         self.m1 = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), 3, 3, self.nb))
@@ -302,6 +315,10 @@ class FlowIO:
 
         Parameters
         ----------
+        data_type: str
+            Specify the data type of the flow file specified
+            Default is 'f4' for single-precision
+            For double-precision use 'f8'
 
         Returns
         -------
