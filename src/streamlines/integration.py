@@ -9,23 +9,31 @@ class Integration:
         self.ppoint = None
         self.cpoint = None
 
+    def __str__(self):
+        doc = "This instance uses data from " + self.interp.flow.filename + \
+              " and integrates based on the given time step"
+        return doc
+
     def compute(self, method='p-space', time_step=1e-6):
         from src.function.variables import Variables
         match method:
             case 'p-space':
-                # For p-space algos; the point -in-domain check was done in search
+                # For p-space algos; the point-in-domain check was done in search
                 if self.interp.idx.ppoint is None:
                     self.ppoint = None
                     return self.ppoint
 
+                # Compute required variables from plot3d data
                 q_interp = Variables(self.interp)
                 q_interp.compute_velocity()
+                # Integration for one time step
                 self.ppoint = self.interp.idx.ppoint + q_interp.velocity.reshape(3) * time_step
 
                 return self.ppoint
 
             case 'c-space':
                 # Get inverse Jacobian from the interpolation class
+                # Using cell node data. For more accurate calculation refer to cRK4 method
                 _J_inv = self.interp.idx.grid.m2[self.interp.idx.cell[0, 0], self.interp.idx.cell[0, 1],
                                                  self.interp.idx.cell[0, 2], :, :, self.interp.idx.block]
 
@@ -35,7 +43,7 @@ class Integration:
                 c_velocity = np.matmul(_J_inv, p_velocity)
                 self.cpoint = self.interp.idx.cpoint + c_velocity * time_step
 
-                # For c-spce the point in-domain check is done after integration
+                # For c-space the point in-domain check is done after integration
                 if not np.all([0, 0, 0] <= self.cpoint) or not np.all(
                         self.cpoint + 1 < [self.interp.idx.grid.ni[self.interp.idx.block],
                                            self.interp.idx.grid.nj[self.interp.idx.block],
@@ -46,10 +54,24 @@ class Integration:
                 return self.cpoint
 
             case 'pRK4':
-                from src.streamlines.interpolation import Interpolation
-                from src.streamlines.search import Search
-
+                """
+                This is a straight forward RK4 integration. Search for the point,
+                Interpolate the data to the point, Compute required variables,
+                Perform RK4 integration!
+                """
                 def _rk4_step(self, x):
+                    """
+
+                    Args:
+                        self:
+                        x: ndarray
+                            point in p-space
+
+                    Returns:
+                        k: ndarray
+                            interim RK4 variables
+
+                    """
                     idx = Search(self.interp.idx.grid, x)
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
@@ -95,11 +117,27 @@ class Integration:
                 That particular step is done in streamlines algorithm.
                 
                 All the points, x0, x1... are in c-space
+                
+                Point location is known in c-space, avoiding search.
+                Interpolates data to the point
+                RK4 integration is performed!
                 '''
                 from src.streamlines.interpolation import Interpolation
                 from src.streamlines.search import Search
 
                 def _rk4_step(self, x):
+                    """
+
+                    Args:
+                        self:
+                        x: ndarray
+                            point in c-space
+
+                    Returns:
+                        k: ndarray
+                            interim RK4 variables
+
+                    """
                     idx = Search(self.interp.idx.grid, x)
                     idx.block = self.interp.idx.block
                     idx.c2p(x)  # This will change the cell attribute

@@ -12,8 +12,6 @@ class Interpolation:
     Attributes
     ----------
     Input:
-        grid : src.io.plot3dio.GridIO
-            Grid object created from GridIO
         flow : src.io.plot3dio.FlowIO
             Flow object created from FlowIO
         idx: src.streamlines.Search
@@ -25,12 +23,14 @@ class Interpolation:
             Dimensionless data from flow
         mach, alpha, rey, time: float
             Dimensionless data from flow
+        J_inv: ndarray
+            Inverse grid metrics at the given point
 
     Methods
     -------
-    compute(method='linear')
+    compute(method='p-space')
         Interpolates the data onto a given point
-        linear or c-space can be specified
+        p-space or c-space can be specified
 
     Example:
         grid = GridIO('../data/plate_data/plate.sp.x')
@@ -41,7 +41,7 @@ class Interpolation:
         grid.read_grid()
         flow.read_flow()
         idx.compute()
-        interp_data.compute()  # method='linear' is default
+        interp_data.compute()  # method='p-space' is default
 
     author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
     date: 10-29/2021
@@ -56,12 +56,17 @@ class Interpolation:
         self.mach, self.alpha, self.rey, self.time = [None] * 4
         self.J_inv = None
 
+    def __str__(self):
+        doc = "This instance uses " + self.flow.filename + " as the flow file " \
+                                                           "to compute properties at " + self.idx.ppoint + "\n"
+        return doc
+
     def compute(self, method='p-space'):
         """
-        Find interpolated plot3d data at a given point
+        Find interpolated plot3d data and grid metrics at a given point
         Args:
             method: Available methods for interpolation
-            1. linear: Tri-linear interpolation in physical co-ordinates
+            1. p-space: Tri-linear interpolation in physical co-ordinates
             2. c-space: Tri-linear interpolation in c-space. Must-use for the c-space algo
 
         Returns:
@@ -123,7 +128,7 @@ class Interpolation:
                         return _a + _b
 
                     # 0123 are vertices of quadrilateral
-                    # Doing interpolation to x location in self.idx.point
+                    # Doing interpolation to x location in self.idx.ppoint
                     # Values in the function help set the linear interpolation in x-direction
                     _cell_grd_01 = _f(self, 0, 1, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
                     _cell_grd_32 = _f(self, 3, 2, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
@@ -137,7 +142,7 @@ class Interpolation:
                                       [None, _cell_q_01], [None, _cell_q_32])
 
                     # 4567 face
-                    # Doing interpolation to x location in self.idx.point
+                    # Doing interpolation to x location in self.idx.ppoint
                     # Values in the function help set the linear interpolation in y-direction
                     _cell_grd_45 = _f(self, 4, 5, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
                     _cell_grd_76 = _f(self, 7, 6, _cell_grd, _cell_grd, 0, 0, _cell_grd, _cell_grd)
