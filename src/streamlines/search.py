@@ -14,9 +14,11 @@ class Search:
     Input :
         grid : src.io.plot3dio.GridIO
             Grid object created from GridIO
-        point: list
+        ppoint: list
             A float list of shape 3 -- Representing x, y, z of a point
     Output :
+        cpoint: numpy.ndarray
+            ppoint location in c-space. Will be computed if calculating in c-space
         index: numpy.ndarray
             Indices of closest node to the given point
         cell: numpy.ndarray
@@ -121,7 +123,7 @@ class Search:
 
     @staticmethod
     def _find_block(self):
-        # Internal method to find the block
+        # _Internal method to find the block
         # Setup to compute block number in which the point is present
         _bool_min = self.grid.grd_min <= self.ppoint
         _bool_max = self.grid.grd_max >= self.ppoint
@@ -145,11 +147,11 @@ class Search:
         """
         Use the method to compute index and cell attributes
 
-        :parameter:
+        parameter:
             method: str
                 Currently distance or block_distance
 
-        :return:
+        return:
         None
 
         author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
@@ -226,8 +228,9 @@ class Search:
         """
         Method to convert c-space point to p-space
         self.block is kept constant through the c-space algos
-        self.block is check and switched in streamlines algo
-        This method is commonly used to test point location
+        self.block is checked and switched in streamlines algo
+        This method is commonly used to test point location as well
+        in different algorithms
 
         Args:
             _cpoint: c-space co-ordinates
@@ -247,10 +250,11 @@ class Search:
             self.ppoint = None
             return self.ppoint
 
-
+        # Determine in which cell the current point is present
         self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
         _cell_grd = self.grid.grd[self.cell[:, 0], self.cell[:, 1], self.cell[:, 2], :, self.block]
 
+        # Calculate the location in p-space
         self.ppoint = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_grd[0] + \
                 _alpha  * (1 - _beta) * (1 - _gamma) * _cell_grd[1] + \
                 _alpha  *      _beta  * (1 - _gamma) * _cell_grd[2] + \
@@ -267,7 +271,7 @@ class Search:
         Method to convert p-space point to c-space
         As there is no direct analytical equation. We use Newton-Raphson
         Args:
-            point: p-space co-ordinates
+            _ppoint: p-space co-ordinates
 
         Returns:
             eps: c-space co-ordinates
@@ -293,8 +297,7 @@ class Search:
                       'Possible reason might be the point might be too close to the end of a domain')
                 return
 
-            # Currently, using one Jacobian per cell
-            # TODO: Need to fix the print statements when switching blocks
+            # Check for out-of-domain case and reset the point to in-domain
             _eps0, _eps1, _eps2 = _cpoint.astype(int)
             _alpha, _beta, _gamma = np.modf(_cpoint)[0]
             if _eps0 + 1 >= self.grid.ni[self.block]:
@@ -304,8 +307,11 @@ class Search:
             if _eps2 + 1 >= self.grid.nk[self.block]:
                 _cpoint[2] = self.grid.nk[self.block] - 1 - _gamma
 
+            # Compute eps after the point is reset
             _eps0, _eps1, _eps2 = _cpoint.astype(int)
             self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
+
+            # Calculate J_inv for the point --> Uses tri-linear interpolation
             _cell_J_inv = self.grid.m2[self.cell[:, 0], self.cell[:, 1], self.cell[:, 2], :, :, self.block]
             _J_inv = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_J_inv[0] + \
                      _alpha * (1 - _beta) * (1 - _gamma) * _cell_J_inv[1] + \
