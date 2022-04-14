@@ -1,5 +1,7 @@
 # Integrate from given point to produce streamlines
 import numpy as np
+from src.streamlines.interpolation import Interpolation
+from src.streamlines.search import Search
 
 
 class Integration:
@@ -59,6 +61,7 @@ class Integration:
                 Interpolate the data to the point, Compute required variables,
                 Perform RK4 integration!
                 """
+
                 def _rk4_step(self, x):
                     """
 
@@ -122,8 +125,6 @@ class Integration:
                 Interpolates data to the point
                 RK4 integration is performed!
                 '''
-                from src.streamlines.interpolation import Interpolation
-                from src.streamlines.search import Search
 
                 def _rk4_step(self, x):
                     """

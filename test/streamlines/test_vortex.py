@@ -11,7 +11,8 @@ class TestVortex(unittest.TestCase):
         Returns:
         """
         from src.streamlines.streamlines import Streamlines
-        sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5])
+        sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5],
+                         integration_method='pRK4', time_step=1)
         sl.compute()
 
         import matplotlib.pyplot as plt
