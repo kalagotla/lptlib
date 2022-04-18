@@ -4,7 +4,7 @@
 
 import unittest
 import numpy as np
-import multiprocessing as mp
+from multiprocess import Pool
 
 
 class TestParallel(unittest.TestCase):
@@ -14,7 +14,6 @@ class TestParallel(unittest.TestCase):
 
         Returns:
         """
-        from multiprocess import Pool
 
         def test_vortex(start_point):
             """
@@ -23,9 +22,8 @@ class TestParallel(unittest.TestCase):
             from src.streamlines.streamlines import Streamlines
             sl = Streamlines('../../data/vortex/vortex.sb.sp.x',
                              '../../data/vortex/vortex.sb.sp.q',
-                             start_point,
-                             integration_method='pRK4', time_step=1)
-            sl.compute()
+                             start_point, time_step=1)
+            sl.compute(method='p-space')
 
             import matplotlib.pyplot as plt
             data = np.array(sl.streamline)

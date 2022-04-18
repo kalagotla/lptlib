@@ -1,9 +1,17 @@
 import unittest
 import numpy as np
+from parameterized import parameterized
+from src.function.timer import Timer
 
 
 class TestVortex(unittest.TestCase):
-    def test_vortex(self):
+    # noinspection DuplicatedCode
+    @parameterized.expand([
+        ('p-space', 'p-space'),
+        ('c-space', 'c-space')
+    ])
+    @Timer()
+    def test_vortex(self, name, method='p-space'):
         """
         Applies streamlines algo for vortex field.
         Details of the vortex can be found in Murman and Powell, 1987
@@ -12,8 +20,8 @@ class TestVortex(unittest.TestCase):
         """
         from src.streamlines.streamlines import Streamlines
         sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5],
-                         integration_method='pRK4', time_step=1)
-        sl.compute()
+                         time_step=1)
+        sl.compute(method=method)
 
         import matplotlib.pyplot as plt
         data = np.array(sl.streamline)
