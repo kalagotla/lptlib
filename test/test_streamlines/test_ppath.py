@@ -7,8 +7,9 @@ from src.function.timer import Timer
 class TestPPath(unittest.TestCase):
     # noinspection DuplicatedCode
     @parameterized.expand([
+        ('adaptive-ppath-p-space', 'adaptive-ppath'),
         ('ppath-p-space', 'ppath'),
-        # ('p-space', 'p-space')
+        ('p-space', 'p-space')
     ])
     @Timer()
     def test_ppath(self, name, method='pRK4'):

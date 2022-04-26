@@ -58,6 +58,17 @@ class Streamlines:
 
     # TODO: Need to add doc for streamlines
 
+    @staticmethod
+    def dot_product_angle(_v1, _v2):
+        if np.linalg.norm(_v1) == 0 or np.linalg.norm(_v2) == 0:
+            print("Zero magnitude vector!")
+        else:
+            vector_dot_product = np.dot(_v1, _v2)
+            arccos = np.arccos(vector_dot_product / (np.linalg.norm(_v1) * np.linalg.norm(_v2)))
+            angle = np.degrees(arccos)
+            return angle
+        return
+
     def compute(self, method='p-space'):
         from src.function.timer import Timer
         from src.io.plot3dio import GridIO
@@ -128,6 +139,27 @@ class Streamlines:
                         idx.point = new_point
 
         if method == 'ppath':
+            vel = None
+            while True:
+                with Timer(text="Elapsed time for loop number " + str(len(self.streamline)) + ": {:.8f}"):
+                    idx = Search(grid, self.point)
+                    interp = Interpolation(flow, idx)
+                    intg = Integration(interp)
+                    idx.compute(method=self.search)
+                    interp.compute(method=self.interpolation)
+                    new_point, new_vel = intg.compute_ppath(diameter=5e-4, density=1000, viscosity=1.827e-5,
+                                                            velocity=vel, method='pRK4', time_step=self.time_step)
+                    if new_point is None:
+                        print('Integration complete!')
+                        break
+
+                    # Save results and continue the loop
+                    self.streamline.append(new_point)
+                    self.svelocity.append(vel)
+                    self.point = new_point
+                    vel = new_vel.copy()
+
+        if method == 'adaptive-ppath':
             vel = None
             while True:
                 with Timer(text="Elapsed time for loop number " + str(len(self.streamline)) + ": {:.8f}"):
