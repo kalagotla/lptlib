@@ -20,9 +20,8 @@ class TestParallel(unittest.TestCase):
             Local function to run in parallel
             """
             from src.streamlines.streamlines import Streamlines
-            sl = Streamlines('../../data/vortex/vortex.sb.sp.x',
-                             '../../data/vortex/vortex.sb.sp.q',
-                             start_point, time_step=1)
+            sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', start_point,
+                             time_step=1)
             sl.compute(method='p-space')
 
             import matplotlib.pyplot as plt

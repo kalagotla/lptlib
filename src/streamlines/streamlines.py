@@ -17,11 +17,11 @@ class Streamlines:
             Path to the plot3d flow data file
         point : list
             Starting point for integration
-        search_method : str
+        search : str
             Default is p-space; can specify c-space
-        interpolation_method : str
+        interpolation : str
             Default is p-space; can specify c-space
-        integration_method : str
+        integration : str
             Default is p-space; can specify c-space
         time_step : float
             Default is 1e-3
@@ -44,16 +44,17 @@ class Streamlines:
 
     """
     def __init__(self, grid_file, flow_file, point,
-                 search_method='p-space', interpolation_method='p-space', integration_method='pRK4',
+                 search='p-space', interpolation='p-space', integration='pRK4',
                  time_step=1e-3):
         self.grid_file = grid_file
         self.flow_file = flow_file
         self.point = np.array(point)
-        self.search_method = search_method
-        self.interpolation_method = interpolation_method
-        self.integration_method = integration_method
+        self.search = search
+        self.interpolation = interpolation
+        self.integration = integration
         self.time_step = time_step
         self.streamline = []
+        self.svelocity = []
 
     # TODO: Need to add doc for streamlines
 
@@ -81,9 +82,9 @@ class Streamlines:
                     idx = Search(grid, self.point)
                     interp = Interpolation(flow, idx)
                     intg = Integration(interp)
-                    idx.compute(method=self.search_method)
-                    interp.compute(method=self.interpolation_method)
-                    new_point = intg.compute(method=self.integration_method, time_step=self.time_step)
+                    idx.compute(method=self.search)
+                    interp.compute(method=self.interpolation)
+                    new_point = intg.compute(method=self.integration, time_step=self.time_step)
                     if new_point is None:
                         print('Integration complete!')
                         break
@@ -125,5 +126,26 @@ class Streamlines:
                         save_point = idx.c2p(new_point)
                         self.streamline.append(save_point)
                         idx.point = new_point
+
+        if method == 'ppath':
+            vel = None
+            while True:
+                with Timer(text="Elapsed time for loop number " + str(len(self.streamline)) + ": {:.8f}"):
+                    idx = Search(grid, self.point)
+                    interp = Interpolation(flow, idx)
+                    intg = Integration(interp)
+                    idx.compute(method=self.search)
+                    interp.compute(method=self.interpolation)
+                    new_point, new_vel = intg.compute_ppath(diameter=5e-4, density=1000, viscosity=1.827e-5,
+                                                            velocity=vel, method='pRK4', time_step=self.time_step)
+                    if new_point is None:
+                        print('Integration complete!')
+                        break
+
+                    # Save results and continue the loop
+                    self.streamline.append(new_point)
+                    self.svelocity.append(vel)
+                    self.point = new_point
+                    vel = new_vel.copy()
 
         return

@@ -54,6 +54,7 @@ class Variables:
     def __init__(self, flow, gamma=1.4):
         self.flow = flow
         self.gamma = gamma
+        self.density = flow.q[..., 0, :]
         self.velocity = None
         self.velocity_magnitude = None
         self.temperature = None
