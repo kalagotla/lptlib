@@ -7,12 +7,12 @@ from src.function.timer import Timer
 class TestVortex(unittest.TestCase):
     # noinspection DuplicatedCode
     @parameterized.expand([
-        ('p-space', 'p-space'),
-        ('adaptive-p-space', 'adaptive-p-space'),
-        ('c-space', 'c-space')
+        ('p-space', 'p-space', 1e-1),
+        ('adaptive-p-space', 'adaptive-p-space', 1e-9),
+        ('c-space', 'c-space', 1e-1)
     ])
     @Timer()
-    def test_vortex(self, name, method='p-space'):
+    def test_vortex(self, name, method='p-space', time_step=1e-1):
         """
         Applies streamlines algo for vortex field.
         Details of the vortex can be found in Murman and Powell, 1987
@@ -21,7 +21,7 @@ class TestVortex(unittest.TestCase):
         """
         from src.streamlines.streamlines import Streamlines
         sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5],
-                         time_step=1e-3)
+                         time_step=time_step)
         sl.compute(method=method)
 
         import matplotlib.pyplot as plt

@@ -128,7 +128,10 @@ class Streamlines:
                         break
 
                     # Save results and adjust time-step
-                    if self.angle_btw(new_point - self.point, new_vel) <= 0.1:
+                    if self.angle_btw(new_point - self.point, new_vel) is None:
+                        print('Increasing time step. Successive points are same')
+                        self.time_step = 10 * self.time_step
+                    elif self.angle_btw(new_point - self.point, new_vel) <= 0.1:
                         self.streamline.append(new_point)
                         self.fvelocity.append(new_vel)
                         self.point = new_point
@@ -161,9 +164,9 @@ class Streamlines:
                         intg = Integration(interp)
                         idx.compute(method='block_distance')
                         interp.compute()
-                        new_point = intg.compute(method='pRK4', time_step=1)
+                        new_point, new_vel = intg.compute(method='pRK4', time_step=1)
                         if new_point is None:
-                            print('No location found. Point out-of-domain. Integration complete!')
+                            print('Point out-of-domain. Integration complete!')
                             break
                         else:
                             # Update the block in idx
