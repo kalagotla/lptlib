@@ -78,40 +78,40 @@ class Integration:
                     idx = Search(self.interp.idx.grid, x)
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
-                    if idx.ppoint is None: return None
+                    if idx.ppoint is None: return None, None
                     interp = Interpolation(self.interp.flow, idx)
                     interp.compute()
                     q_interp = Variables(interp)
                     q_interp.compute_velocity()
-                    v = q_interp.velocity.reshape(3)
-                    k = time_step * v
-                    return k
+                    u = q_interp.velocity.reshape(3)
+                    k = time_step * u
+                    return u, k
 
                 # Start RK4 for p-space
                 # For p-space algos; the point-in-domain check was done in search
                 x0 = self.interp.idx.ppoint
-                if x0 is None: return None
+                if x0 is None: return None, None
                 q_interp = Variables(self.interp)
                 q_interp.compute_velocity()
-                v0 = q_interp.velocity.reshape(3)
-                k0 = time_step * v0
+                u0 = q_interp.velocity.reshape(3)
+                k0 = time_step * u0
                 x1 = x0 + 0.5 * k0
 
-                k1 = _rk4_step(self, x1)
-                if k1 is None: return None
+                u1, k1 = _rk4_step(self, x1)
+                if k1 is None: return None, None
                 x2 = x0 + 0.5 * k1
 
-                k2 = _rk4_step(self, x2)
-                if k2 is None: return None
+                u2, k2 = _rk4_step(self, x2)
+                if k2 is None: return None, None
                 x3 = x0 + k2
 
-                k3 = _rk4_step(self, x3)
-                if k3 is None: return None
+                u3, k3 = _rk4_step(self, x3)
+                if k3 is None: return None, None
                 x4 = x0 + 1/6 * (k0 + 2*k1 + 2*k2 + k3)
 
                 self.ppoint = x4
 
-                return self.ppoint
+                return self.ppoint, u3
 
             case 'cRK4':
                 '''
@@ -185,7 +185,7 @@ class Integration:
                 return self.cpoint
 
     def compute_ppath(self, diameter=1e-6, density=1000, viscosity=1.827e-5, velocity=None,
-                      method='pRK4', time_step=1e-1):
+                      method='pRK4', time_step=1e-4):
 
         def _drag_constant(rhof, vp, uf, dp, mu):
             """
@@ -205,8 +205,8 @@ class Integration:
             """
             re = rhof * np.linalg.norm(vp - uf) * dp / mu
 
-            if re <= 1e-6:
-                return 0
+            if re <= 1e-12:
+                return re
             if re < 1e-3:
                 return 24 / re
             if 1e-3 <= re < 0.45:
@@ -259,9 +259,12 @@ class Integration:
                     rhop = density
                     q_interp.compute_temperature()
                     mu = _viscosity(viscosity, q_interp.temperature.reshape(-1))
-                    _k = -0.75 * _rhof / (rhop * dp)
+                    if dp <= 1e-20:
+                        _k = 0
+                    else:
+                        _k = -0.75 * _rhof / (rhop * dp)
                     _cd = _drag_constant(_rhof, vp, uf, dp, mu)
-                    _vk = _cd * _k * (vp - uf) * abs(vp - uf) * time_step
+                    _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
                     return _vk
 
                 # Start RK4 for p-space

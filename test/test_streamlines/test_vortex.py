@@ -8,6 +8,7 @@ class TestVortex(unittest.TestCase):
     # noinspection DuplicatedCode
     @parameterized.expand([
         ('p-space', 'p-space'),
+        ('adaptive-p-space', 'adaptive-p-space'),
         ('c-space', 'c-space')
     ])
     @Timer()
@@ -20,7 +21,7 @@ class TestVortex(unittest.TestCase):
         """
         from src.streamlines.streamlines import Streamlines
         sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5],
-                         time_step=1)
+                         time_step=1e-3)
         sl.compute(method=method)
 
         import matplotlib.pyplot as plt

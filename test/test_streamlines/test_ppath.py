@@ -7,12 +7,12 @@ from src.function.timer import Timer
 class TestPPath(unittest.TestCase):
     # noinspection DuplicatedCode
     @parameterized.expand([
-        ('adaptive-ppath-p-space', 'adaptive-ppath'),
-        ('ppath-p-space', 'ppath'),
-        ('p-space', 'p-space')
+        ('adaptive-ppath-p-space', 'adaptive-ppath', 1e-9),
+        ('ppath-p-space', 'ppath', 1e-4),
+        ('p-space', 'p-space', 1e-4)
     ])
     @Timer()
-    def test_ppath(self, name, method='pRK4'):
+    def test_ppath(self, name, method='pRK4', time_step=1e-4):
         """
         Applies streamlines algo for vortex field.
         Details of the vortex can be found in Murman and Powell, 1987
@@ -21,7 +21,7 @@ class TestPPath(unittest.TestCase):
         """
         from src.streamlines.streamlines import Streamlines
         sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5],
-                         time_step=1e-2)
+                         time_step=time_step)
         # sl = Streamlines(grid_file='../../data/multi_block/plate/plate.mb.sp.x',
         #                  flow_file='../../data/multi_block/plate/plate.mb.sp.q',
         #                  point=[0.5, 0.5, 0.01], time_step=1e-3)

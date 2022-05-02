@@ -54,20 +54,31 @@ class Streamlines:
         self.integration = integration
         self.time_step = time_step
         self.streamline = []
+        self.fvelocity = []
         self.svelocity = []
 
     # TODO: Need to add doc for streamlines
 
     @staticmethod
-    def dot_product_angle(_v1, _v2):
-        if np.linalg.norm(_v1) == 0 or np.linalg.norm(_v2) == 0:
-            print("Zero magnitude vector!")
+    def angle_btw(v1, v2):
+        # If vector are tiny return for handling tiny time steps
+        # A lot of trail and error decided 1e-12 would work
+        if np.linalg.norm(v1) <= 1e-12 or np.linalg.norm(v2) <= 1e-12: return
+
+        u1 = v1 / np.linalg.norm(v1)
+        u2 = v2 / np.linalg.norm(v2)
+
+        y = u1 - u2
+        x = u1 + u2
+
+        a0 = 2 * np.arctan(np.linalg.norm(y) / np.linalg.norm(x))
+
+        if (not np.signbit(a0)) or np.signbit(np.pi - a0):
+            return np.rad2deg(a0)
+        elif np.signbit(a0):
+            return 0.0
         else:
-            vector_dot_product = np.dot(_v1, _v2)
-            arccos = np.arccos(vector_dot_product / (np.linalg.norm(_v1) * np.linalg.norm(_v2)))
-            angle = np.degrees(arccos)
-            return angle
-        return
+            return 180
 
     def compute(self, method='p-space'):
         from src.function.timer import Timer
@@ -95,12 +106,39 @@ class Streamlines:
                     intg = Integration(interp)
                     idx.compute(method=self.search)
                     interp.compute(method=self.interpolation)
-                    new_point = intg.compute(method=self.integration, time_step=self.time_step)
+                    new_point, new_vel = intg.compute(method=self.integration, time_step=self.time_step)
                     if new_point is None:
                         print('Integration complete!')
                         break
                     self.streamline.append(new_point)
+                    self.fvelocity.append(new_vel)
                     self.point = new_point
+
+        if method == 'adaptive-p-space':
+            while True:
+                with Timer(text="Elapsed time for loop number " + str(len(self.streamline)) + ": {:.8f}"):
+                    idx = Search(grid, self.point)
+                    interp = Interpolation(flow, idx)
+                    intg = Integration(interp)
+                    idx.compute(method=self.search)
+                    interp.compute(method=self.interpolation)
+                    new_point, new_vel = intg.compute(method=self.integration, time_step=self.time_step)
+                    if new_point is None:
+                        print('Integration complete!')
+                        break
+
+                    # Save results and adjust time-step
+                    if self.angle_btw(new_point - self.point, new_vel) <= 0.1:
+                        self.streamline.append(new_point)
+                        self.fvelocity.append(new_vel)
+                        self.point = new_point
+                        self.time_step = 2 * self.time_step
+                    elif self.angle_btw(new_point - self.point, new_vel) >= 1.4:
+                        self.time_step = 0.5 * self.time_step
+                    else:
+                        self.streamline.append(new_point)
+                        self.fvelocity.append(new_vel)
+                        self.point = new_point
 
         if method == 'c-space':
             # Use c-space search to convert and find the location of given point
@@ -175,9 +213,28 @@ class Streamlines:
                         break
 
                     # Save results and continue the loop
-                    self.streamline.append(new_point)
-                    self.svelocity.append(vel)
-                    self.point = new_point
-                    vel = new_vel.copy()
+                    if vel is None:
+                        # For the first step in the loop
+                        self.streamline.append(new_point)
+                        self.svelocity.append(new_vel)
+                        self.point = new_point
+                        vel = new_vel.copy()
+                    elif self.angle_btw(new_point - self.point, vel) is None:
+                        print('Increasing time step. Successive points are same')
+                        self.time_step = 10 * self.time_step
+                    elif self.angle_btw(new_point - self.point, vel) <= 0.05:
+                        self.streamline.append(new_point)
+                        self.svelocity.append(vel)
+                        self.point = new_point
+                        vel = new_vel.copy()
+                        self.time_step = 2 * self.time_step
+                    # Check for if the points are identical because of tiny time step and deflection
+                    elif self.angle_btw(new_point - self.point, vel) >= 1.4:
+                        self.time_step = 0.5 * self.time_step
+                    else:
+                        self.streamline.append(new_point)
+                        self.svelocity.append(vel)
+                        self.point = new_point
+                        vel = new_vel.copy()
 
         return
