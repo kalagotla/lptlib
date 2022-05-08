@@ -95,7 +95,7 @@ class Integration:
                 q_interp.compute_velocity()
                 u0 = q_interp.velocity.reshape(3)
                 k0 = time_step * u0
-                x1 = x0 + 0.5 * k0
+                x1 = x0 + k0
 
                 u1, k1 = _rk4_step(self, x1)
                 if k1 is None: return None, None
@@ -103,7 +103,7 @@ class Integration:
 
                 u2, k2 = _rk4_step(self, x2)
                 if k2 is None: return None, None
-                x3 = x0 + k2
+                x3 = x0 + 0.5 * k2
 
                 u3, k3 = _rk4_step(self, x3)
                 if k3 is None: return None, None
@@ -166,7 +166,7 @@ class Integration:
                 p_velocity = q_interp.velocity.reshape(3)
                 c_velocity = np.matmul(_J_inv, p_velocity)
                 k0 = time_step * c_velocity
-                x1 = x0 + 0.5 * k0
+                x1 = x0 + k0
 
                 k1 = _rk4_step(self, x1)
                 if k1 is None: return None
@@ -174,7 +174,7 @@ class Integration:
 
                 k2 = _rk4_step(self, x2)
                 if k2 is None: return None
-                x3 = x0 + k2
+                x3 = x0 + 0.5 * k2
 
                 k3 = _rk4_step(self, x3)
                 if k3 is None: return None
@@ -187,41 +187,35 @@ class Integration:
     def compute_ppath(self, diameter=1e-6, density=1000, viscosity=1.827e-5, velocity=None,
                       method='pRK4', time_step=1e-4):
 
-        def _drag_constant(rhof, vp, uf, dp, mu):
+        def _drag_constant(_re):
             """
             Coefficient of drag for a spherical particle
             wrt relative Reynolds number
             ref: Fluid Mechanics, Frank M. White
             Args:
-                rhof:
-                vp:
-                uf:
-                dp:
-                mu:
+                _re
 
             Returns:
                 coefficient of drag based on local flow/particle properties
 
             """
-            re = rhof * np.linalg.norm(vp - uf) * dp / mu
-
-            if re <= 1e-12:
-                return re
-            if re < 1e-3:
-                return 24 / re
-            if 1e-3 <= re < 0.45:
-                return 24 / re * (1 + 3 * re / 16)
-            if 0.45 <= re < 1:
+            if _re <= 1e-7:
+                return 0
+            if _re < 1e-3:
+                return 24 / _re
+            if 1e-3 <= _re < 0.45:
+                return 24 / _re * (1 + 3 * _re / 16)
+            if 0.45 <= _re < 1:
                 # Same as above due to lack of data
-                return 24 / re * (1 + 3 * re / 16)
-            if 1 <= re < 800:
-                return 24 / re * (1 + re ** (2 / 3) / 6)
-            if 800 <= re < 3e5:
+                return 24 / _re * (1 + 3 * _re / 16)
+            if 1 <= _re < 800:
+                return 24 / _re * (1 + _re ** (2 / 3) / 6)
+            if 800 <= _re < 3e5:
                 return 0.44
-            if 3e5 <= re < 4e5:
+            if 3e5 <= _re < 4e5:
                 # Same as above due to lack of data
                 return 0.44
-            if re >= 4e5:
+            if _re >= 4e5:
                 return 0.07
 
         def _viscosity(_mu_ref, _temperature):
@@ -247,7 +241,8 @@ class Integration:
                     idx = Search(self.interp.idx.grid, x)
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
-                    if idx.ppoint is None: return None
+                    if idx.ppoint is None:
+                        return None, None
                     interp = Interpolation(self.interp.flow, idx)
                     interp.compute()
                     q_interp = Variables(interp)
@@ -259,13 +254,14 @@ class Integration:
                     rhop = density
                     q_interp.compute_temperature()
                     mu = _viscosity(viscosity, q_interp.temperature.reshape(-1))
-                    if dp <= 1e-20:
-                        _k = 0
-                    else:
-                        _k = -0.75 * _rhof / (rhop * dp)
-                    _cd = _drag_constant(_rhof, vp, uf, dp, mu)
+                    re = _rhof * np.linalg.norm(vp - uf) * dp / mu
+                    _cd = _drag_constant(re)
+                    if _cd == 0:
+                        _vk = np.zeros(3)
+                        return _vk, uf
+                    _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
-                    return _vk
+                    return _vk, uf
 
                 # Start RK4 for p-space
                 # For p-space algos; the point-in-domain check was done in search
@@ -279,24 +275,27 @@ class Integration:
                     v0 = u0.copy()
                 else:
                     v0 = velocity.copy()
-                vk0 = _rk4_step(self, v0, x0)
-                v1 = v0 + 0.5 * vk0
+                vk0, uf0 = _rk4_step(self, v0, x0)
+                # Assign fluid velocity when v is small
+                if np.linalg.norm(vk0) == 0:
+                    v0 = uf0.copy()
+                v1 = v0 + vk0
                 xk0 = v1 * time_step
-                x1 = x0 + 0.5 * xk0
+                x1 = x0 + xk0
 
-                vk1 = _rk4_step(self, v1, x1)
+                vk1, uf1 = _rk4_step(self, v1, x1)
                 if vk1 is None: return None, None
                 v2 = v0 + 0.5 * vk1
                 xk1 = v2 * time_step
                 x2 = x0 + 0.5 * xk1
 
-                vk2 = _rk4_step(self, v2, x2)
+                vk2, uf2 = _rk4_step(self, v2, x2)
                 if vk2 is None: return None, None
-                v3 = v0 + vk2
+                v3 = v0 + 0.5 * vk2
                 xk2 = v3 * time_step
-                x3 = x0 + xk2
+                x3 = x0 + 0.5 * xk2
 
-                vk3 = _rk4_step(self, v3, x3)
+                vk3, uf3 = _rk4_step(self, v3, x3)
                 if vk3 is None: return None, None
                 v4 = v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
                 xk3 = v4 * time_step

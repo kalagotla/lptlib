@@ -29,6 +29,10 @@ class Streamlines:
     Output:
         streamline : numpy.ndarray
             shape is nx3; each column represents x, y, z
+        fvelocity : list
+            shape is nx3; each column represents ufx, ufy, ufz
+        svelocity: list
+            shape is nx3; each column represents vpx, vpy, vpz
 
     Methods
     -------
@@ -61,9 +65,10 @@ class Streamlines:
 
     @staticmethod
     def angle_btw(v1, v2):
-        # If vector are tiny return for handling tiny time steps
-        # A lot of trail and error decided 1e-12 would work
-        if np.linalg.norm(v1) <= 1e-12 or np.linalg.norm(v2) <= 1e-12: return
+        # If vectors are tiny return for handling tiny time steps
+        # A lot of trail and error decided 1e-9 would work fast
+        if np.linalg.norm(v1) <= 1e-9 or np.linalg.norm(v2) <= 1e-9:
+            return None
 
         u1 = v1 / np.linalg.norm(v1)
         u2 = v2 / np.linalg.norm(v2)
@@ -209,7 +214,7 @@ class Streamlines:
                     intg = Integration(interp)
                     idx.compute(method=self.search)
                     interp.compute(method=self.interpolation)
-                    new_point, new_vel = intg.compute_ppath(diameter=5e-4, density=1000, viscosity=1.827e-5,
+                    new_point, new_vel = intg.compute_ppath(diameter=1e-7, density=1000, viscosity=1.827e-5,
                                                             velocity=vel, method='pRK4', time_step=self.time_step)
                     if new_point is None:
                         print('Integration complete!')
@@ -222,18 +227,23 @@ class Streamlines:
                         self.svelocity.append(new_vel)
                         self.point = new_point
                         vel = new_vel.copy()
+                    # Check for if the points are identical because of tiny time step and deflection
                     elif self.angle_btw(new_point - self.point, vel) is None:
                         print('Increasing time step. Successive points are same')
                         self.time_step = 10 * self.time_step
+                    # Increase time step when angle is below 0.5 degrees
                     elif self.angle_btw(new_point - self.point, vel) <= 0.05:
+                        print('Increasing time step. Low deflection wrt velocity')
                         self.streamline.append(new_point)
                         self.svelocity.append(vel)
                         self.point = new_point
                         vel = new_vel.copy()
                         self.time_step = 2 * self.time_step
-                    # Check for if the points are identical because of tiny time step and deflection
+                    # Decrease time step when angle is above 1.4 degrees
                     elif self.angle_btw(new_point - self.point, vel) >= 1.4:
+                        print('Decreasing time step. High deflection wrt velocity')
                         self.time_step = 0.5 * self.time_step
+                    # Save if none of the above conditions meet
                     else:
                         self.streamline.append(new_point)
                         self.svelocity.append(vel)
