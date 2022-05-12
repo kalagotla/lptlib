@@ -7,7 +7,7 @@ from src.function.timer import Timer
 class TestPPath(unittest.TestCase):
     # noinspection DuplicatedCode
     @parameterized.expand([
-        ('adaptive-ppath-p-space', 'adaptive-ppath', 1e-3),
+        ('adaptive-ppath-p-space', 'adaptive-ppath', 1e-4),
         # ('ppath-p-space', 'ppath', 1e-1),
         # ('p-space', 'p-space', 1e-1)
     ])
@@ -20,11 +20,11 @@ class TestPPath(unittest.TestCase):
         Returns:
         """
         from src.streamlines.streamlines import Streamlines
-        sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5],
-                         time_step=time_step)
-        # sl = Streamlines(grid_file='../../data/multi_block/plate/plate.mb.sp.x',
-        #                  flow_file='../../data/multi_block/plate/plate.mb.sp.q',
-        #                  point=[0.5, 0.5, 0.01], time_step=1e-3)
+        sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5])
+        sl.diameter = 1e-5
+        sl.density = 1000
+        sl.time_step = time_step
+        sl.max_time_step = 1e-3
         sl.compute(method=method)
 
         import matplotlib.pyplot as plt

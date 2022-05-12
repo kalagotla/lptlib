@@ -254,13 +254,20 @@ class Integration:
                     rhop = density
                     q_interp.compute_temperature()
                     mu = _viscosity(viscosity, q_interp.temperature.reshape(-1))
+                    # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(vp - uf) * dp / mu
                     _cd = _drag_constant(re)
+                    # When drag is zero consider particle as a fluid packet
                     if _cd == 0:
                         _vk = np.zeros(3)
                         return _vk, uf
                     _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
+                    # if np.linalg.norm(_vk) >= 1e6 and time_step >= 1e-4:
+                    #     print('!!! Large residuals detected. Decreasing time_step !!!')
+                    #     # Decreasing _vk effectively reduces the time step too; implicit reduction
+                    #     # This will ensure velocity will not blow up
+                    #     _vk = _vk * 1e-4
                     return _vk, uf
 
                 # Start RK4 for p-space
@@ -276,7 +283,8 @@ class Integration:
                 else:
                     v0 = velocity.copy()
                 vk0, uf0 = _rk4_step(self, v0, x0)
-                # Assign fluid velocity when v is small
+                # Assign fluid velocity when vk is zero
+                # Theory: When zero drag particle is massless, hence fluid velocity
                 if np.linalg.norm(vk0) == 0:
                     v0 = uf0.copy()
                 v1 = v0 + vk0
@@ -284,19 +292,22 @@ class Integration:
                 x1 = x0 + xk0
 
                 vk1, uf1 = _rk4_step(self, v1, x1)
-                if vk1 is None: return None, None
+                if vk1 is None:
+                    return None, None
                 v2 = v0 + 0.5 * vk1
                 xk1 = v2 * time_step
                 x2 = x0 + 0.5 * xk1
 
                 vk2, uf2 = _rk4_step(self, v2, x2)
-                if vk2 is None: return None, None
+                if vk2 is None:
+                    return None, None
                 v3 = v0 + 0.5 * vk2
                 xk2 = v3 * time_step
                 x3 = x0 + 0.5 * xk2
 
                 vk3, uf3 = _rk4_step(self, v3, x3)
-                if vk3 is None: return None, None
+                if vk3 is None:
+                    return None, None
                 v4 = v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
                 xk3 = v4 * time_step
                 x4 = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
