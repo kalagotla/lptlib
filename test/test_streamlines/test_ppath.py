@@ -8,8 +8,9 @@ class TestPPath(unittest.TestCase):
     # noinspection DuplicatedCode
     @parameterized.expand([
         ('adaptive-ppath-p-space', 'adaptive-ppath', 1e-4),
-        # ('ppath-p-space', 'ppath', 1e-1),
-        # ('p-space', 'p-space', 1e-1)
+        ('ppath-p-space', 'ppath', 1e-2),
+        ('adaptive-p-space', 'adaptive-p-space', 1e-4),
+        ('p-space', 'p-space', 1e-2)
     ])
     @Timer()
     def test_ppath(self, name, method='pRK4', time_step=1e-4):
@@ -21,15 +22,16 @@ class TestPPath(unittest.TestCase):
         """
         from src.streamlines.streamlines import Streamlines
         sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5])
-        sl.diameter = 1e-5
+        sl.diameter = 0
         sl.density = 1000
         sl.time_step = time_step
-        sl.max_time_step = 1e-3
+        sl.max_time_step = 1
         sl.compute(method=method)
 
         import matplotlib.pyplot as plt
         data = np.array(sl.streamline)
         np.save('../../data/vortex/' + name, data)
+        print('Data written to file: ' + name)
         xp, yp, zp = data[:, 0], data[:, 1], data[:, 2]
 
         ax = plt.axes(projection='3d')

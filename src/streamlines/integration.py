@@ -199,6 +199,7 @@ class Integration:
                 coefficient of drag based on local flow/particle properties
 
             """
+            # This was decided by trail-and-error from VISUAL3 code
             if _re <= 1e-7:
                 return 0
             if _re < 1e-3:
@@ -294,6 +295,8 @@ class Integration:
                 vk1, uf1 = _rk4_step(self, v1, x1)
                 if vk1 is None:
                     return None, None
+                if np.linalg.norm(vk1) == 0:
+                    v0 = uf1.copy()
                 v2 = v0 + 0.5 * vk1
                 xk1 = v2 * time_step
                 x2 = x0 + 0.5 * xk1
@@ -301,6 +304,8 @@ class Integration:
                 vk2, uf2 = _rk4_step(self, v2, x2)
                 if vk2 is None:
                     return None, None
+                if np.linalg.norm(vk2) == 0:
+                    v0 = uf2.copy()
                 v3 = v0 + 0.5 * vk2
                 xk2 = v3 * time_step
                 x3 = x0 + 0.5 * xk2
@@ -308,6 +313,8 @@ class Integration:
                 vk3, uf3 = _rk4_step(self, v3, x3)
                 if vk3 is None:
                     return None, None
+                if np.linalg.norm(vk3) == 0:
+                    v0 = uf3.copy()
                 v4 = v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
                 xk3 = v4 * time_step
                 x4 = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)

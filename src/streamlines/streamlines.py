@@ -137,16 +137,19 @@ class Streamlines:
                         print('Integration complete!')
                         break
 
+                    # Adaptive algorithm starts
                     # Save results and adjust time-step
+                    # Details for the algorithm are provided in adaptive-ppath
                     if self.angle_btw(new_point - self.point, new_vel) is None:
                         print('Increasing time step. Successive points are same')
                         self.time_step = 10 * self.time_step
-                    elif self.angle_btw(new_point - self.point, new_vel) <= 0.1:
+                    elif self.angle_btw(new_point - self.point, new_vel) <= 0.1 \
+                            and self.time_step <= self.max_time_step:
                         self.streamline.append(new_point)
                         self.fvelocity.append(new_vel)
                         self.point = new_point
                         self.time_step = 2 * self.time_step
-                    elif self.angle_btw(new_point - self.point, new_vel) >= 1.4:
+                    elif self.angle_btw(new_point - self.point, new_vel) >= 1.4 and self.time_step >= 1e-12:
                         self.time_step = 0.5 * self.time_step
                     else:
                         self.streamline.append(new_point)
@@ -198,8 +201,9 @@ class Streamlines:
                     intg = Integration(interp)
                     idx.compute(method=self.search)
                     interp.compute(method=self.interpolation)
-                    new_point, new_vel = intg.compute_ppath(diameter=5e-4, density=1000, viscosity=1.827e-5,
-                                                            velocity=vel, method='pRK4', time_step=self.time_step)
+                    new_point, new_vel = intg.compute_ppath(diameter=self.diameter, density=self.density,
+                                                            viscosity=self.viscosity, velocity=vel, method='pRK4',
+                                                            time_step=self.time_step)
                     if new_point is None:
                         print('Integration complete!')
                         break
@@ -226,6 +230,7 @@ class Streamlines:
                         print('Integration complete!')
                         break
 
+                    # Adaptive algorithm starts
                     # Save results and continue the loop
                     if vel is None:
                         # For the first step in the loop
