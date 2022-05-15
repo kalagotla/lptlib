@@ -1,1 +1,1 @@
-from plot3dio import GridIO, FlowIO
+from .plot3dio import GridIO, FlowIO
