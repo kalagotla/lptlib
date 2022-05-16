@@ -4,7 +4,10 @@
 
 import unittest
 import numpy as np
-from multiprocess import Pool
+import matplotlib.pyplot as plt
+from multiprocessing.pool import ThreadPool as Pool
+import multiprocessing as mp
+import random
 
 
 class TestParallel(unittest.TestCase):
@@ -21,31 +24,29 @@ class TestParallel(unittest.TestCase):
             """
             from src.streamlines.streamlines import Streamlines
             sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', start_point,
-                             time_step=1)
-            sl.compute(method='p-space')
+                             time_step=1e-3)
+            sl.compute(method='adaptive-p-space')
 
-            import matplotlib.pyplot as plt
-            data = np.array(sl.streamline)
-            xp, yp, zp = data[:, 0], data[:, 1], data[:, 2]
-
-            ax = plt.axes(projection='3d')
-            ax.plot3D(xp, yp, zp, 'b', label='SB-P')
-            ax.set_title('Comparing different particle path algorithms')
-            ax.set_xlabel('x')
-            ax.set_ylabel('y')
-            ax.set_zlabel('z')
-            ax.legend()
-            plt.show()
-
-            return
+            return np.array(sl.streamline)
 
         # Points at which the streamline should start
-        point_list = [[-0.05, 0.05, 5], [-0.06, 0.05, 5]]
+        point_list = []
+        npoints = 500
+        for i in range(npoints):
+            point_list.append([random.uniform(-npoints, npoints) / npoints,
+                               random.uniform(-npoints, npoints) / npoints, 5])
 
         # Use two processes to run in parallel
-        pool = Pool(2)
+        pool = Pool(mp.cpu_count() - 2)
         streamline_list = pool.map(test_vortex, point_list)
         pool.close()
+
+        point_list = np.array(point_list)
+        plt.scatter(point_list[:, 0], point_list[:, 1])
+
+        for i in range(len(streamline_list)):
+            plt.plot(streamline_list[i][:, 0], streamline_list[i][:, 1])
+        plt.show()
 
 
 if __name__ == '__main__':
