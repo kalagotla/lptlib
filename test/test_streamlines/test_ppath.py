@@ -10,7 +10,8 @@ class TestPPath(unittest.TestCase):
         ('adaptive-ppath-p-space', 'adaptive-ppath', 1e-4),
         ('ppath-p-space', 'ppath', 1e-2),
         ('adaptive-p-space', 'adaptive-p-space', 1e-4),
-        ('p-space', 'p-space', 1e-2)
+        ('p-space', 'p-space', 1e-2),
+        ('adaptive-c-space', 'adaptive-c-space', 1e-4)
     ])
     @Timer()
     def test_ppath(self, name, method='pRK4', time_step=1e-4):

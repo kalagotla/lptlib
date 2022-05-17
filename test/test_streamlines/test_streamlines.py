@@ -1,5 +1,6 @@
 import unittest
 
+
 class TestStreamlines(unittest.TestCase):
     def test_streamlines(self):
         from src.streamlines.streamlines import Streamlines

@@ -146,7 +146,7 @@ class Integration:
                     if idx.cpoint is None:
                         self.cpoint = None
                         self.ppoint = None
-                        return None
+                        return None, None, None
                     interp = Interpolation(self.interp.flow, idx)
                     interp.compute(method='c-space')
                     _J_inv = interp.J_inv
@@ -155,11 +155,12 @@ class Integration:
                     p_velocity = q_interp.velocity.reshape(3)
                     c_velocity = np.matmul(_J_inv, p_velocity)
                     k = time_step * c_velocity
-                    return k
+                    return k, p_velocity, c_velocity
 
                 x0 = self.interp.idx.cpoint
                 _J_inv = self.interp.J_inv
-                if x0 is None: return None
+                if x0 is None:
+                    return None, None, None
 
                 q_interp = Variables(self.interp)
                 q_interp.compute_velocity()
@@ -168,21 +169,24 @@ class Integration:
                 k0 = time_step * c_velocity
                 x1 = x0 + k0
 
-                k1 = _rk4_step(self, x1)
-                if k1 is None: return None
+                k1, pv1, cv1 = _rk4_step(self, x1)
+                if k1 is None:
+                    return None, None, None
                 x2 = x0 + 0.5 * k1
 
-                k2 = _rk4_step(self, x2)
-                if k2 is None: return None
+                k2, pv2, cv2 = _rk4_step(self, x2)
+                if k2 is None:
+                    return None, None, None
                 x3 = x0 + 0.5 * k2
 
-                k3 = _rk4_step(self, x3)
-                if k3 is None: return None
+                k3, pv3, cv3 = _rk4_step(self, x3)
+                if k3 is None:
+                    return None, None, None
                 x4 = x0 + 1/6 * (k0 + 2*k1 + 2*k2 + k3)
 
                 self.cpoint = x4
 
-                return self.cpoint
+                return self.cpoint, pv3, cv3
 
     def compute_ppath(self, diameter=1e-6, density=1000, viscosity=1.827e-5, velocity=None,
                       method='pRK4', time_step=1e-4):

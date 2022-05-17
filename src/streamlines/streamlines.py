@@ -167,7 +167,7 @@ class Streamlines:
                     interp = Interpolation(flow, idx)
                     interp.compute(method='c-space')
                     intg = Integration(interp)
-                    new_point = intg.compute(method='cRK4', time_step=self.time_step)
+                    new_point, new_pvel, new_cvel = intg.compute(method='cRK4', time_step=self.time_step)
                     if new_point is None:
                         # For multi-block case if the point is out-of-block
                         # Use previous point and run one-step of p-space algo
@@ -177,7 +177,7 @@ class Streamlines:
                         intg = Integration(interp)
                         idx.compute(method='block_distance')
                         interp.compute()
-                        new_point, new_vel = intg.compute(method='pRK4', time_step=1)
+                        new_point, new_pvel = intg.compute(method='pRK4', time_step=1)
                         if new_point is None:
                             print('Point out-of-domain. Integration complete!')
                             break
@@ -191,6 +191,66 @@ class Streamlines:
                         save_point = idx.c2p(new_point)
                         self.streamline.append(save_point)
                         idx.point = new_point
+
+        if method == 'adaptive-c-space':
+            # Use c-space search to convert and find the location of given point
+            # All the idx attributes are converted to c-space -- point, cell, block
+            save_point = self.point
+            idx = Search(grid, self.point)
+            idx.compute(method='c-space')
+            while True:
+                with Timer(text="Elapsed time for loop number " + str(len(self.streamline)) + ": {:.8f}"):
+                    interp = Interpolation(flow, idx)
+                    interp.compute(method='c-space')
+                    intg = Integration(interp)
+                    new_point, new_pvel, new_cvel = intg.compute(method='cRK4', time_step=self.time_step)
+                    if new_point is None:
+                        # For multi-block case if the point is out-of-block
+                        # Use previous point and run one-step of p-space algo
+                        print('Point exited the block! Searching for new position...')
+                        idx = Search(grid, save_point)
+                        interp = Interpolation(flow, idx)
+                        intg = Integration(interp)
+                        idx.compute(method='block_distance')
+                        interp.compute()
+                        new_point, new_pvel = intg.compute(method='pRK4', time_step=self.time_step)
+                        if new_point is None:
+                            print('Point out-of-domain. Integration complete!')
+                            break
+                        else:
+                            # Update the block in idx
+                            idx = Search(grid, new_point)
+                            idx.compute(method='c-space')
+                            self.streamline.append(new_point)
+                            self.point = save_point
+                            save_point = new_point
+                            # new_point = idx.p2c(new_point)  # Move point obtained to c-space
+                    else:
+                        self.point = save_point
+                        save_point = idx.c2p(new_point)
+
+                        # Adaptive algorithm starts
+                        # Save results and adjust time-step
+                        # Details for the algorithm are provided in adaptive-ppath
+                        if self.angle_btw(save_point - self.point, new_pvel) is None:
+                            print('Increasing time step. Successive points are same')
+                            self.time_step = 10 * self.time_step
+                        elif self.angle_btw(save_point - self.point, new_pvel) <= 0.1 \
+                                and self.time_step <= self.max_time_step:
+                            self.point = save_point
+                            save_point = idx.c2p(new_point)
+                            self.streamline.append(save_point)
+                            self.fvelocity.append(new_pvel)
+                            idx.point = new_point
+                            self.time_step = 2 * self.time_step
+                        elif self.angle_btw(save_point - self.point, new_pvel) >= 1.4 and self.time_step >= 1e-12:
+                            self.time_step = 0.5 * self.time_step
+                        else:
+                            self.point = save_point
+                            save_point = idx.c2p(new_point)
+                            self.streamline.append(save_point)
+                            self.fvelocity.append(new_pvel)
+                            idx.point = new_point
 
         if method == 'ppath':
             vel = None
@@ -251,7 +311,7 @@ class Streamlines:
                         vel = new_vel.copy()
                         self.time_step = 2 * self.time_step
                     # Decrease time step when angle is above 1.4 degrees
-                    # Make sure time step does not go below zero; 1 pico-second
+                    # Make sure time step does not go to zero; 1 pico-second
                     elif self.angle_btw(new_point - self.point, vel) >= 1.4 and self.time_step >= 1e-12:
                         print('Decreasing time step. High deflection wrt velocity')
                         self.time_step = 0.5 * self.time_step
