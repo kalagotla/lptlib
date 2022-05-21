@@ -254,6 +254,7 @@ class Streamlines:
 
         if method == 'ppath':
             vel = None
+            fvel = None
             while True:
                 with Timer(text="Elapsed time for loop number " + str(len(self.streamline)) + ": {:.8f}"):
                     idx = Search(grid, self.point)
@@ -261,7 +262,7 @@ class Streamlines:
                     intg = Integration(interp)
                     idx.compute(method=self.search)
                     interp.compute(method=self.interpolation)
-                    new_point, new_vel = intg.compute_ppath(diameter=self.diameter, density=self.density,
+                    new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
                                                             viscosity=self.viscosity, velocity=vel, method='pRK4',
                                                             time_step=self.time_step)
                     if new_point is None:
@@ -271,11 +272,14 @@ class Streamlines:
                     # Save results and continue the loop
                     self.streamline.append(new_point)
                     self.svelocity.append(vel)
+                    self.fvelocity.append(fvel)
                     self.point = new_point
                     vel = new_vel.copy()
+                    fvel = new_fvel.copy()
 
         if method == 'adaptive-ppath':
             vel = None
+            fvel = None
             while True:
                 with Timer(text="Elapsed time for loop number " + str(len(self.streamline)) + ": {:.8f}"):
                     idx = Search(grid, self.point)
@@ -283,9 +287,9 @@ class Streamlines:
                     intg = Integration(interp)
                     idx.compute(method=self.search)
                     interp.compute(method=self.interpolation)
-                    new_point, new_vel = intg.compute_ppath(diameter=self.diameter, density=self.density,
-                                                            viscosity=self.viscosity, velocity=vel, method='pRK4',
-                                                            time_step=self.time_step)
+                    new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
+                                                                      viscosity=self.viscosity, velocity=vel,
+                                                                      method='pRK4', time_step=self.time_step)
                     if new_point is None:
                         print('Integration complete!')
                         break
@@ -296,8 +300,10 @@ class Streamlines:
                         # For the first step in the loop
                         self.streamline.append(new_point)
                         self.svelocity.append(new_vel)
+                        self.fvelocity.append(new_fvel)
                         self.point = new_point
                         vel = new_vel.copy()
+                        fvel = new_fvel.copy()
                     # Check for if the points are identical because of tiny time step and deflection
                     elif self.angle_btw(new_point - self.point, vel) is None:
                         print('Increasing time step. Successive points are same')
@@ -307,8 +313,10 @@ class Streamlines:
                         print('Increasing time step. Low deflection wrt velocity')
                         self.streamline.append(new_point)
                         self.svelocity.append(vel)
+                        self.fvelocity.append(fvel)
                         self.point = new_point
                         vel = new_vel.copy()
+                        fvel = new_fvel.copy()
                         self.time_step = 2 * self.time_step
                     # Decrease time step when angle is above 1.4 degrees
                     # Make sure time step does not go to zero; 1 pico-second
@@ -319,7 +327,9 @@ class Streamlines:
                     else:
                         self.streamline.append(new_point)
                         self.svelocity.append(vel)
+                        self.fvelocity.append(fvel)
                         self.point = new_point
                         vel = new_vel.copy()
+                        fvel = new_fvel.copy()
 
         return

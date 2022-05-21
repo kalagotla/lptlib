@@ -108,10 +108,12 @@ class Integration:
                 u3, k3 = _rk4_step(self, x3)
                 if k3 is None: return None, None
                 x4 = x0 + 1/6 * (k0 + 2*k1 + 2*k2 + k3)
+                u4, k4 = _rk4_step(self, x4)
+                if k4 is None: return None, None
 
                 self.ppoint = x4
 
-                return self.ppoint, u3
+                return self.ppoint, u4
 
             case 'cRK4':
                 '''
@@ -183,10 +185,13 @@ class Integration:
                 if k3 is None:
                     return None, None, None
                 x4 = x0 + 1/6 * (k0 + 2*k1 + 2*k2 + k3)
+                k4, pv4, cv4 = _rk4_step(self, x4)
+                if k4 is None:
+                    return None, None, None
 
                 self.cpoint = x4
 
-                return self.cpoint, pv3, cv3
+                return self.cpoint, pv4, cv4
 
     def compute_ppath(self, diameter=1e-6, density=1000, viscosity=1.827e-5, velocity=None,
                       method='pRK4', time_step=1e-4):
@@ -247,7 +252,7 @@ class Integration:
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
                     if idx.ppoint is None:
-                        return None, None
+                        return None, None, None
                     interp = Interpolation(self.interp.flow, idx)
                     interp.compute()
                     q_interp = Variables(interp)
@@ -265,20 +270,16 @@ class Integration:
                     # When drag is zero consider particle as a fluid packet
                     if _cd == 0:
                         _vk = np.zeros(3)
-                        return _vk, uf
+                        return _vk, uf, None
                     _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
-                    # if np.linalg.norm(_vk) >= 1e6 and time_step >= 1e-4:
-                    #     print('!!! Large residuals detected. Decreasing time_step !!!')
-                    #     # Decreasing _vk effectively reduces the time step too; implicit reduction
-                    #     # This will ensure velocity will not blow up
-                    #     _vk = _vk * 1e-4
-                    return _vk, uf
+                    return _vk, uf, None
 
                 # Start RK4 for p-space
                 # For p-space algos; the point-in-domain check was done in search
                 x0 = self.interp.idx.ppoint
-                if x0 is None: return None, None
+                if x0 is None:
+                    return None, None, None
                 q_interp = Variables(self.interp)
                 q_interp.compute_velocity()
                 u0 = q_interp.velocity.reshape(3)
@@ -287,7 +288,7 @@ class Integration:
                     v0 = u0.copy()
                 else:
                     v0 = velocity.copy()
-                vk0, uf0 = _rk4_step(self, v0, x0)
+                vk0, uf0, temp = _rk4_step(self, v0, x0)
                 # Assign fluid velocity when vk is zero
                 # Theory: When zero drag particle is massless, hence fluid velocity
                 if np.linalg.norm(vk0) == 0:
@@ -296,34 +297,37 @@ class Integration:
                 xk0 = v1 * time_step
                 x1 = x0 + xk0
 
-                vk1, uf1 = _rk4_step(self, v1, x1)
+                vk1, uf1, temp = _rk4_step(self, v1, x1)
                 if vk1 is None:
-                    return None, None
+                    return None, None, None
                 if np.linalg.norm(vk1) == 0:
                     v0 = uf1.copy()
                 v2 = v0 + 0.5 * vk1
                 xk1 = v2 * time_step
                 x2 = x0 + 0.5 * xk1
 
-                vk2, uf2 = _rk4_step(self, v2, x2)
+                vk2, uf2, temp = _rk4_step(self, v2, x2)
                 if vk2 is None:
-                    return None, None
+                    return None, None, None
                 if np.linalg.norm(vk2) == 0:
                     v0 = uf2.copy()
                 v3 = v0 + 0.5 * vk2
                 xk2 = v3 * time_step
                 x3 = x0 + 0.5 * xk2
 
-                vk3, uf3 = _rk4_step(self, v3, x3)
+                vk3, uf3, temp = _rk4_step(self, v3, x3)
                 if vk3 is None:
-                    return None, None
+                    return None, None, None
                 if np.linalg.norm(vk3) == 0:
                     v0 = uf3.copy()
                 v4 = v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
                 xk3 = v4 * time_step
                 x4 = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
+                vk4, uf4, temp = _rk4_step(self, v4, x4)
+                if vk4 is None:
+                    return None, None, None
 
                 self.ppoint = x4
 
-                return x4, v4
+                return x4, v4, uf4
 
