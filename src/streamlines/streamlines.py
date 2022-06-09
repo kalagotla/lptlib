@@ -97,6 +97,7 @@ class Streamlines:
         from src.streamlines.search import Search
         from src.streamlines.interpolation import Interpolation
         from src.streamlines.integration import Integration
+        from src.function.variables import Variables
 
         grid = GridIO(self.grid_file)
         flow = FlowIO(self.flow_file)
@@ -106,7 +107,17 @@ class Streamlines:
         flow.read_flow()
         grid.compute_metrics()
 
+        # Add data to output at the given point
         self.streamline.append(self.point)
+        idx = Search(grid, self.point)
+        interp = Interpolation(flow, idx)
+        idx.compute()
+        interp.compute()
+        q_interp = Variables(interp)
+        q_interp.compute_velocity()
+        uf = q_interp.velocity.reshape(3)
+        self.fvelocity.append(uf)
+        self.svelocity.append(uf)
 
         if method == 'p-space':
             while True:
@@ -122,6 +133,7 @@ class Streamlines:
                         break
                     self.streamline.append(new_point)
                     self.fvelocity.append(new_vel)
+                    self.svelocity.append(new_vel)
                     self.point = new_point
 
         if method == 'adaptive-p-space':
@@ -147,6 +159,7 @@ class Streamlines:
                             and self.time_step <= self.max_time_step:
                         self.streamline.append(new_point)
                         self.fvelocity.append(new_vel)
+                        self.svelocity.append(new_vel)
                         self.point = new_point
                         self.time_step = 2 * self.time_step
                     elif self.angle_btw(new_point - self.point, new_vel) >= 1.4 and self.time_step >= 1e-12:
@@ -154,6 +167,7 @@ class Streamlines:
                     else:
                         self.streamline.append(new_point)
                         self.fvelocity.append(new_vel)
+                        self.svelocity.append(new_vel)
                         self.point = new_point
 
         if method == 'c-space':
@@ -186,10 +200,14 @@ class Streamlines:
                             idx = Search(grid, new_point)
                             idx.compute(method='c-space')
                             self.streamline.append(new_point)
+                            self.fvelocity.append(new_pvel)
+                            self.svelocity.append(new_pvel)
                             # new_point = idx.p2c(new_point)  # Move point obtained to c-space
                     else:
                         save_point = idx.c2p(new_point)
                         self.streamline.append(save_point)
+                        self.fvelocity.append(new_pvel)
+                        self.svelocity.append(new_pvel)
                         idx.point = new_point
 
         if method == 'adaptive-c-space':
@@ -222,6 +240,8 @@ class Streamlines:
                             idx = Search(grid, new_point)
                             idx.compute(method='c-space')
                             self.streamline.append(new_point)
+                            self.fvelocity.append(new_pvel)
+                            self.svelocity.append(new_pvel)
                             self.point = save_point
                             save_point = new_point
                             # new_point = idx.p2c(new_point)  # Move point obtained to c-space
@@ -241,6 +261,7 @@ class Streamlines:
                             save_point = idx.c2p(new_point)
                             self.streamline.append(save_point)
                             self.fvelocity.append(new_pvel)
+                            self.svelocity.append(new_pvel)
                             idx.point = new_point
                             self.time_step = 2 * self.time_step
                         elif self.angle_btw(save_point - self.point, new_pvel) >= 1.4 and self.time_step >= 1e-12:
@@ -250,6 +271,7 @@ class Streamlines:
                             save_point = idx.c2p(new_point)
                             self.streamline.append(save_point)
                             self.fvelocity.append(new_pvel)
+                            self.svelocity.append(new_pvel)
                             idx.point = new_point
 
         if method == 'ppath':
@@ -271,14 +293,16 @@ class Streamlines:
 
                     # Save results and continue the loop
                     self.streamline.append(new_point)
-                    self.svelocity.append(vel)
-                    self.fvelocity.append(fvel)
+                    self.svelocity.append(new_vel)
+                    self.fvelocity.append(new_fvel)
                     self.point = new_point
                     vel = new_vel.copy()
                     fvel = new_fvel.copy()
 
         if method == 'adaptive-ppath':
+            # particle velocity
             vel = None
+            # fluid velocity
             fvel = None
             while True:
                 with Timer(text="Elapsed time for loop number " + str(len(self.streamline)) + ": {:.8f}"):
@@ -312,8 +336,8 @@ class Streamlines:
                     elif self.angle_btw(new_point - self.point, vel) <= 0.05 and self.time_step <= self.max_time_step:
                         print('Increasing time step. Low deflection wrt velocity')
                         self.streamline.append(new_point)
-                        self.svelocity.append(vel)
-                        self.fvelocity.append(fvel)
+                        self.svelocity.append(new_vel)
+                        self.fvelocity.append(new_fvel)
                         self.point = new_point
                         vel = new_vel.copy()
                         fvel = new_fvel.copy()
@@ -326,8 +350,8 @@ class Streamlines:
                     # Save if none of the above conditions meet
                     else:
                         self.streamline.append(new_point)
-                        self.svelocity.append(vel)
-                        self.fvelocity.append(fvel)
+                        self.svelocity.append(new_vel)
+                        self.fvelocity.append(new_fvel)
                         self.point = new_point
                         vel = new_vel.copy()
                         fvel = new_fvel.copy()

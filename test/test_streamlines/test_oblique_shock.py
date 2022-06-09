@@ -9,10 +9,10 @@ class TestObliqueShock(unittest.TestCase):
     @parameterized.expand([
         # ('adaptive-ppath-p-space', 'adaptive-ppath', 1e-7),
         # ('ppath-p-space', 'ppath', 1e-7),
-        # ('adaptive-p-space', 'adaptive-p-space', 1e-7),
+        ('adaptive-p-space', 'adaptive-p-space', 1e-7),
         # ('p-space', 'p-space', 1e-7),
         # ('adaptive-c-space', 'adaptive-c-space', 1e-9),
-        ('c-space', 'c-space', 1e-7),
+        # ('c-space', 'c-space', 1e-7),
     ])
     @Timer()
     def test_oblique_shock(self, name, method='pRK4', time_step=1e-4):
@@ -31,13 +31,13 @@ class TestObliqueShock(unittest.TestCase):
         np.save('../../data/shocks/' + name + str(sl.diameter), xdata)
         print('Data written to file: ' + name + str(sl.diameter))
         xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
-        # vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
-        # ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
+        vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
+        ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
 
         ax = plt.axes()
-        # ax.plot(xp[1:], vx, 'r', label='Particle')
-        # ax.plot(xp[1:], ux, 'b', label='Fluid')
-        ax.plot(xp, yp, label='Path')
+        ax.plot(xp, vx, 'r', label='Particle')
+        ax.plot(xp, ux, 'b', label='Fluid')
+        # ax.plot(xp, yp, label='Path')
         ax.set_title('Shock Normal Velocity')
         ax.set_xlabel('x')
         ax.set_ylabel('y')
