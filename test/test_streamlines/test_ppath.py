@@ -11,7 +11,9 @@ class TestPPath(unittest.TestCase):
         ('ppath-p-space', 'ppath', 1e-2),
         ('adaptive-p-space', 'adaptive-p-space', 1e-4),
         ('p-space', 'p-space', 1e-2),
-        ('adaptive-c-space', 'adaptive-c-space', 1e-4)
+        ('adaptive-c-space', 'adaptive-c-space', 1e-4),
+        ('ppath-c-space', 'ppath-c-space', 1e-2),
+        ('adaptive-ppath-c-space', 'adaptive-ppath-c-space', 1e-4)
     ])
     @Timer()
     def test_ppath(self, name, method='pRK4', time_step=1e-4):
@@ -23,10 +25,11 @@ class TestPPath(unittest.TestCase):
         """
         from src.streamlines.streamlines import Streamlines
         sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5])
-        sl.diameter = 0
+        sl.diameter = 0.5e-6
         sl.density = 1000
         sl.time_step = time_step
-        sl.max_time_step = 1
+        # Change max-time-step as required. This is set for adaptive-ppath-c-space algo
+        sl.max_time_step = 1e-4
         sl.compute(method=method)
 
         import matplotlib.pyplot as plt
