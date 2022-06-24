@@ -12,6 +12,7 @@ class TestPPath(unittest.TestCase):
         ('adaptive-p-space', 'adaptive-p-space', 1e-4),
         ('p-space', 'p-space', 1e-2),
         ('adaptive-c-space', 'adaptive-c-space', 1e-4),
+        ('c-space', 'c-space', 1e-2),
         ('ppath-c-space', 'ppath-c-space', 1e-2),
         ('adaptive-ppath-c-space', 'adaptive-ppath-c-space', 1e-4)
     ])
@@ -29,7 +30,7 @@ class TestPPath(unittest.TestCase):
         sl.density = 1000
         sl.time_step = time_step
         # Change max-time-step as required. This is set for adaptive-ppath-c-space algo
-        sl.max_time_step = 1e-4
+        sl.max_time_step = 1e-3
         sl.compute(method=method)
 
         import matplotlib.pyplot as plt

@@ -11,6 +11,7 @@ class Integration:
         self.interp = interp
         self.ppoint = None
         self.cpoint = None
+        self.rk4_bool = False
 
     def __str__(self):
         doc = "This instance uses data from " + self.interp.flow.filename + \
@@ -267,10 +268,6 @@ class Integration:
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(vp - uf) * dp / mu
                     _cd = _drag_constant(re)
-                    # When drag is zero consider particle as a fluid packet
-                    if _cd == 0:
-                        _vk = np.zeros(3)
-                        return _vk, uf, None
                     _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
                     return _vk, uf, None
@@ -305,6 +302,10 @@ class Integration:
                 v2 = v0 + 0.5 * vk1
                 xk1 = v2 * time_step
                 x2 = x0 + 0.5 * xk1
+                # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
+                if np.linalg.norm(x2 - x0) >= 10 * np.linalg.norm(x1-x0):
+                    self.rk4_bool = True
+                    return x0, v0, u0
 
                 vk2, uf2, temp = _rk4_step(self, v2, x2)
                 if vk2 is None:
@@ -314,6 +315,10 @@ class Integration:
                 v3 = v0 + 0.5 * vk2
                 xk2 = v3 * time_step
                 x3 = x0 + 0.5 * xk2
+                # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
+                if np.linalg.norm(x3 - x0) >= 10 * np.linalg.norm(x1 - x0):
+                    self.rk4_bool = True
+                    return x0, v0, u0
 
                 vk3, uf3, temp = _rk4_step(self, v3, x3)
                 if vk3 is None:
@@ -323,6 +328,11 @@ class Integration:
                 v4 = v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
                 xk3 = v4 * time_step
                 x4 = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
+                # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
+                if np.linalg.norm(x4 - x0) >= 10 * np.linalg.norm(x1 - x0):
+                    self.rk4_bool = True
+                    return x0, v0, u0
+
                 vk4, uf4, temp = _rk4_step(self, v4, x4)
                 if vk4 is None:
                     return None, None, None
@@ -374,10 +384,6 @@ class Integration:
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(c_vp - c_uf) * dp / mu
                     _cd = _drag_constant(re)
-                    # When drag is zero consider particle as a fluid packet
-                    # if _cd == 0:
-                    #     _vk = np.zeros(3)
-                    #     return _vk, p_uf, c_uf, p_vp, c_vp
                     _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (c_vp - c_uf) * np.linalg.norm(c_vp - c_uf) * time_step
                     return _vk, p_uf, c_uf, p_vp, c_vp
@@ -412,6 +418,9 @@ class Integration:
                 c_v2 = c_v0 + 0.5 * vk1
                 xk1 = c_v2 * time_step
                 x2 = x0 + 0.5 * xk1
+                if np.linalg.norm(x2 - x0) >= 10 * np.linalg.norm(x1-x0):
+                    self.rk4_bool = True
+                    return x0, p_v0, p_u0
 
                 vk2, p_u2, c_u2, p_v2, c_v2 = _rk4_step(self, c_v2, x2)
                 if vk2 is None:
@@ -421,6 +430,9 @@ class Integration:
                 c_v3 = c_v0 + 0.5 * vk2
                 xk2 = c_v3 * time_step
                 x3 = x0 + 0.5 * xk2
+                if np.linalg.norm(x3 - x0) >= 10 * np.linalg.norm(x1-x0):
+                    self.rk4_bool = True
+                    return x0, p_v0, p_u0
 
                 vk3, p_u3, c_u3, p_v3, c_v3 = _rk4_step(self, c_v3, x3)
                 if vk3 is None:
@@ -430,10 +442,14 @@ class Integration:
                 c_v4 = c_v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
                 xk3 = c_v4 * time_step
                 x4 = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
+                if np.linalg.norm(x4 - x0) >= 10 * np.linalg.norm(x1-x0):
+                    self.rk4_bool = True
+                    return x0, p_v0, p_u0
+
                 vk4, p_u4, c_u4, p_v4, c_v4 = _rk4_step(self, c_v4, x4)
                 if vk4 is None:
                     return None, None, None
 
-                self.ppoint = x4
+                self.cpoint = x4
 
                 return x4, p_u4, p_v4
