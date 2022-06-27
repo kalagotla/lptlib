@@ -340,6 +340,9 @@ class FlowIO:
             _nt = self.ni * self.nj * self.nk * 5
             _temp = np.fromfile(data, dtype=data_type, count=sum(_nt) + 4 * self.nb)
 
+            # Assign the dimensionless attributes
+            self.mach, self.alpha, self.rey, self.time = _temp[0:4]
+
             # Create a mask to remove dimensionless quantities from q
             # Indices of the first four dimensionless quantities
             _index_array = np.array([0, 1, 2, 3])
@@ -350,9 +353,6 @@ class FlowIO:
             _mask[_index_array] = 0
             # Use the mask to remove dimensionless quantities
             _temp = _temp[_mask]
-
-            # Assign the dimensionless attributes
-            self.mach, self.alpha, self.rey, self.time = _temp[0:4]
 
             # Pre-define q array
             self.q = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), 5, self.nb))
