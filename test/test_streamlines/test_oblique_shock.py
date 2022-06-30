@@ -9,12 +9,12 @@ class TestObliqueShock(unittest.TestCase):
     @parameterized.expand([
         # ('adaptive-ppath-p-space', 'adaptive-ppath', 3e-7),
         # ('ppath-p-space', 'ppath', 1e-8),
-        # ('ppath-c-space', 'ppath-c-space', 8e-7),
-        # ('adaptive-ppath-c-space', 'adaptive-ppath-c-space', 2e-7),
+        # ('ppath-c-space', 'ppath-c-space', 1e-7),
+        ('adaptive-ppath-c-space', 'adaptive-ppath-c-space', 1e-8),
         # ('adaptive-p-space', 'adaptive-p-space', 1e-8),
-        ('p-space', 'p-space', 1e-8),
-        # ('adaptive-c-space', 'adaptive-c-space', 1e-8),
-        # ('c-space', 'c-space', 1e-8),
+        # ('p-space', 'p-space', 1e-8),
+        # ('adaptive-c-space', 'adaptive-c-space', 1e-7),
+        # ('c-space', 'c-space', 1e-9),
     ])
     @Timer()
     def test_oblique_shock(self, name, method='pRK4', time_step=1e-4):
@@ -24,7 +24,7 @@ class TestObliqueShock(unittest.TestCase):
         sl.diameter = 5e-7
         sl.density = 1000
         sl.time_step = time_step
-        sl.max_time_step = 1
+        sl.max_time_step = 1e-8
         sl.compute(method=method)
 
         xdata = np.array(sl.streamline)
@@ -39,7 +39,7 @@ class TestObliqueShock(unittest.TestCase):
         ax = plt.axes()
         # ax.plot(xp, vx, 'r', label='Particle')
         # ax.plot(xp, ux, 'b', label='Fluid')
-        ax.plot(xp, yp, label='Path')
+        ax.plot(xp, yp, '.-', label='Path')
         # ax.set_title('Shock Normal Velocity')
         ax.set_xlabel('x')
         ax.set_ylabel('y')

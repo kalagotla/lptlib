@@ -273,21 +273,16 @@ class Streamlines:
                         # Adaptive algorithm starts
                         # Save results and adjust time-step
                         # Details for the algorithm are provided in adaptive-ppath
-                        if pvel is None:
-                            # For the first step in the loop
-                            self.streamline.append(save_point)
-                            self.fvelocity.append(new_pvel)
-                            self.svelocity.append(new_pvel)
-                            self.point = new_point
-                            pvel = new_pvel.copy()
-                        elif self.angle_btw(save_point - self.point, pvel) is None:
+                        # Decided to use new_pvel for adaptivity because of the in-shock cell RK4 integration
+                        # RK4 depends on future points for integration and this adjustment moves it forward
+                        if self.angle_btw(save_point - self.point, new_pvel) is None:
                             print('Increasing time step. Successive points are same')
                             self.time_step = 10 * self.time_step
                             loop_check += 1
                             if loop_check == 70:
                                 print('Stuck in the same loop for too long. Integration ends!')
                                 return
-                        elif self.angle_btw(save_point - self.point, pvel) <= 0.1 \
+                        elif self.angle_btw(save_point - self.point, new_pvel) <= 0.1 \
                                 and self.time_step <= self.max_time_step:
                             self.point = save_point
                             save_point = idx.c2p(new_point)
@@ -298,7 +293,7 @@ class Streamlines:
                             pvel = new_pvel.copy()
                             self.time_step = 2 * self.time_step
                             loop_check = 0
-                        elif self.angle_btw(save_point - self.point, pvel) >= 1.4 and self.time_step >= 1e-12:
+                        elif self.angle_btw(save_point - self.point, new_pvel) >= 1.4 and self.time_step >= 1e-12:
                             self.time_step = 0.5 * self.time_step
                         else:
                             self.point = save_point
@@ -542,7 +537,7 @@ class Streamlines:
                             self.point = save_point
                             save_point = idx.c2p(new_point)
                             self.streamline.append(save_point)
-                            self.fvelocity.append(new_pvel)
+                            self.fvelocity.append(new_fvel)
                             self.svelocity.append(new_pvel)
                             idx.point = new_point.copy()
                             pvel = new_pvel.copy()
@@ -555,7 +550,7 @@ class Streamlines:
                             self.point = save_point
                             save_point = idx.c2p(new_point)
                             self.streamline.append(save_point)
-                            self.fvelocity.append(new_pvel)
+                            self.fvelocity.append(new_fvel)
                             self.svelocity.append(new_pvel)
                             idx.point = new_point.copy()
                             pvel = new_pvel.copy()
