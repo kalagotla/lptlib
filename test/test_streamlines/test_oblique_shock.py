@@ -7,14 +7,14 @@ import matplotlib.pyplot as plt
 
 class TestObliqueShock(unittest.TestCase):
     @parameterized.expand([
-        # ('adaptive-ppath-p-space', 'adaptive-ppath', 3e-7),
-        # ('ppath-p-space', 'ppath', 1e-8),
-        # ('ppath-c-space', 'ppath-c-space', 1e-7),
+        ('adaptive-ppath-p-space', 'adaptive-ppath', 1e-7),
+        ('ppath-p-space', 'ppath', 1e-8),
+        ('ppath-c-space', 'ppath-c-space', 1e-7),
         ('adaptive-ppath-c-space', 'adaptive-ppath-c-space', 1e-8),
-        # ('adaptive-p-space', 'adaptive-p-space', 1e-8),
-        # ('p-space', 'p-space', 1e-8),
-        # ('adaptive-c-space', 'adaptive-c-space', 1e-7),
-        # ('c-space', 'c-space', 1e-9),
+        ('adaptive-p-space', 'adaptive-p-space', 1e-8),
+        ('p-space', 'p-space', 1e-8),
+        ('adaptive-c-space', 'adaptive-c-space', 1e-7),
+        ('c-space', 'c-space', 1e-9),
     ])
     @Timer()
     def test_oblique_shock(self, name, method='pRK4', time_step=1e-4):
