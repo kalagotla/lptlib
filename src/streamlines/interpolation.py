@@ -54,6 +54,7 @@ class Interpolation:
         self.nb = None
         self.ni, self.nj, self.nk = [None] * 3
         self.mach, self.alpha, self.rey, self.time = [None] * 4
+        self.J = None
         self.J_inv = None
 
     def __str__(self):
@@ -173,24 +174,29 @@ class Interpolation:
                 Equation can be found in Sadarjoen et al.
                 """
 
+                # Interpolate m1 and m2 for use in integration; m1 is used in ppath only!
+                # m1 -- indicated as J (determinant of m1 is J)
+                _cell_J = self.idx.grid.m1[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :, self.idx.block]
+                # m2 -- indicated as J_inv (determinant of m2 is J_inv)
                 _cell_J_inv = self.idx.grid.m2[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :, self.idx.block]
                 _alpha, _beta, _gamma = self.idx.cpoint - self.idx.cell[0]
-                self.q = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_q[0] + \
-                              _alpha  * (1 - _beta) * (1 - _gamma) * _cell_q[1] + \
-                              _alpha  *      _beta  * (1 - _gamma) * _cell_q[2] + \
-                         (1 - _alpha) *      _beta  * (1 - _gamma) * _cell_q[3] + \
-                         (1 - _alpha) * (1 - _beta) *      _gamma  * _cell_q[4] + \
-                              _alpha  * (1 - _beta) *      _gamma  * _cell_q[5] + \
-                              _alpha  *      _beta *       _gamma  * _cell_q[6] + \
-                         (1 - _alpha) *      _beta  *      _gamma  * _cell_q[7]
-                self.J_inv = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_J_inv[0] + \
-                                  _alpha  * (1 - _beta) * (1 - _gamma) * _cell_J_inv[1] + \
-                                  _alpha  *      _beta  * (1 - _gamma) * _cell_J_inv[2] + \
-                             (1 - _alpha) *      _beta  * (1 - _gamma) * _cell_J_inv[3] + \
-                             (1 - _alpha) * (1 - _beta) *      _gamma  * _cell_J_inv[4] + \
-                                  _alpha  * (1 - _beta) *      _gamma  * _cell_J_inv[5] + \
-                                  _alpha  *      _beta *       _gamma  * _cell_J_inv[6] + \
-                             (1 - _alpha) *      _beta  *      _gamma  * _cell_J_inv[7]
+
+                def _eqn(_alpha, _beta, _gamma, _var):
+                    _fun = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _var[0] + \
+                                _alpha  * (1 - _beta) * (1 - _gamma) * _var[1] + \
+                                _alpha  *      _beta  * (1 - _gamma) * _var[2] + \
+                           (1 - _alpha) *      _beta  * (1 - _gamma) * _var[3] + \
+                           (1 - _alpha) * (1 - _beta) *      _gamma  * _var[4] + \
+                                _alpha  * (1 - _beta) *      _gamma  * _var[5] + \
+                                _alpha  *      _beta *       _gamma  * _var[6] + \
+                           (1 - _alpha) *      _beta  *      _gamma  * _var[7]
+
+                    return _fun
+
+                self.q = _eqn(_alpha, _beta, _gamma, _cell_q)
+                self.J = _eqn(_alpha, _beta, _gamma, _cell_J)
+                self.J_inv = _eqn(_alpha, _beta, _gamma, _cell_J_inv)
+
                 self.q = self.q.reshape((1, 1, 1, -1, 1))
 
                 # if the point is node return node data
