@@ -195,39 +195,80 @@ class Integration:
                 return self.cpoint, pv4, cv4
 
     def compute_ppath(self, diameter=1e-6, density=1000, viscosity=1.827e-5, velocity=None,
-                      method='pRK4', time_step=1e-4):
+                      method='pRK4', time_step=1e-4, drag_model='stokes'):
 
-        def _drag_constant(_re):
+        def _drag_constant(_re, _mach=None, _model=drag_model):
             """
             Coefficient of drag for a spherical particle
-            wrt relative Reynolds number
-            ref: Fluid Mechanics, Frank M. White
+
             Args:
-                _re
+                _re : Relative Reynolds Number
+                _mach : Relative Mach Number
+                _model : Drag Model Name
+                    Available models are 'sphere', 'stokes', 'oseen', 'schiller_nauman',
+                    'cunningham'
 
             Returns:
                 coefficient of drag based on local flow/particle properties
 
             """
-            # This was decided by trail-and-error from VISUAL3 code
-            if _re <= 1e-7:
-                return 0
-            if _re < 1e-3:
-                return 24 / _re
-            if 1e-3 <= _re < 0.45:
-                return 24 / _re * (1 + 3 * _re / 16)
-            if 0.45 <= _re < 1:
-                # Same as above due to lack of data
-                return 24 / _re * (1 + 3 * _re / 16)
-            if 1 <= _re < 800:
-                return 24 / _re * (1 + _re ** (2 / 3) / 6)
-            if 800 <= _re < 3e5:
-                return 0.44
-            if 3e5 <= _re < 4e5:
-                # Same as above due to lack of data
-                return 0.44
-            if _re >= 4e5:
-                return 0.07
+            match _model:
+                case 'sphere':
+                    # ref: Fluid Mechanics, Frank M. White
+                    # This was decided by trail-and-error from VISUAL3 code
+                    if _re <= 1e-7:
+                        return 0
+                    if _re < 1e-3:
+                        return 24 / _re
+                    if 1e-3 <= _re < 0.45:
+                        return 24 / _re * (1 + 3 * _re / 16)
+                    if 0.45 <= _re < 1:
+                        # Same as above due to lack of data
+                        return 24 / _re * (1 + 3 * _re / 16)
+                    if 1 <= _re < 800:
+                        return 24 / _re * (1 + _re ** (2 / 3) / 6)
+                    if 800 <= _re < 3e5:
+                        return 0.44
+                    if 3e5 <= _re < 4e5:
+                        # Same as above due to lack of data
+                        return 0.44
+                    if _re >= 4e5:
+                        return 0.07
+
+                case 'stokes':
+                    # Stokes Drag; for creeping flow regime; Re << 1
+                    if _re <= 1e-7:
+                        return 0
+                    else:
+                        return 24/_re
+
+                case 'oseen':
+                    # Oseen's model; for creeping flow regime; Re < 1
+                    if _re <= 1e-7:
+                        return 0
+                    else:
+                        return 24/_re * (1 + 3/16 * _re)
+
+                case 'schiller_nauman':
+                    # Schiller and Nauman's model; for Re <~ 200 & M <~ 0.25
+                    if _re <= 1e-7:
+                        return 0
+                    else:
+                        return 24/_re * (1 + 0.15 * _re**0.687)
+
+                case 'cunningham':
+                    # Cunningham model; for Re << 1; M << 1; Kn <~ 0.1
+                    # Knudsen number
+                    if _re <= 1e-7:
+                        return 0
+                    if _re <= 1:
+                        _kn = _mach / _re * np.sqrt(q_interp.gamma * np.pi/2)
+                        return 24/_re * (1 + 4.5*_kn)**-1
+                    if _re > 1:
+                        _kn = _mach / np.sqrt(_re)
+                        return 24/_re * (1 + 4.5*_kn)**-1
+
+                    return
 
         def _viscosity(_mu_ref, _temperature):
             # Sutherland's viscosity law
@@ -267,7 +308,11 @@ class Integration:
                     mu = _viscosity(viscosity, q_interp.temperature.reshape(-1))
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(vp - uf) * dp / mu
-                    _cd = _drag_constant(re)
+                    # Relative Mach Number
+                    q_interp.compute_mach()
+                    _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) /\
+                            q_interp.velocity_magnitude.reshape(-1)
+                    _cd = _drag_constant(re, _mach=_mach, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
                     return _vk, uf, None
@@ -341,7 +386,6 @@ class Integration:
 
                 return x4, v4, uf4
 
-        match method:
             case 'cRK4':
 
                 def _rk4_step(self, c_vp, x):
@@ -383,7 +427,11 @@ class Integration:
                     mu = _viscosity(viscosity, q_interp.temperature.reshape(-1))
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(c_vp - c_uf) * dp / mu
-                    _cd = _drag_constant(re)
+                    # Relative Mach Number
+                    q_interp.compute_mach()
+                    _mach = np.linalg.norm(p_vp - p_uf) * q_interp.mach.reshape(-1) /\
+                            q_interp.velocity_magnitude.reshape(-1)
+                    _cd = _drag_constant(re, _mach=_mach, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (c_vp - c_uf) * np.linalg.norm(c_vp - c_uf) * time_step
                     return _vk, p_uf, c_uf, p_vp, c_vp

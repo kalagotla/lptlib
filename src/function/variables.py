@@ -51,11 +51,13 @@ class Variables:
 
     """
 
-    def __init__(self, flow, gamma=1.4):
+    def __init__(self, flow, gamma=1.4, gas_constant=287.052874):
         self.flow = flow
         self.gamma = gamma
+        self.gas_constant = gas_constant
         self.density = flow.q[..., 0, :]
         self.velocity = None
+        self.mach = None
         self.velocity_magnitude = None
         self.temperature = None
         self.pressure = None
@@ -79,13 +81,21 @@ class Variables:
         _E_T = self.flow.q[..., 4, :] / self.flow.mach**2
         self.temperature = (self.gamma - 1) * (_E_T/self.flow.q[..., 0, :] - self.velocity_magnitude/2) / _R
 
+    def compute_mach(self):
+        """
+        Function to compute local mach number
+        Returns: None
+        """
+        self.compute_temperature()
+        self.mach = self.velocity_magnitude / np.sqrt(self.gamma * self.gas_constant * self.temperature)
+
     def compute_pressure(self):
         """
         Function to compute pressure.
         This computes velocity and temperature first
         :return: None
         """
-        self.compute_temperature()
+        self.compute_mach()
         self.pressure = self.flow.q[..., 0, :] * self.temperature
 
     def compute(self):

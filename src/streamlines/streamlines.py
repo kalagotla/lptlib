@@ -50,7 +50,7 @@ class Streamlines:
     def __init__(self, grid_file, flow_file, point,
                  search='block_distance', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000, viscosity=1.827e-5,
-                 time_step=1e-3, max_time_step=1):
+                 time_step=1e-3, max_time_step=1, drag_model='stokes'):
         self.grid_file = grid_file
         self.flow_file = flow_file
         self.point = np.array(point)
@@ -62,6 +62,7 @@ class Streamlines:
         self.viscosity = viscosity
         self.time_step = time_step
         self.max_time_step = max_time_step
+        self.drag_model = drag_model
         self.streamline = []
         self.fvelocity = []
         self.svelocity = []
@@ -319,7 +320,8 @@ class Streamlines:
                                                                       density=self.density,
                                                                       viscosity=self.viscosity,
                                                                       velocity=vel, method='pRK4',
-                                                                      time_step=self.time_step)
+                                                                      time_step=self.time_step,
+                                                                      drag_model=self.drag_model)
                     if new_point is None:
                         print('Integration complete!')
                         break
@@ -346,7 +348,8 @@ class Streamlines:
                     interp.compute(method=self.interpolation)
                     new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
                                                                       viscosity=self.viscosity, velocity=vel,
-                                                                      method='pRK4', time_step=self.time_step)
+                                                                      method='pRK4', time_step=self.time_step,
+                                                                      drag_model=self.drag_model)
                     if new_point is None:
                         print('Integration complete!')
                         break
@@ -416,7 +419,8 @@ class Streamlines:
                                                                        density=self.density,
                                                                        viscosity=self.viscosity,
                                                                        velocity=pvel, method='cRK4',
-                                                                       time_step=self.time_step)
+                                                                       time_step=self.time_step,
+                                                                       drag_model=self.drag_model)
                     if new_point is None:
                         # For multi-block case if the point is out-of-block
                         # Use previous point and run one-step of p-space algo
@@ -430,7 +434,8 @@ class Streamlines:
                                                                            density=self.density,
                                                                            viscosity=self.viscosity,
                                                                            velocity=pvel, method='pRK4',
-                                                                           time_step=self.time_step)
+                                                                           time_step=self.time_step,
+                                                                           drag_model=self.drag_model)
                         if new_point is None:
                             print('Point out-of-domain. Integration complete!')
                             break
@@ -476,7 +481,8 @@ class Streamlines:
                                                                        density=self.density,
                                                                        viscosity=self.viscosity,
                                                                        velocity=pvel, method='cRK4',
-                                                                       time_step=self.time_step)
+                                                                       time_step=self.time_step,
+                                                                       drag_model=self.drag_model)
                     if new_point is None:
                         # For multi-block case if the point is out-of-block
                         # Use previous point and run one-step of p-space algo
@@ -490,7 +496,8 @@ class Streamlines:
                                                                            density=self.density,
                                                                            viscosity=self.viscosity,
                                                                            velocity=pvel, method='pRK4',
-                                                                           time_step=self.time_step)
+                                                                           time_step=self.time_step,
+                                                                           drag_model=self.drag_model)
                         if new_point is None:
                             print('Point out-of-domain. Integration complete!')
                             break
