@@ -7,10 +7,10 @@ import matplotlib.pyplot as plt
 
 class TestDragModel(unittest.TestCase):
     @parameterized.expand([
-        ('adaptive-ppath-p-space', 'adaptive-ppath', 1e-7, 'cunningham'),
-        ('ppath-p-space', 'ppath', 1e-8, 'cunningham'),
-        ('ppath-c-space', 'ppath-c-space', 1e-8, 'cunningham'),
-        ('adaptive-ppath-c-space', 'adaptive-ppath-c-space', 1e-8, 'cunningham'),
+        ('adaptive-ppath-p-space', 'adaptive-ppath', 1e-7, 'henderson'),
+        ('ppath-p-space', 'ppath', 1e-8, 'henderson'),
+        ('ppath-c-space', 'ppath-c-space', 1e-8, 'henderson'),
+        ('adaptive-ppath-c-space', 'adaptive-ppath-c-space', 1e-8, 'henderson'),
     ])
     def test_drag_model(self, name, method='pRK4', time_step=1e-4, drag_model='stokes'):
         from src.streamlines.streamlines import Streamlines

@@ -197,7 +197,7 @@ class Integration:
     def compute_ppath(self, diameter=1e-6, density=1000, viscosity=1.827e-5, velocity=None,
                       method='pRK4', time_step=1e-4, drag_model='stokes'):
 
-        def _drag_constant(_re, _mach=None, _model=drag_model):
+        def _drag_constant(_re, _mach=None, _gamma=None, _model=drag_model):
             """
             Coefficient of drag for a spherical particle
 
@@ -268,6 +268,39 @@ class Integration:
                         _kn = _mach / np.sqrt(_re)
                         return 24/_re * (1 + 4.5*_kn)**-1
 
+                case 'henderson':
+                    # Henderson model; for all flow regimes
+                    # Simplified by ignoring sphere temperature
+                    if _re < 1e-7:
+                        return 0
+
+                    # For Mach < 1
+                    _s = _mach * np.sqrt(_gamma/2)
+                    _f1 = 24 * (_re + _s * (5.897 * np.exp(-0.247 * _re/_s)))**-1
+                    _f2 = np.exp(-0.5*_mach/np.sqrt(_re)) * \
+                                ((4.5 + 0.38*(0.03*_re + 0.48*np.sqrt(_re))) / (1 + 0.03*_re + 0.48*np.sqrt(_re)) +
+                                 0.1*_mach**2 + 0.2*_mach**8)
+                    _f3 = (1 - np.exp(-_mach/_re))*0.6*_s
+                    _cd1 = _f1 + _f2 + _f3
+                    if _mach < 1:
+                        return _cd1
+
+                    # For Mach >= 1.75
+                    _mach_inf = self.interp.flow.mach
+                    _re_inf = self.interp.flow.rey
+                    _s_inf = _mach_inf * np.sqrt(_gamma/2)
+                    _g1 = 0.9 + 0.34/_mach_inf**2
+                    _g2 = 1.86 * np.sqrt(_mach_inf/_re_inf) * (2 + 2/_s_inf**2 + 1.058/_s_inf - 1/_s_inf**4)
+                    _g3 = 1 + 1.86 * np.sqrt(_mach_inf/_re_inf)
+                    _cd2 = (_g1 + _g2) / _g3
+                    if _mach >= 1.75:
+                        return _cd2
+
+                    # For 1 <= Mach < 1.75; linear interpolation
+                    if 1 <= _mach < 1.75:
+                        return _cd1 + 4/3 * (_mach_inf - 1) * (_cd2 - _cd1)
+
+
                     return
 
         def _viscosity(_mu_ref, _temperature):
@@ -312,7 +345,7 @@ class Integration:
                     q_interp.compute_mach()
                     _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) /\
                             q_interp.velocity_magnitude.reshape(-1)
-                    _cd = _drag_constant(re, _mach=_mach, _model=drag_model)
+                    _cd = _drag_constant(re, _mach=_mach, _gamma=q_interp.gamma, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
                     return _vk, uf, None
@@ -431,7 +464,7 @@ class Integration:
                     q_interp.compute_mach()
                     _mach = np.linalg.norm(p_vp - p_uf) * q_interp.mach.reshape(-1) /\
                             q_interp.velocity_magnitude.reshape(-1)
-                    _cd = _drag_constant(re, _mach=_mach, _model=drag_model)
+                    _cd = _drag_constant(re, _mach=_mach, _gamma=q_interp.gamma, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (c_vp - c_uf) * np.linalg.norm(c_vp - c_uf) * time_step
                     return _vk, p_uf, c_uf, p_vp, c_vp
