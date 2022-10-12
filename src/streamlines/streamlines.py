@@ -216,12 +216,16 @@ class Streamlines:
                             break
                         else:
                             # Update the block in idx
+                            # new_point is in p-space for this else block
+
                             idx = Search(grid, new_point)
                             idx.compute(method='c-space')
                             self.streamline.append(new_point)
                             self.fvelocity.append(new_pvel)
                             self.svelocity.append(new_pvel)
-                            # new_point = idx.p2c(new_point)  # Move point obtained to c-space
+                            self.point = save_point
+                            save_point = new_point
+                            pvel = new_pvel.copy()
                     else:
                         save_point = idx.c2p(new_point)
                         self.streamline.append(save_point)
@@ -448,6 +452,8 @@ class Streamlines:
                             self.svelocity.append(new_pvel)
                             pvel = new_pvel.copy()
                             fvel = new_fvel.copy()
+                            self.point = save_point
+                            save_point = new_point
                     else:
 
                         # Check for mid-rk4 blowup
@@ -511,6 +517,8 @@ class Streamlines:
                             self.svelocity.append(new_pvel)
                             pvel = new_pvel.copy()
                             fvel = new_fvel.copy()
+                            self.point = save_point
+                            save_point = new_point
                     else:
                         self.point = save_point
                         save_point = idx.c2p(new_point)

@@ -36,7 +36,7 @@ class TestDragModel(unittest.TestCase):
         # ax.plot(xp, vx, 'r', label='Particle')
         # ax.plot(xp, ux, 'b', label='Fluid')
         ax.plot(xp, yp, '.-', label='Path')
-        # ax.set_title('Shock Normal Velocity')
+        ax.set_title(name)
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         ax.set_xlim(0, 38e-4)

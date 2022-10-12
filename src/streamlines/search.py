@@ -295,6 +295,7 @@ class Search:
             if _iter >= 1e3:
                 print('Newton-Raphson did not converge. Try again!\n'
                       'Possible reason might be the point might be too close to the end of a domain')
+                self.ppoint, self.cpoint = None, None
                 return
 
             # Check for out-of-domain case and reset the point to in-domain
