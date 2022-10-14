@@ -91,7 +91,7 @@ class Streamlines:
         else:
             return 180
 
-    def compute(self, method='p-space'):
+    def compute(self, method='p-space', grid=None, flow=None):
         from src.function.timer import Timer
         from src.io.plot3dio import GridIO
         from src.io.plot3dio import FlowIO
@@ -100,13 +100,14 @@ class Streamlines:
         from src.streamlines.integration import Integration
         from src.function.variables import Variables
 
-        grid = GridIO(self.grid_file)
-        flow = FlowIO(self.flow_file)
+        if grid is None or flow is None:
+            grid = GridIO(self.grid_file)
+            flow = FlowIO(self.flow_file)
 
-        # Read in the grid and flow data
-        grid.read_grid()
-        flow.read_flow()
-        grid.compute_metrics()
+            # Read in the grid and flow data
+            grid.read_grid()
+            flow.read_flow()
+            grid.compute_metrics()
 
         # Add data to output at the given point
         # This is the assumption where particle velocity is same as the fluid
