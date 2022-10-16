@@ -250,6 +250,32 @@ class GridIO:
         print("Done computing Inverse Jacobian for all the blocks!!")
         print("All Grid metrics computed successfully!")
 
+    def two_to_three(self, steps=5, step_size=None, data_type='f4'):
+        """
+        Converts 2D plot3d grid file to 3D format
+        TODO: Current limitation is that the code works only for 3d written 2d files and single block
+        Returns: None
+
+        """
+        if step_size is None:
+            print("Step size is not provided; Using minimum grid size")
+            step_size = abs(min(np.diff(self.grd[:, 0, 0, 0, 0])))
+
+        _a_temp = np.array([self.nb, self.ni, self.nj, int(steps)], dtype='i4')
+        _x_temp = self.grd[..., 0, 0].repeat(int(steps), axis=2)
+        _y_temp = self.grd[..., 1, 0].repeat(int(steps), axis=2)
+        _z_temp = np.ones((int(self.ni), int(self.nj), int(steps))) * np.linspace(0, steps*step_size, steps)
+        _b_temp = np.array([_x_temp.T, _y_temp.T, _z_temp.T], dtype=data_type)
+
+        _temp_filename = self.filename.replace('.x', '_3D.x')
+        with open(_temp_filename, 'wb') as f:
+            f.write(_a_temp)
+            f.write(_b_temp)
+
+        print('\n File is successfully written in the working directory as {}', _temp_filename)
+
+        return
+
 
 class FlowIO:
     """Module to read-in a flow file and output flow parameters
@@ -297,7 +323,7 @@ class FlowIO:
         self.alpha = None
         self.rey = None
         self.time = None
-        self.q = []
+        self.q = None
 
     def __str__(self):
         doc = "This instance has the filename " + self.filename + "\n" + \
@@ -364,3 +390,27 @@ class FlowIO:
                     .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 5), order='F')
 
             print("Flow data reading is successful for " + self.filename + "\n")
+
+    def two_to_three(self, steps=5, data_type='f4'):
+        """
+        Converts 2D plot3d flow file to 3D format
+        TODO: Current limitation is that the code works only for 3d written 2d files and single block
+        Returns: None
+
+        """
+        _a_temp = np.array([self.nb, self.ni, self.nj, int(steps)], dtype='i4')
+        _b_temp = np.array([self.mach, self.alpha, self.rey, self.time], dtype=data_type)
+        _q0_temp = self.q[..., 0, 0].repeat(int(steps), axis=2)
+        _q1_temp = self.q[..., 1, 0].repeat(int(steps), axis=2)
+        _q2_temp = self.q[..., 2, 0].repeat(int(steps), axis=2)
+        _q3_temp = self.q[..., 3, 0].repeat(int(steps), axis=2)
+        _q4_temp = self.q[..., 4, 0].repeat(int(steps), axis=2)
+        _q_temp = np.array([_q0_temp, _q1_temp, _q2_temp, _q3_temp, _q4_temp], dtype=data_type)
+
+        _temp_filename = self.filename.replace('.q', '_3D.q')
+        with open(_temp_filename, 'wb') as f:
+            f.write(_a_temp)
+            f.write(_b_temp)
+            f.write(_q_temp)
+
+        return

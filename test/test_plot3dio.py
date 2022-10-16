@@ -73,6 +73,20 @@ class TestIO(unittest.TestCase):
         self.assertEqual(np.all(grid.m2 == test_grid.m2), True)
         self.assertEqual(np.all(grid.J == test_grid.J), True)
 
+    def test_two_to_three(self):
+        """
+        Tests the conversion of data from 2d to 3d
+        Returns: None
+
+        """
+        from src.io.plot3dio import GridIO
+
+        # Import the shock interaction case
+        grid = GridIO('../data/shock_interaction/shock_interaction_coarse.x')
+        grid.read_grid()
+        grid.two_to_three()
+
+
 
 def grid_metrics(grid):
     """
