@@ -86,6 +86,8 @@ class TestIO(unittest.TestCase):
         grid.read_grid()
         grid.two_to_three()
 
+        test_grid = GridIO('../data/shock_interaction/shock_interaction_coarse_3D.x')
+        test_grid.read_grid()
 
 
 def grid_metrics(grid):
