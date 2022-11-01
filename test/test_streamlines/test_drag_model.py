@@ -26,7 +26,8 @@ class TestDragModel(unittest.TestCase):
         xdata = np.array(sl.streamline)
         vdata = np.array(sl.svelocity)
         udata = np.array(sl.fvelocity)
-        np.save('../../data/shocks/' + name + str(sl.diameter), xdata)
+        data_save = np.hstack((xdata, vdata, udata))
+        np.save('../../data/shocks/' + name + str(sl.diameter), data_save)
         print('Data written to file: ' + name + str(sl.diameter))
         xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
         vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]

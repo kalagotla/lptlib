@@ -250,7 +250,7 @@ class GridIO:
         print("Done computing Inverse Jacobian for all the blocks!!")
         print("All Grid metrics computed successfully!")
 
-    def two_to_three(self, steps=5, step_size=None, data_type='f4'):
+    def two_to_three(self, steps: int = 5, step_size: float = None, data_type='f4'):
         """
         Converts 2D plot3d grid file to 3D format
         TODO: Current limitation is that the code works only for 3d written 2d files and single block
@@ -261,18 +261,18 @@ class GridIO:
             print("Step size is not provided; Using minimum grid size")
             step_size = abs(min(np.diff(self.grd[:, 0, 0, 0, 0])))
 
-        _a_temp = np.array([self.nb, self.ni, self.nj, int(steps)], dtype='i4')
-        _x_temp = self.grd[..., 0, 0].repeat(int(steps), axis=2)
-        _y_temp = self.grd[..., 1, 0].repeat(int(steps), axis=2)
-        _z_temp = np.ones((int(self.ni), int(self.nj), int(steps))) * np.linspace(0, steps*step_size, steps)
+        _a_temp = np.array([self.nb, self.ni, self.nj, steps], dtype='i4')
+        _x_temp = self.grd[..., 0, 0].repeat(steps, axis=2)
+        _y_temp = self.grd[..., 1, 0].repeat(steps, axis=2)
+        _z_temp = np.ones((int(self.ni), int(self.nj), steps)) * np.linspace(0, steps*step_size, steps)
         _b_temp = np.array([_x_temp.T, _y_temp.T, _z_temp.T], dtype=data_type)
 
         _temp_filename = self.filename.replace('.x', '_3D.x')
         with open(_temp_filename, 'wb') as f:
-            f.write(_a_temp)
-            f.write(_b_temp)
+            f.write(_a_temp.tobytes())
+            f.write(_b_temp.tobytes())
 
-        print('\n File is successfully written in the working directory as {}', _temp_filename)
+        print(f'\n File is successfully written in the working directory as {_temp_filename}')
 
         return
 
