@@ -47,7 +47,7 @@ class Streamlines:
 
 
     """
-    def __init__(self, grid_file, flow_file, point,
+    def __init__(self, grid_file=None, flow_file=None, point=None,
                  search='block_distance', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000, viscosity=1.827e-5,
                  time_step=1e-3, max_time_step=1, drag_model='stokes'):
