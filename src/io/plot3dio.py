@@ -276,6 +276,34 @@ class GridIO:
 
         return
 
+    def mgrd_to_p3d(self, xi, yi, out_file: str = 'mgrd_to_p3d.x',
+                    steps: int = 5, step_size: float = None, data_type='f4'):
+        """
+        Creates a 3d plot3d grid file;
+        This can be later used to be converted to 3d format by two_to_three
+        Returns:
+
+        """
+        if step_size is None:
+            print("Step size is not provided; Using minimum grid size")
+            step_size = abs(min(np.diff(self.grd[:, 0, 0, 0, 0])))
+
+        # Number of blocks is always 1 for this function
+        _ng, _ni, _nj, _nk = np.array([1, xi.shape[0], yi.shape[1], steps], dtype='i4')
+        _xx, _yy, _zz = np.meshgrid(xi[:, 0], yi[0], np.linspace(0, steps*step_size, steps), indexing='ij')
+        _grd = np.array([_xx.T, _yy.T, _zz.T], dtype=data_type)
+
+        with open(out_file, 'wb') as f:
+            f.write(_ng)
+            f.write(_ni)
+            f.write(_nj)
+            f.write(_nk)
+            f.write(_grd.tobytes())
+
+        print(f'\n File is successfully written in the working directory as {out_file}')
+
+        return
+
 
 class FlowIO:
     """Module to read-in a flow file and output flow parameters
@@ -391,7 +419,7 @@ class FlowIO:
 
             print("Flow data reading is successful for " + self.filename + "\n")
 
-    def two_to_three(self, steps=5, data_type='f4'):
+    def two_to_three(self, steps: int = 5, data_type='f4'):
         """
         Converts 2D plot3d flow file to 3D format
         TODO: Current limitation is that the code works only for 3d written 2d files and single block
@@ -409,8 +437,37 @@ class FlowIO:
 
         _temp_filename = self.filename.replace('.q', '_3D.q')
         with open(_temp_filename, 'wb') as f:
-            f.write(_a_temp)
-            f.write(_b_temp)
-            f.write(_q_temp)
+            f.write(_a_temp.tobytes())
+            f.write(_b_temp.tobytes())
+            f.write(_q_temp.tobytes())
+
+        return
+
+    def mgrd_to_p3d(self, q, out_file: str = 'mgrd_to_p3d', mode: str = None, steps: int = 5, data_type='f4'):
+        """
+        Writes out data generated from scattered data interpolation to plot3d format
+        Args:
+            q:
+            out_file:
+            mode:
+            steps:
+            data_type:
+
+        Returns:
+
+        """
+        _a_temp = np.array([1, q.shape[1], q.shape[-1], int(steps)], dtype='i4')
+        _b_temp = np.array([self.mach, self.alpha, self.rey, self.time], dtype=data_type)
+        _q0 = np.expand_dims(q[0, ...], axis=2).repeat(int(steps), axis=2)
+        _q1 = np.expand_dims(q[1, ...], axis=2).repeat(int(steps), axis=2)
+        _q2 = np.expand_dims(q[2, ...], axis=2).repeat(int(steps), axis=2)
+        _q3 = np.expand_dims(q[3, ...], axis=2).repeat(int(steps), axis=2)
+        _q4 = np.expand_dims(q[4, ...], axis=2).repeat(int(steps), axis=2)
+        _q = np.array([_q0, _q1, _q2, _q3, _q4], dtype=data_type)
+
+        with open(out_file+'_'+mode+'.q', 'wb') as f:
+            f.write(_a_temp.tobytes())
+            f.write(_b_temp.tobytes())
+            f.write(_q.tobytes())
 
         return

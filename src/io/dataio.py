@@ -54,7 +54,7 @@ class DataIO:
 
         # Create the grid to interpolate to
         _xi, _yi = np.linspace(_x_min, _x_max, self.refinement), np.linspace(_y_min, _y_max, self.refinement)
-        _xi, _yi = np.meshgrid(_xi, _yi)
+        _xi, _yi = np.meshgrid(_xi, _yi, indexing='ij')
 
         # Function to loop through the scattered data
         def _grid_interp(_points=_p_data[:, :2], _x_grid=_xi, _y_grid=_yi, _data=None, method='linear'):
@@ -73,9 +73,8 @@ class DataIO:
         _qf = np.array(_qf)
         _qp = np.array(_qp)
 
-        # Create code to write meshgrid to plot3d format
-        # flow has the needed top values
-
-        # Write out the plot3d file
+        # Write out to plot3d format for further processing
+        self.grid.mgrd_to_p3d(_xi, _yi)
+        self.flow.mgrd_to_p3d(_qf, mode='fluid')
 
         return
