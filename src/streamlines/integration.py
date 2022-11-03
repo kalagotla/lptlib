@@ -423,6 +423,7 @@ class Integration:
 
                 def _rk4_step(self, c_vp, x):
                     """
+                    Returns required data for the RK4 step
 
                     Args:
                         self:
@@ -491,18 +492,23 @@ class Integration:
                 xk0 = c_v1 * time_step
                 x1 = x0 + xk0
 
+                # Integration starts
                 vk1, p_u1, c_u1, p_v1, c_v1 = _rk4_step(self, c_v1, x1)
+                # if the residual is none return; exited the domain
                 if vk1 is None:
                     return None, None, None
+                # if zero; particle is acting like massless particle; low relative reynolds number cases
                 if np.linalg.norm(vk1) == 0:
                     c_v0 = c_u1.copy()
                 c_v2 = c_v0 + 0.5 * vk1
                 xk1 = c_v2 * time_step
                 x2 = x0 + 0.5 * xk1
+                # Check for mid-RK4 blow up due to residuals
                 if np.linalg.norm(x2 - x0) >= 10 * np.linalg.norm(x1-x0):
                     self.rk4_bool = True
                     return x0, p_v0, p_u0
 
+                # Repeat three more times; RK4
                 vk2, p_u2, c_u2, p_v2, c_v2 = _rk4_step(self, c_v2, x2)
                 if vk2 is None:
                     return None, None, None

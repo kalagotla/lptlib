@@ -151,8 +151,15 @@ class Streamlines:
                     interp.compute(method=self.interpolation)
                     new_point, new_vel = intg.compute(method=self.integration, time_step=self.time_step)
                     if new_point is None:
-                        print('Integration complete!')
-                        break
+                        print('Checking if the end of the domain is reached...')
+                        self.time_step = 1e-9 * self.time_step
+                        new_point, new_vel = intg.compute(method=self.integration, time_step=self.time_step)
+                        if new_point is not None:
+                            print('Continuing integration by decreasing time-step!')
+                            continue
+                        elif new_point is None:
+                            print('Integration complete!')
+                            break
 
                     # Adaptive algorithm starts
                     # Save results and adjust time-step
@@ -248,30 +255,44 @@ class Streamlines:
                     interp.compute(method='c-space')
                     intg = Integration(interp)
                     new_point, new_pvel, new_cvel = intg.compute(method='cRK4', time_step=self.time_step)
+
+                    # Check for large time-step in the last loop
                     if new_point is None:
-                        # For multi-block case if the point is out-of-block
-                        # Use previous point and run one-step of p-space algo
-                        print('Point exited the block! Searching for new position...')
-                        idx = Search(grid, save_point)
-                        interp = Interpolation(flow, idx)
-                        intg = Integration(interp)
-                        idx.compute(method='block_distance')
-                        interp.compute()
-                        new_point, new_pvel = intg.compute(method='pRK4', time_step=self.time_step)
-                        if new_point is None:
-                            print('Point out-of-domain. Integration complete!')
-                            break
-                        else:
-                            # Update the block in idx
-                            idx = Search(grid, new_point)
-                            idx.compute(method='c-space')
-                            self.streamline.append(new_point)
-                            self.fvelocity.append(new_pvel)
-                            self.svelocity.append(new_pvel)
-                            self.point = save_point
-                            save_point = new_point
-                            pvel = new_pvel.copy()
-                            # new_point = idx.p2c(new_point)  # Move point obtained to c-space
+                        # Checking by decreasing time-step
+                        print('Checking if the end of the domain is reached...')
+                        self.time_step = 1e-9 * self.time_step
+                        new_point, new_pvel, new_cvel = intg.compute(method='cRK4', time_step=self.time_step)
+                        if new_point is not None:
+                            print('Continuing integration by decreasing time-step!')
+                            continue
+                        # Check for block switch
+                        elif new_point is None:
+                            # For multi-block case if the point is out-of-block
+                            # Use previous point and run one-step of p-space algo
+                            print('Point exited the block! Searching for new position...')
+                            idx = Search(grid, save_point)
+                            interp = Interpolation(flow, idx)
+                            intg = Integration(interp)
+                            idx.compute(method='block_distance')
+                            interp.compute()
+                            new_point, new_pvel = intg.compute(method='pRK4', time_step=self.time_step)
+                            # Even after pRK4 if the point is None; End integration
+                            if new_point is None:
+                                print('End of the domain. Integration Ends!')
+                                break
+                            # If not none; update to c-space and run
+                            else:
+                                # Update the block in idx
+                                idx = Search(grid, new_point)
+                                idx.compute(method='c-space')
+                                self.streamline.append(new_point)
+                                self.fvelocity.append(new_pvel)
+                                self.svelocity.append(new_pvel)
+                                self.point = save_point
+                                save_point = new_point
+                                pvel = new_pvel.copy()
+                                # new_point = idx.p2c(new_point)  # Move point obtained to c-space
+                    # If the point is not none; continue c-space
                     else:
                         self.point = save_point
                         save_point = idx.c2p(new_point)
@@ -356,8 +377,18 @@ class Streamlines:
                                                                       method='pRK4', time_step=self.time_step,
                                                                       drag_model=self.drag_model)
                     if new_point is None:
-                        print('Integration complete!')
-                        break
+                        print('Checking if the end of the domain is reached...')
+                        self.time_step = 1e-9 * self.time_step
+                        new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
+                                                                          viscosity=self.viscosity, velocity=vel,
+                                                                          method='pRK4', time_step=self.time_step,
+                                                                          drag_model=self.drag_model)
+                        if new_point is not None:
+                            print('Continuing integration by decreasing time-step!')
+                            continue
+                        elif new_point is None:
+                            print('Integration complete!')
+                            break
 
                     # Check for mid-rk4 blowup
                     if intg.rk4_bool is True:
@@ -490,36 +521,51 @@ class Streamlines:
                                                                        velocity=pvel, method='cRK4',
                                                                        time_step=self.time_step,
                                                                        drag_model=self.drag_model)
+                    # Check if the point is out-of-block
                     if new_point is None:
-                        # For multi-block case if the point is out-of-block
-                        # Use previous point and run one-step of p-space algo
-                        print('Point exited the block! Searching for new position...')
-                        idx = Search(grid, save_point)
-                        interp = Interpolation(flow, idx)
-                        intg = Integration(interp)
-                        idx.compute(method='block_distance')
-                        interp.compute()
+                        # Check for large time-step
+                        print('Checking if the end of the domain is reached...')
+                        self.time_step = 1e-9 * self.time_step
                         new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
                                                                            density=self.density,
                                                                            viscosity=self.viscosity,
-                                                                           velocity=pvel, method='pRK4',
+                                                                           velocity=pvel, method='cRK4',
                                                                            time_step=self.time_step,
                                                                            drag_model=self.drag_model)
-                        if new_point is None:
-                            print('Point out-of-domain. Integration complete!')
-                            break
-                        else:
-                            # Update the block in idx
-                            idx = Search(grid, new_point)
-                            idx.compute(method='c-space')
-                            # new_point found is in p-space; so, append
-                            self.streamline.append(new_point)
-                            self.fvelocity.append(new_fvel)
-                            self.svelocity.append(new_pvel)
-                            pvel = new_pvel.copy()
-                            fvel = new_fvel.copy()
-                            self.point = save_point
-                            save_point = new_point
+                        if new_point is not None:
+                            print('Continuing integration by decreasing time-step!')
+                            continue
+                        # Check for out-of-block situation
+                        # For multi-block case if the point is out-of-block
+                        # Use previous point and run one-step of p-space algo
+                        elif new_point is None:
+                            print('Point exited the block! Searching for new position...')
+                            idx = Search(grid, save_point)
+                            interp = Interpolation(flow, idx)
+                            intg = Integration(interp)
+                            idx.compute(method='block_distance')
+                            interp.compute()
+                            new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
+                                                                               density=self.density,
+                                                                               viscosity=self.viscosity,
+                                                                               velocity=pvel, method='pRK4',
+                                                                               time_step=self.time_step,
+                                                                               drag_model=self.drag_model)
+                            if new_point is None:
+                                print('Point out-of-domain. Integration complete!')
+                                break
+                            else:
+                                # Update the block in idx
+                                idx = Search(grid, new_point)
+                                idx.compute(method='c-space')
+                                # new_point found is in p-space; so, append
+                                self.streamline.append(new_point)
+                                self.fvelocity.append(new_fvel)
+                                self.svelocity.append(new_pvel)
+                                pvel = new_pvel.copy()
+                                fvel = new_fvel.copy()
+                                self.point = save_point
+                                save_point = new_point
                     else:
                         self.point = save_point
                         save_point = idx.c2p(new_point)
@@ -529,6 +575,10 @@ class Streamlines:
                             print('Mid-RK4 blow up! Reducing time-step')
                             intg.rk4_bool = False
                             self.time_step = 0.5 * self.time_step
+                            loop_check += 1
+                            if loop_check == 70:
+                                print('Stuck in the same loop for too long. Integration ends!')
+                                return
 
                         # Adaptive algorithm starts
                         # Save results and adjust time-step
