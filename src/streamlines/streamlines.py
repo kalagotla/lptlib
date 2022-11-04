@@ -395,6 +395,10 @@ class Streamlines:
                         print('Mid-RK4 blow up! Reducing time-step')
                         intg.rk4_bool = False
                         self.time_step = 0.5 * self.time_step
+                        loop_check += 1
+                        if loop_check == 70:
+                            print('Stuck in the same loop for too long. Integration ends!')
+                            return
 
                     # Adaptive algorithm starts
                     # Save results and continue the loop
@@ -493,6 +497,10 @@ class Streamlines:
                             print('Mid-RK4 blow up! Reducing time-step')
                             intg.rk4_bool = False
                             self.time_step = 0.5 * self.time_step
+                            loop_check += 1
+                            if loop_check == 70:
+                                print('Stuck in the same loop for too long. Integration ends!')
+                                return
 
                         else:
                             self.point = save_point
