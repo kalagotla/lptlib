@@ -426,6 +426,7 @@ class FlowIO:
         Returns: None
 
         """
+        # TODO: The code below needs debugging. It's not tested. mgrd_to_p3d might help!
         _a_temp = np.array([self.nb, self.ni, self.nj, int(steps)], dtype='i4')
         _b_temp = np.array([self.mach, self.alpha, self.rey, self.time], dtype=data_type)
         _q0_temp = self.q[..., 0, 0].repeat(int(steps), axis=2)
@@ -458,11 +459,11 @@ class FlowIO:
         """
         _a_temp = np.array([1, q.shape[1], q.shape[-1], int(steps)], dtype='i4')
         _b_temp = np.array([self.mach, self.alpha, self.rey, self.time], dtype=data_type)
-        _q0 = np.expand_dims(q[0, ...], axis=2).repeat(int(steps), axis=2)
-        _q1 = np.expand_dims(q[1, ...], axis=2).repeat(int(steps), axis=2)
-        _q2 = np.expand_dims(q[2, ...], axis=2).repeat(int(steps), axis=2)
-        _q3 = np.expand_dims(q[3, ...], axis=2).repeat(int(steps), axis=2)
-        _q4 = np.expand_dims(q[4, ...], axis=2).repeat(int(steps), axis=2)
+        _q0 = np.expand_dims(q[0, ...], axis=2).T.repeat(int(steps), axis=0)
+        _q1 = np.expand_dims(q[1, ...], axis=2).T.repeat(int(steps), axis=0)
+        _q2 = np.expand_dims(q[2, ...], axis=2).T.repeat(int(steps), axis=0)
+        _q3 = np.expand_dims(q[3, ...], axis=2).T.repeat(int(steps), axis=0)
+        _q4 = np.expand_dims(q[4, ...], axis=2).T.repeat(int(steps), axis=0)
         _q = np.array([_q0, _q1, _q2, _q3, _q4], dtype=data_type)
 
         with open(out_file+'_'+mode+'.q', 'wb') as f:

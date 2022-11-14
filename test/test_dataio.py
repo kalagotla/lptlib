@@ -15,7 +15,7 @@ class TestDataIO(unittest.TestCase):
         flow.read_flow()
 
         # data module test
-        data = DataIO(grid, flow, read_file='../data/shocks/adaptive-ppath-p-space5e-07.npy')
+        data = DataIO(grid, flow, read_file='../data/shocks/particle_data/combined_data.npy')
         data.compute()
 
 
