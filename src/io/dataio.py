@@ -5,8 +5,7 @@ from src.streamlines.search import Search
 from src.streamlines.interpolation import Interpolation
 from multiprocessing.pool import ThreadPool as Pool
 import multiprocessing as mp
-from  \
-    scipy.interpolate import griddata
+from scipy.interpolate import griddata
 
 
 class DataIO:
