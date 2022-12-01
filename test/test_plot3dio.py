@@ -4,11 +4,11 @@
 import unittest
 import doctest
 import numpy as np
+from src.io import GridIO, FlowIO
 
 
 class TestIO(unittest.TestCase):
     def test_grid_io(self):
-        from src.io.plot3dio import GridIO
 
         # Test with the plate data
         grid = GridIO('../data/plate_data/plate.sp.x')
@@ -22,7 +22,6 @@ class TestIO(unittest.TestCase):
         return
 
     def test_flow_io(self):
-        from src.io.plot3dio import FlowIO
 
         # Test with the plate data
         flow = FlowIO('../data/plate_data/sol-0000010.q')
@@ -39,7 +38,6 @@ class TestIO(unittest.TestCase):
         Returns:
 
         """
-        from src.io.plot3dio import GridIO
 
         # Testing with an 8-block 2x2x2 grid
         grid = GridIO('../data/multi_block/cube/cube.mb.x')
@@ -56,7 +54,6 @@ class TestIO(unittest.TestCase):
         Returns:
 
         """
-        from src.io.plot3dio import GridIO
 
         # Testing with a multi-block plate grid
         grid = GridIO('../data/multi_block/plate/plate.mb.sp.x')
@@ -79,7 +76,6 @@ class TestIO(unittest.TestCase):
         Returns: None
 
         """
-        from src.io.plot3dio import GridIO
 
         # Import the shock interaction case
         grid = GridIO('../data/shock_interaction/shock_interaction_coarse.x')
@@ -88,6 +84,24 @@ class TestIO(unittest.TestCase):
 
         test_grid = GridIO('../data/shock_interaction/shock_interaction_coarse_3D.x')
         test_grid.read_grid()
+
+    def test_read_formatted_txt(self):
+        """
+        Tests the code to read formatted text obtained from Tecplot
+        Returns:
+
+        """
+        path = '../data/shock_interaction/fine/'
+        grid = GridIO(path + 'fine_python.x')
+        grid.read_grid()
+
+        flow = FlowIO(path + '42500.txt')
+        # Fill out required variables for the q-file
+        flow.mach = 2.3
+        flow.rey = 32033863.98
+        flow.alpha = 0.0
+        flow.time = 1.0
+        flow.read_formatted_txt(grid=grid, data_type='f8')
 
 
 def grid_metrics(grid):

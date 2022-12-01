@@ -329,6 +329,13 @@ class FlowIO:
     -------
     read_flow()
         returns the output attributes
+    two_to_three()
+        converts 2D data to 3D
+    mgrd_to_p3d()
+        converts and returns meshgrid data to plot3D data
+    read_formatted_txt()
+        Reads Tecplot returned formatted text. Must contain five columns without headers
+        rho, rho-u, rho-v, rho-w, e are the five columns
 
     Example:
         grid = FlowIO('plate.sp.x')  # Assume file is in the path\n
@@ -472,3 +479,33 @@ class FlowIO:
             f.write(_q.tobytes())
 
         return
+
+    def read_formatted_txt(self, grid, data_type='f8'):
+        """
+        Reads the formatted flow file generated from Tecplot. Needs grid object
+        Generate data from tecplot without the header, delimiter as space and have 5 variables
+        rho, rho-u, rho-v, rho-w, and e
+        Manually add all the required variables for flow object
+        Args:
+            grid: grid object related to the flow file
+            data_type: data type of the formatted text from Tecplot
+
+        Returns:
+            None
+
+        """
+        # Read the formatted data till the file ends and reshape it to (ni, nj, nk, 5, nb)
+        with open(self.filename, 'r') as flow:
+            self.q = np.fromfile(flow, sep=' ', dtype=data_type, count=-1)\
+                .reshape((int(grid.ni), int(grid.nj), int(grid.nk), 5, 1))
+
+        # Fill in other variables
+        if self.mach is not None and self.rey is not None and self.alpha is not None and self.time is not None:
+            print('\nYour flow object is ready for further computations!\n')
+        else:
+            print('\nPlease fill out mach, rey, alpha, and time variables in the object\n')
+            print('\n** ERROR **: Try again; mach is not filled\n')
+            exit()
+
+        return
+
