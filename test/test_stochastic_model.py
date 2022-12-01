@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 import matplotlib.pyplot as plt
 from src.streamlines.stochastic_model import StochasticModel, Particle, SpawnLocations
+from src.io.plot3dio import GridIO, FlowIO
 
 
 class TestStochasticModel(unittest.TestCase):
@@ -13,7 +14,7 @@ class TestStochasticModel(unittest.TestCase):
         p.mean_dia = 281e-9
         p.std_dia = 97e-9
         p.density = 813
-        p.n_concentration = 2600
+        p.n_concentration = 2
         p.compute_distribution()
 
         # Test SpawnLocations class
@@ -25,38 +26,45 @@ class TestStochasticModel(unittest.TestCase):
 
         # Run the model in parallel
         grid_file, flow_file = '../data/shocks/shock_test.sb.sp.x', '../data/shocks/shock_test.sb.sp.q'
-        sm = StochasticModel(p, l, grid_file=grid_file, flow_file=flow_file)
+        grid = GridIO(grid_file)
+        grid.read_grid()
+        grid.compute_metrics()
+        flow = FlowIO(flow_file)
+        flow.read_flow()
+        sm = StochasticModel(p, l, grid=grid, flow=flow)
         sm.method = 'adaptive-ppath'
-        sm.time_step = 1e-8
-        sm.max_time_step = 1e-9
+        sm.drag_model = "sphere"
+        sm.time_step = 1e-6
+        sm.max_time_step = 1e-4
+        sm.filepath = '../data/shocks/particle_data/'
 
-        # Run multi-process
+        # Run multiprocess
         lpt_data = sm.multi_process()
 
         # sl = sm.setup([18e-4, 2e-4, 2e-4], p.mean_dia)
         #
         # Plot data
-        # ax = plt.axes()
-        for i in range(p.n_concentration):
+        ax = plt.axes()
+        for i in range(1, p.n_concentration):
             xdata = np.array(lpt_data[i].streamline)
             vdata = np.array(lpt_data[i].svelocity)
             udata = np.array(lpt_data[i].fvelocity)
             data_save = np.hstack((xdata, vdata, udata))
             np.save('../data/shocks/particle_data/' + 'particle_number_' + str(i), data_save)
-            # xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
-            # vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
-            # ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
+            xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
+            vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
+            ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
 
-            # ax.plot(xp, vx, 'r', label='Particle')
-            # ax.plot(xp, ux, 'b', label='Fluid')
+            ax.plot(xp, vx, '-.r', label='Particle')
+            ax.plot(xp, ux, '.b', label='Fluid')
             # ax.plot(xp, yp, '.-', label='Path')
-            # # ax.set_title(name)
-            # ax.set_xlabel('x')
-            # ax.set_ylabel('y')
-            # ax.set_xlim(0, 38e-4)
-            # ax.legend()
-        # ax.set_title(sm.method)
-        # plt.show()
+            # ax.set_title(name)
+            ax.set_xlabel('x')
+            ax.set_ylabel('y')
+            ax.set_xlim(0, 38e-4)
+            ax.legend()
+        ax.set_title(sm.method)
+        plt.show()
 
 
 if __name__ == '__main__':

@@ -50,7 +50,8 @@ class Streamlines:
     def __init__(self, grid_file=None, flow_file=None, point=None,
                  search='block_distance', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000, viscosity=1.827e-5,
-                 time_step=1e-3, max_time_step=1, drag_model='stokes'):
+                 time_step=1e-3, max_time_step=1, drag_model='stokes',
+                 filepath=None):
         self.grid_file = grid_file
         self.flow_file = flow_file
         self.point = np.array(point)
@@ -66,6 +67,7 @@ class Streamlines:
         self.streamline = []
         self.fvelocity = []
         self.svelocity = []
+        self.filepath = filepath
 
     # TODO: Need to add doc for streamlines
 
@@ -140,6 +142,16 @@ class Streamlines:
                     self.svelocity.append(new_vel)
                     self.point = new_point
 
+            # Save files for each particle; can be used for multiprocessing large number of particles
+            if self.filepath is not None:
+                xdata = np.array(self.streamline)
+                vdata = np.array(self.svelocity)
+                udata = np.array(self.fvelocity)
+                _data_save = np.hstack((xdata, vdata, udata))
+
+                np.save(self.filepath + 'ppath_' + str(self.point), _data_save)
+                print('** SUCCESS ** Done writing for start point - ' + str(self.point) + ' ** SUCCESS **')
+
         if method == 'adaptive-p-space':
             vel = None
             while True:
@@ -197,6 +209,16 @@ class Streamlines:
                         vel = new_vel.copy()
                         loop_check = 0
 
+            # Save files for each particle; can be used for multiprocessing large number of particles
+            if self.filepath is not None:
+                xdata = np.array(self.streamline)
+                vdata = np.array(self.svelocity)
+                udata = np.array(self.fvelocity)
+                _data_save = np.hstack((xdata, vdata, udata))
+
+                np.save(self.filepath + 'ppath_' + str(self.point), _data_save)
+                print('** SUCCESS ** Done writing for start point - ' + str(self.point) + ' ** SUCCESS **')
+
         if method == 'c-space':
             # Use c-space search to convert and find the location of given point
             # All the idx attributes are converted to c-space -- point, cell, block
@@ -240,6 +262,16 @@ class Streamlines:
                         self.fvelocity.append(new_pvel)
                         self.svelocity.append(new_pvel)
                         idx.point = new_point
+
+            # Save files for each particle; can be used for multiprocessing large number of particles
+            if self.filepath is not None:
+                xdata = np.array(self.streamline)
+                vdata = np.array(self.svelocity)
+                udata = np.array(self.fvelocity)
+                _data_save = np.hstack((xdata, vdata, udata))
+
+                np.save(self.filepath + 'ppath_' + str(self.point), _data_save)
+                print('** SUCCESS ** Done writing for start point - ' + str(self.point) + ' ** SUCCESS **')
 
         if method == 'adaptive-c-space':
             # Use c-space search to convert and find the location of given point
@@ -331,6 +363,15 @@ class Streamlines:
                             idx.point = new_point
                             pvel = new_pvel.copy()
                             loop_check = 0
+            # Save files for each particle; can be used for multiprocessing large number of particles
+            if self.filepath is not None:
+                xdata = np.array(self.streamline)
+                vdata = np.array(self.svelocity)
+                udata = np.array(self.fvelocity)
+                _data_save = np.hstack((xdata, vdata, udata))
+
+                np.save(self.filepath + 'ppath_' + str(self.point), _data_save)
+                print('** SUCCESS ** Done writing for start point - ' + str(self.point) + ' ** SUCCESS **')
 
         if method == 'ppath':
             vel = None
@@ -359,6 +400,16 @@ class Streamlines:
                     self.point = new_point
                     vel = new_vel.copy()
                     fvel = new_fvel.copy()
+
+            # Save files for each particle; can be used for multiprocessing large number of particles
+            if self.filepath is not None:
+                xdata = np.array(self.streamline)
+                vdata = np.array(self.svelocity)
+                udata = np.array(self.fvelocity)
+                _data_save = np.hstack((xdata, vdata, udata))
+
+                np.save(self.filepath + 'ppath_' + str(self.point), _data_save)
+                print('** SUCCESS ** Done writing for start point - ' + str(self.point) + ' ** SUCCESS **')
 
         if method == 'adaptive-ppath':
             # particle velocity
@@ -444,6 +495,16 @@ class Streamlines:
                         fvel = new_fvel.copy()
                         loop_check = 0
 
+            # Save files for each particle; can be used for multiprocessing large number of particles
+            if self.filepath is not None:
+                xdata = np.array(self.streamline)
+                vdata = np.array(self.svelocity)
+                udata = np.array(self.fvelocity)
+                _data_save = np.hstack((xdata, vdata, udata))
+
+                np.save(self.filepath + 'ppath_' + str(self.point), _data_save)
+                print('** SUCCESS ** Done writing for start point - ' + str(self.point) + ' ** SUCCESS **')
+
         if method == 'ppath-c-space':
             pvel = None
             fvel = None
@@ -511,6 +572,16 @@ class Streamlines:
                             pvel = new_pvel.copy()
                             fvel = new_fvel.copy()
                             idx.point = new_point
+
+            # Save files for each particle; can be used for multiprocessing large number of particles
+            if self.filepath is not None:
+                xdata = np.array(self.streamline)
+                vdata = np.array(self.svelocity)
+                udata = np.array(self.fvelocity)
+                _data_save = np.hstack((xdata, vdata, udata))
+
+                np.save(self.filepath + 'ppath_' + str(self.point), _data_save)
+                print('** SUCCESS ** Done writing for start point - ' + str(self.point) + ' ** SUCCESS **')
 
         if method == 'adaptive-ppath-c-space':
             pvel = None
@@ -630,5 +701,15 @@ class Streamlines:
                             pvel = new_pvel.copy()
                             fvel = new_fvel.copy()
                             loop_check = 0
+
+            # Save files for each particle; can be used for multiprocessing large number of particles
+            if self.filepath is not None:
+                xdata = np.array(self.streamline)
+                vdata = np.array(self.svelocity)
+                udata = np.array(self.fvelocity)
+                _data_save = np.hstack((xdata, vdata, udata))
+
+                np.save(self.filepath + 'ppath_' + str(self.point), _data_save)
+                print('** SUCCESS ** Done writing for start point - ' + str(self.point) + ' ** SUCCESS **')
 
         return

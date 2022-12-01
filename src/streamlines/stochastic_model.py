@@ -2,10 +2,8 @@
 # Stochastic model for tracers is implemented
 
 import numpy as np
-import matplotlib.pyplot as plt
 from multiprocessing.pool import ThreadPool as Pool
 import multiprocessing as mp
-from src.io.plot3dio import GridIO, FlowIO
 from src.streamlines.streamlines import Streamlines
 
 rng = np.random.default_rng(7)
@@ -19,29 +17,25 @@ class StochasticModel(Streamlines):
     Attributes
     ----------
 
-    Input:
-
     """
 
     def __init__(self, particles, spawn_locations, method='adaptive-p-space',
-                 grid_file=None, flow_file=None, point=None,
-                 search='block_distance', interpolation='p-space', integration='pRK4',
+                 grid=None, flow=None, point=None,
+                 search='p-space', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000, viscosity=1.827e-5,
-                 time_step=1e-3, max_time_step=1, drag_model='stokes'
+                 time_step=1e-3, max_time_step=1, drag_model='henderson', filepath: str = None
                  ):
-        super().__init__(grid_file=grid_file, flow_file=flow_file, point=point,
+        super().__init__(point=point,
                          search=search, interpolation=interpolation, integration=integration,
                          diameter=diameter, density=density, viscosity=viscosity,
                          time_step=time_step, max_time_step=max_time_step, drag_model=drag_model)
         self.particles = particles
         self.spawn_locations = spawn_locations
         # Read-in grid and flow files
-        self.grid = GridIO(self.grid_file)
-        self.flow = FlowIO(self.flow_file)
+        self.grid = grid
+        self.flow = flow
         self.method = method
-        self.grid.read_grid()
-        self.grid.compute_metrics()
-        self.flow.read_flow()
+        self.filepath = filepath
 
     def setup(self, spawn_location, particle_dia):
         """
@@ -59,6 +53,7 @@ class StochasticModel(Streamlines):
         sl.density = self.particles.density
         sl.drag_model = self.drag_model
         sl.max_time_step = self.max_time_step
+        sl.filepath = self.filepath
         sl.compute(method=self.method, grid=self.grid, flow=self.flow)
 
         return sl

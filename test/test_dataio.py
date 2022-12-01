@@ -16,6 +16,9 @@ class TestDataIO(unittest.TestCase):
 
         # data module test
         data = DataIO(grid, flow, read_file='../data/shocks/particle_data/combined_data.npy')
+        # Increased refinement for better resolution
+        data.x_refinement = 500
+        data.y_refinement = 400
         data.compute()
 
 
