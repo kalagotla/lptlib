@@ -504,7 +504,7 @@ class FlowIO:
             print('\nYour flow object is ready for further computations!\n')
         else:
             print('\nPlease fill out mach, rey, alpha, and time variables in the object\n')
-            print('\n** ERROR **: Try again; mach is not filled\n')
+            print('\n** ERROR **: Try again; one of the required variables is not filled\n')
             exit()
 
         return

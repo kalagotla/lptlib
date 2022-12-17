@@ -190,7 +190,7 @@ class Streamlines:
                         if loop_check == 70:
                             print('Stuck in the same loop for too long. Integration ends!')
                             return
-                    elif self.angle_btw(new_point - self.point, vel) <= 0.1 \
+                    elif self.angle_btw(new_point - self.point, vel) <= 0.001 \
                             and self.time_step <= self.max_time_step:
                         self.streamline.append(new_point)
                         self.fvelocity.append(new_vel)
@@ -199,7 +199,7 @@ class Streamlines:
                         vel = new_vel.copy()
                         self.time_step = 2 * self.time_step
                         loop_check = 0
-                    elif self.angle_btw(new_point - self.point, vel) >= 1.4 and self.time_step >= 1e-12:
+                    elif self.angle_btw(new_point - self.point, vel) >= 0.01 and self.time_step >= 1e-12:
                         self.time_step = 0.5 * self.time_step
                     else:
                         self.streamline.append(new_point)
@@ -341,7 +341,7 @@ class Streamlines:
                             if loop_check == 70:
                                 print('Stuck in the same loop for too long. Integration ends!')
                                 return
-                        elif self.angle_btw(save_point - self.point, new_pvel) <= 0.1 \
+                        elif self.angle_btw(save_point - self.point, new_pvel) <= 0.001 \
                                 and self.time_step <= self.max_time_step:
                             self.point = save_point
                             save_point = idx.c2p(new_point)
@@ -352,7 +352,7 @@ class Streamlines:
                             pvel = new_pvel.copy()
                             self.time_step = 2 * self.time_step
                             loop_check = 0
-                        elif self.angle_btw(save_point - self.point, new_pvel) >= 1.4 and self.time_step >= 1e-12:
+                        elif self.angle_btw(save_point - self.point, new_pvel) >= 0.01 and self.time_step >= 1e-12:
                             self.time_step = 0.5 * self.time_step
                         else:
                             self.point = save_point
@@ -435,7 +435,7 @@ class Streamlines:
                                                                           method='pRK4', time_step=self.time_step,
                                                                           drag_model=self.drag_model)
                         if new_point is not None:
-                            print('Continuing integration by decreasing time-step!')
+                            # print('Continuing integration by decreasing time-step!')
                             continue
                         elif new_point is None:
                             print('Integration complete!')
@@ -443,7 +443,7 @@ class Streamlines:
 
                     # Check for mid-rk4 blowup
                     if intg.rk4_bool is True:
-                        print('Mid-RK4 blow up! Reducing time-step')
+                        print('**WARNING** Large residual. Mid-RK4 blow up! Reducing time-step')
                         intg.rk4_bool = False
                         self.time_step = 0.5 * self.time_step
                         loop_check += 1
@@ -463,14 +463,14 @@ class Streamlines:
                         fvel = new_fvel.copy()
                     # Check for if the points are identical because of tiny time step and deflection
                     elif self.angle_btw(new_point - self.point, vel) is None:
-                        print('Increasing time step. Successive points are same')
+                        # print('Increasing time step. Successive points are same')
                         self.time_step = 10 * self.time_step
                         loop_check += 1
                         if loop_check == 70:
                             print('Successive points did not change for too long. Integration ends!')
                             return
                     # Increase time step when angle is below 0.05 degrees
-                    elif self.angle_btw(new_point - self.point, vel) <= 0.01 and self.time_step <= self.max_time_step:
+                    elif self.angle_btw(new_point - self.point, vel) <= 0.001 and self.time_step <= self.max_time_step:
                         # print('Increasing time step. Low deflection wrt velocity')
                         self.streamline.append(new_point)
                         self.svelocity.append(new_vel)
@@ -482,7 +482,7 @@ class Streamlines:
                         loop_check = 0
                     # Decrease time step when angle is above 1.4 degrees
                     # Make sure time step does not go to zero; 1 pico-second
-                    elif self.angle_btw(new_point - self.point, vel) >= 1.4 and self.time_step >= 1e-12:
+                    elif self.angle_btw(new_point - self.point, vel) >= 0.01 and self.time_step >= 1e-12:
                         # print('Decreasing time step. High deflection wrt velocity')
                         self.time_step = 0.5 * self.time_step
                     # Save if none of the above conditions meet
@@ -677,7 +677,7 @@ class Streamlines:
                             if loop_check == 70:
                                 print('Stuck in the same loop for too long. Integration ends!')
                                 return
-                        elif self.angle_btw(save_point - self.point, pvel) <= 0.01 \
+                        elif self.angle_btw(save_point - self.point, pvel) <= 0.001 \
                                 and self.time_step <= self.max_time_step:
                             self.point = save_point
                             save_point = idx.c2p(new_point)
@@ -689,7 +689,7 @@ class Streamlines:
                             fvel = new_fvel.copy()
                             self.time_step = 2 * self.time_step
                             loop_check = 0
-                        elif self.angle_btw(save_point - self.point, pvel) >= 1.4 and self.time_step >= 1e-12:
+                        elif self.angle_btw(save_point - self.point, pvel) >= 0.01 and self.time_step >= 1e-12:
                             self.time_step = 0.5 * self.time_step
                         else:
                             self.point = save_point

@@ -213,10 +213,13 @@ class Integration:
 
             """
             match _model:
+                case 'zero-drag':
+                    # zero drag model to simulate fluid
+                    return 0
                 case 'sphere':
                     # ref: Fluid Mechanics, Frank M. White
                     # This was decided by trail-and-error from VISUAL3 code
-                    if _re <= 1e-7:
+                    if _re <= 1e-4:
                         return 0
                     if _re < 1e-3:
                         return 24 / _re
@@ -237,21 +240,21 @@ class Integration:
 
                 case 'stokes':
                     # Stokes Drag; for creeping flow regime; Re << 1
-                    if _re <= 1e-7:
+                    if _re <= 1e-4:
                         return 0
                     else:
                         return 24/_re
 
                 case 'oseen':
                     # Oseen's model; for creeping flow regime; Re < 1
-                    if _re <= 1e-7:
+                    if _re <= 1e-4:
                         return 0
                     else:
                         return 24/_re * (1 + 3/16 * _re)
 
                 case 'schiller_nauman':
                     # Schiller and Nauman's model; for Re <~ 200 & M <~ 0.25
-                    if _re <= 1e-7:
+                    if _re <= 1e-4:
                         return 0
                     else:
                         return 24/_re * (1 + 0.15 * _re**0.687)
@@ -259,7 +262,7 @@ class Integration:
                 case 'cunningham':
                     # Cunningham model; for Re << 1; M << 1; Kn <~ 0.1
                     # Knudsen number
-                    if _re <= 1e-7:
+                    if _re <= 1e-4:
                         return 0
                     if _re <= 1:
                         _kn = _mach / _re * np.sqrt(q_interp.gamma * np.pi/2)
@@ -271,7 +274,7 @@ class Integration:
                 case 'henderson':
                     # Henderson model; for all flow regimes
                     # Simplified by ignoring sphere temperature
-                    if _re < 1e-7:
+                    if _re < 1e-4:
                         return 0
 
                     # For Mach < 1

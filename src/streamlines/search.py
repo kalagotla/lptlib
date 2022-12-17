@@ -330,7 +330,7 @@ class Search:
             _delta_ppoint = _ppoint - _pred_ppoint
 
             # End newton-raphson if condition is met
-            if sum(abs(_delta_ppoint)) <= 1e-6:
+            if sum(abs(_delta_ppoint)) <= 1e-12:
                 _eps0, _eps1, _eps2 = _cpoint.astype(int)
                 self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
                 self.cpoint = _cpoint

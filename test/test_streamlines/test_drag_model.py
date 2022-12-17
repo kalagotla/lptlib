@@ -7,19 +7,20 @@ import matplotlib.pyplot as plt
 
 class TestDragModel(unittest.TestCase):
     @parameterized.expand([
-        ('adaptive-ppath-p-space', 'adaptive-ppath', 1e-7, 'henderson'),
-        ('ppath-p-space', 'ppath', 1e-8, 'henderson'),
-        ('ppath-c-space', 'ppath-c-space', 1e-8, 'henderson'),
-        ('adaptive-ppath-c-space', 'adaptive-ppath-c-space', 1e-8, 'henderson'),
+        ('henderson', 'adaptive-ppath', 1e-8, 'henderson'),
+        ('stokes', 'adaptive-ppath', 1e-8, 'stokes'),
+        ('oseen', 'adaptive-ppath', 1e-8, 'oseen'),
+        ('schiller_nauman', 'adaptive-ppath', 1e-8, 'schiller_nauman'),
+        ('cunningham', 'adaptive-ppath', 1e-8, 'cunningham'),
     ])
     def test_drag_model(self, name, method='pRK4', time_step=1e-4, drag_model='stokes'):
         from src.streamlines.streamlines import Streamlines
         sl = Streamlines('../../data/shocks/shock_test.sb.sp.x', '../../data/shocks/shock_test.sb.sp.q',
-                         [18e-4, 2e-4, 2e-4])
+                         [15e-4, 2e-4, 2e-4])
         sl.diameter = 5e-7
         sl.density = 1000
         sl.time_step = time_step
-        sl.max_time_step = 1e-8
+        sl.max_time_step = 10
         sl.drag_model = drag_model
         sl.compute(method=method)
 

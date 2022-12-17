@@ -17,14 +17,14 @@ class TestObliqueShock(unittest.TestCase):
         ('c-space', 'c-space', 1e-9),
     ])
     @Timer()
-    def test_oblique_shock(self, name, method='pRK4', time_step=1e-4):
+    def test_oblique_shock(self, name, method='adaptive-ppath', time_step=1e-4):
         from src.streamlines.streamlines import Streamlines
         sl = Streamlines('../../data/shocks/shock_test.sb.sp.x', '../../data/shocks/shock_test.sb.sp.q',
-                         [18e-4, 2e-4, 2e-4])
+                         [15e-4, 2e-4, 2e-4])
         sl.diameter = 5e-7
         sl.density = 1000
         sl.time_step = time_step
-        sl.max_time_step = 1e-8
+        sl.max_time_step = 1e-3
         sl.compute(method=method)
 
         xdata = np.array(sl.streamline)
@@ -37,14 +37,17 @@ class TestObliqueShock(unittest.TestCase):
         ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
 
         ax = plt.axes()
-        # ax.plot(xp, vx, 'r', label='Particle')
-        # ax.plot(xp, ux, 'b', label='Fluid')
-        ax.plot(xp, yp, '.-', label='Path')
+        ax.plot(xp, vx, 'r', label='Particle')
+        ax.plot(xp, ux, 'b', label='Fluid')
         ax.set_title(name)
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         ax.set_xlim(0, 38e-4)
         ax.legend()
+
+        plt.figure()
+        plt.plot(xp, yp, '.-', label='Path')
+        plt.xlim(0, 38e-4)
         plt.show()
 
 

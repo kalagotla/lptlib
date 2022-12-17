@@ -14,7 +14,7 @@ class TestStochasticModel(unittest.TestCase):
         p.mean_dia = 281e-9
         p.std_dia = 97e-9
         p.density = 813
-        p.n_concentration = 2
+        p.n_concentration = 1300
         p.compute_distribution()
 
         # Test SpawnLocations class
@@ -33,9 +33,10 @@ class TestStochasticModel(unittest.TestCase):
         flow.read_flow()
         sm = StochasticModel(p, l, grid=grid, flow=flow)
         sm.method = 'adaptive-ppath'
-        sm.drag_model = "sphere"
-        sm.time_step = 1e-6
-        sm.max_time_step = 1e-4
+        sm.drag_model = "henderson"
+        sm.search = 'p-space'
+        sm.time_step = 1e-8
+        sm.max_time_step = 1e-8
         sm.filepath = '../data/shocks/particle_data/'
 
         # Run multiprocess
@@ -44,27 +45,32 @@ class TestStochasticModel(unittest.TestCase):
         # sl = sm.setup([18e-4, 2e-4, 2e-4], p.mean_dia)
         #
         # Plot data
-        ax = plt.axes()
-        for i in range(1, p.n_concentration):
+        # fig, ax = plt.subplots()
+        # fig1, ax1 = plt.subplots()
+        for i in range(p.n_concentration):
             xdata = np.array(lpt_data[i].streamline)
             vdata = np.array(lpt_data[i].svelocity)
             udata = np.array(lpt_data[i].fvelocity)
             data_save = np.hstack((xdata, vdata, udata))
-            np.save('../data/shocks/particle_data/' + 'particle_number_' + str(i), data_save)
-            xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
-            vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
-            ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
-
-            ax.plot(xp, vx, '-.r', label='Particle')
-            ax.plot(xp, ux, '.b', label='Fluid')
+            np.save('../data/shocks/particle_data/multi_process/' + 'particle_number_' + str(i), data_save)
+            # xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
+            # vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
+            # ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
+            #
+            # ax.plot(xp, vx, 'r', label='Particle')
+            # ax.plot(xp, ux, 'b', label='Fluid')
             # ax.plot(xp, yp, '.-', label='Path')
             # ax.set_title(name)
-            ax.set_xlabel('x')
-            ax.set_ylabel('y')
-            ax.set_xlim(0, 38e-4)
-            ax.legend()
-        ax.set_title(sm.method)
-        plt.show()
+            # ax.set_xlabel('x')
+            # ax.set_ylabel('y')
+            # ax.set_xlim(0, 38e-4)
+
+            # Plot paths in separate window
+            # ax1.plot(xp, yp, '.-', label='Path')
+            # ax1.set_xlim(0, 38e-4)
+        # ax.set_title(sm.method)
+        # ax1.set_title(sm.method)
+        # plt.show()
 
 
 if __name__ == '__main__':
