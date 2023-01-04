@@ -28,20 +28,21 @@ class Search:
 
     Methods
     -------
-    read_grid()
-        returns the output attributes
+    compute()
+        Finds the location of given point in the grid using the given search-method
+        search-methods:
+            distance, block-distance, p-space, c-space
 
-        Example:
-            grid = GridIO('plate.sp.x')  # Assume file is in the path
-            nodes = Search(grid, [0.5, 0.7, -10.7])  # grid object is created from GridIO
-            print(nodes)  # prints the docstring for grid
-            nodes.compute()  # Call method to search for the cell
-            # Instance attributes
-            print(nodes.index)  # closest node in the grid to the given point
-            print(nodes.cell)  # prints the nodes of the cell
+    p2c()
+        Method to convert location of point in physical space to computational space
+        Rarely used
 
-        author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
-        date: 10-24/2021
+    c2p()
+        Method to convert from c-space to p-space
+        Used in integration algorithms to get new cell
+
+    author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
+    date: 10-24/2021
         """
 
     def __init__(self, grid, ppoint):

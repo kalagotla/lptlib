@@ -15,7 +15,7 @@ class TestDataIO(unittest.TestCase):
         flow.read_flow()
 
         # data module test
-        data = DataIO(grid, flow, read_file='../data/shocks/particle_data/combined_data.npy')
+        data = DataIO(grid, flow, location='../data/shocks/particle_data/multi_process/')
         # Increased refinement for better resolution
         data.x_refinement = 500
         data.y_refinement = 400

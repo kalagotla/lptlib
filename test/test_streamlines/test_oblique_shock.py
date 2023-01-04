@@ -37,8 +37,8 @@ class TestObliqueShock(unittest.TestCase):
         ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
 
         ax = plt.axes()
-        ax.plot(xp, vx, 'r', label='Particle')
-        ax.plot(xp, ux, 'b', label='Fluid')
+        ax.plot(xp, vx, '.-r', label='Particle')
+        ax.plot(xp, ux, '.-b', label='Fluid')
         ax.set_title(name)
         ax.set_xlabel('x')
         ax.set_ylabel('y')
