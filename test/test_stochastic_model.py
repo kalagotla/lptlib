@@ -36,8 +36,8 @@ class TestStochasticModel(unittest.TestCase):
         sm.drag_model = "henderson"
         sm.search = 'p-space'
         sm.time_step = 1e-8
-        sm.max_time_step = 1e-8
-        sm.filepath = '../data/shocks/particle_data/'
+        sm.max_time_step = 1e-1
+        sm.filepath = '../data/shocks/particle_data/multi_process_test/'
 
         # Run multiprocess
         lpt_data = sm.multi_process()
@@ -52,14 +52,13 @@ class TestStochasticModel(unittest.TestCase):
             vdata = np.array(lpt_data[i].svelocity)
             udata = np.array(lpt_data[i].fvelocity)
             data_save = np.hstack((xdata, vdata, udata))
-            np.save('../data/shocks/particle_data/multi_process/' + 'particle_number_' + str(i), data_save)
+            np.save('../data/shocks/particle_data/multi_process_test/final_data/' + 'particle_number_' + str(i), data_save)
             # xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
             # vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
             # ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
             #
             # ax.plot(xp, vx, 'r', label='Particle')
             # ax.plot(xp, ux, 'b', label='Fluid')
-            # ax.plot(xp, yp, '.-', label='Path')
             # ax.set_title(name)
             # ax.set_xlabel('x')
             # ax.set_ylabel('y')

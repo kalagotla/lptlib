@@ -189,7 +189,7 @@ class Streamlines:
                         loop_check += 1
                         if loop_check == 70:
                             print('Stuck in the same loop for too long. Integration ends!')
-                            return
+                            break
                     elif self.angle_btw(new_point - self.point, vel) <= 0.001 \
                             and self.time_step <= self.max_time_step:
                         self.streamline.append(new_point)
@@ -340,7 +340,7 @@ class Streamlines:
                             loop_check += 1
                             if loop_check == 70:
                                 print('Stuck in the same loop for too long. Integration ends!')
-                                return
+                                break
                         elif self.angle_btw(save_point - self.point, new_pvel) <= 0.001 \
                                 and self.time_step <= self.max_time_step:
                             self.point = save_point
@@ -449,7 +449,7 @@ class Streamlines:
                         loop_check += 1
                         if loop_check == 70:
                             print('Stuck in the same loop for too long. Integration ends!')
-                            return
+                            break
 
                     # Adaptive algorithm starts
                     # Save results and continue the loop
@@ -468,7 +468,7 @@ class Streamlines:
                         loop_check += 1
                         if loop_check == 70:
                             print('Successive points did not change for too long. Integration ends!')
-                            return
+                            break
                     # Increase time step when angle is below 0.05 degrees
                     elif self.angle_btw(new_point - self.point, vel) <= 0.001 and self.time_step <= self.max_time_step:
                         # print('Increasing time step. Low deflection wrt velocity')
@@ -561,7 +561,7 @@ class Streamlines:
                             loop_check += 1
                             if loop_check == 70:
                                 print('Stuck in the same loop for too long. Integration ends!')
-                                return
+                                break
 
                         else:
                             self.point = save_point
@@ -657,7 +657,7 @@ class Streamlines:
                             loop_check += 1
                             if loop_check == 70:
                                 print('Stuck in the same loop for too long. Integration ends!')
-                                return
+                                break
 
                         # Adaptive algorithm starts
                         # Save results and adjust time-step
@@ -676,8 +676,8 @@ class Streamlines:
                             loop_check += 1
                             if loop_check == 70:
                                 print('Stuck in the same loop for too long. Integration ends!')
-                                return
-                        elif self.angle_btw(save_point - self.point, pvel) <= 0.001 \
+                                break
+                        elif self.angle_btw(save_point - self.point, pvel) <= 0.01 \
                                 and self.time_step <= self.max_time_step:
                             self.point = save_point
                             save_point = idx.c2p(new_point)
@@ -689,7 +689,7 @@ class Streamlines:
                             fvel = new_fvel.copy()
                             self.time_step = 2 * self.time_step
                             loop_check = 0
-                        elif self.angle_btw(save_point - self.point, pvel) >= 0.01 and self.time_step >= 1e-12:
+                        elif self.angle_btw(save_point - self.point, pvel) >= 0.1 and self.time_step >= 1e-12:
                             self.time_step = 0.5 * self.time_step
                         else:
                             self.point = save_point
