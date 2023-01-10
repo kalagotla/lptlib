@@ -89,7 +89,7 @@ class Search:
             self.info = 'Given point is a node in the domain with a tol of 1e-6.\n' \
                         'Interpolation will assign node properties for integration.\n' \
                         'Index of the node will be returned by cell attribute\n'
-            print(self.info)
+            # print(self.info)
             return
 
         # ON BOUNDARY FOR A GENERALIZED HEXA IS SAME AS DEFAULT SEARCH
@@ -137,7 +137,7 @@ class Search:
             self.ppoint = None
             self.cpoint = None
             self.block = None
-            print(self.info)
+            # print(self.info)
             return
         # Assign the block number to the attribute
         self.block = int(np.where(_bool.all(axis=1))[0][0])
@@ -294,8 +294,8 @@ class Search:
         while True:
             # Check if taking too long
             if _iter >= 1e3:
-                print('Newton-Raphson did not converge. Try again!\n'
-                      'Possible reason might be the point might be too close to the end of a domain')
+                # print('Newton-Raphson did not converge. Try again!\n'
+                #       'Possible reason might be the point might be too close to the end of a domain')
                 self.ppoint, self.cpoint = None, None
                 return
 

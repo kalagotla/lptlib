@@ -14,7 +14,7 @@ class TestStochasticModel(unittest.TestCase):
         p.mean_dia = 281e-9
         p.std_dia = 97e-9
         p.density = 813
-        p.n_concentration = 1300
+        p.n_concentration = 5
         p.compute_distribution()
 
         # Test SpawnLocations class
@@ -35,41 +35,21 @@ class TestStochasticModel(unittest.TestCase):
         sm.method = 'adaptive-ppath'
         sm.drag_model = "henderson"
         sm.search = 'p-space'
-        sm.time_step = 1e-8
+        sm.time_step = 1e-10
         sm.max_time_step = 1e-1
         sm.filepath = '../data/shocks/particle_data/multi_process_test/'
 
         # Run multiprocess
         lpt_data = sm.multi_process()
 
-        # sl = sm.setup([18e-4, 2e-4, 2e-4], p.mean_dia)
-        #
-        # Plot data
-        # fig, ax = plt.subplots()
-        # fig1, ax1 = plt.subplots()
+        # save data
         for i in range(p.n_concentration):
             xdata = np.array(lpt_data[i].streamline)
             vdata = np.array(lpt_data[i].svelocity)
             udata = np.array(lpt_data[i].fvelocity)
             data_save = np.hstack((xdata, vdata, udata))
-            np.save('../data/shocks/particle_data/multi_process_test/final_data/' + 'particle_number_' + str(i), data_save)
-            # xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
-            # vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
-            # ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
-            #
-            # ax.plot(xp, vx, 'r', label='Particle')
-            # ax.plot(xp, ux, 'b', label='Fluid')
-            # ax.set_title(name)
-            # ax.set_xlabel('x')
-            # ax.set_ylabel('y')
-            # ax.set_xlim(0, 38e-4)
-
-            # Plot paths in separate window
-            # ax1.plot(xp, yp, '.-', label='Path')
-            # ax1.set_xlim(0, 38e-4)
-        # ax.set_title(sm.method)
-        # ax1.set_title(sm.method)
-        # plt.show()
+            np.save('../data/shocks/particle_data/multi_process_test/final_data/' + 'particle_number_' + str(i),
+                    data_save)
 
 
 if __name__ == '__main__':

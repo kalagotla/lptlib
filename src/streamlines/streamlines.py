@@ -1,5 +1,13 @@
 # Uses the program API to extract streamlines
 import numpy as np
+from src.function.timer import Timer
+from src.function.timer import Timer
+from src.io.plot3dio import GridIO
+from src.io.plot3dio import FlowIO
+from src.streamlines.search import Search
+from src.streamlines.interpolation import Interpolation
+from src.streamlines.integration import Integration
+from src.function.variables import Variables
 
 
 class Streamlines:
@@ -51,7 +59,7 @@ class Streamlines:
                  search='block_distance', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000, viscosity=1.827e-5,
                  time_step=1e-3, max_time_step=1, drag_model='stokes',
-                 filepath=None):
+                 filepath=None, task=None):
         self.grid_file = grid_file
         self.flow_file = flow_file
         self.point = np.array(point)
@@ -68,6 +76,7 @@ class Streamlines:
         self.fvelocity = []
         self.svelocity = []
         self.filepath = filepath
+        self.task = task
 
     # TODO: Need to add doc for streamlines
 
@@ -94,14 +103,16 @@ class Streamlines:
             return 180
 
     def compute(self, method='p-space', grid=None, flow=None):
-        from src.function.timer import Timer
-        from src.io.plot3dio import GridIO
-        from src.io.plot3dio import FlowIO
-        from src.streamlines.search import Search
-        from src.streamlines.interpolation import Interpolation
-        from src.streamlines.integration import Integration
-        from src.function.variables import Variables
+        """
+        Method to compute particle paths. Contains multiple algorithms
+        Args:
+            method:
+            grid:
+            flow:
 
+        Returns:
+
+        """
         if grid is None or flow is None:
             grid = GridIO(self.grid_file)
             flow = FlowIO(self.flow_file)
@@ -412,88 +423,91 @@ class Streamlines:
                 print('** SUCCESS ** Done writing for start point - ' + str(self.point) + ' ** SUCCESS **')
 
         if method == 'adaptive-ppath':
+            t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
+            t.start()
             # particle velocity
             vel = None
             # fluid velocity
             fvel = None
             while True:
-                with Timer(text="Elapsed time for loop number " + str(len(self.streamline)) + ": {:.8f}"):
-                    idx = Search(grid, self.point)
-                    interp = Interpolation(flow, idx)
-                    intg = Integration(interp)
-                    idx.compute(method=self.search)
-                    interp.compute(method=self.interpolation)
+                idx = Search(grid, self.point)
+                interp = Interpolation(flow, idx)
+                intg = Integration(interp)
+                idx.compute(method=self.search)
+                interp.compute(method=self.interpolation)
+                new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
+                                                                  viscosity=self.viscosity, velocity=vel,
+                                                                  method='pRK4', time_step=self.time_step,
+                                                                  drag_model=self.drag_model)
+                if new_point is None:
+                    # print('Checking if the end of the domain is reached...')
+                    self.time_step = 1e-9 * self.time_step
                     new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
                                                                       viscosity=self.viscosity, velocity=vel,
                                                                       method='pRK4', time_step=self.time_step,
                                                                       drag_model=self.drag_model)
-                    if new_point is None:
-                        print('Checking if the end of the domain is reached...')
-                        self.time_step = 1e-9 * self.time_step
-                        new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
-                                                                          viscosity=self.viscosity, velocity=vel,
-                                                                          method='pRK4', time_step=self.time_step,
-                                                                          drag_model=self.drag_model)
-                        if new_point is not None:
-                            # print('Continuing integration by decreasing time-step!')
-                            continue
-                        elif new_point is None:
-                            print('Integration complete!')
-                            break
+                    if new_point is not None:
+                        # print('Continuing integration by decreasing time-step!')
+                        continue
+                    elif new_point is None:
+                        print('Integration complete!')
+                        break
 
-                    # Check for mid-rk4 blowup
-                    if intg.rk4_bool is True:
-                        print('**WARNING** Large residual. Mid-RK4 blow up! Reducing time-step')
-                        intg.rk4_bool = False
-                        self.time_step = 0.5 * self.time_step
-                        loop_check += 1
-                        if loop_check == 70:
-                            print('Stuck in the same loop for too long. Integration ends!')
-                            break
+                # Check for mid-rk4 blowup
+                if intg.rk4_bool is True:
+                    print(f'**WARNING** Large residual. Mid-RK4 blow up! Reducing time-step for particle number'
+                          f' - {self.task}')
+                    intg.rk4_bool = False
+                    self.time_step = 0.5 * self.time_step
+                    loop_check += 1
+                    if loop_check == 70:
+                        print('Stuck in the same loop for too long. Integration ends!')
+                        break
 
-                    # Adaptive algorithm starts
-                    # Save results and continue the loop
-                    elif vel is None:
-                        # For the first step in the loop
-                        self.streamline.append(new_point)
-                        self.svelocity.append(new_vel)
-                        self.fvelocity.append(new_fvel)
-                        self.point = new_point
-                        vel = new_vel.copy()
-                        fvel = new_fvel.copy()
-                    # Check for if the points are identical because of tiny time step and deflection
-                    elif self.angle_btw(new_point - self.point, vel) is None:
-                        # print('Increasing time step. Successive points are same')
-                        self.time_step = 10 * self.time_step
-                        loop_check += 1
-                        if loop_check == 70:
-                            print('Successive points did not change for too long. Integration ends!')
-                            break
-                    # Increase time step when angle is below 0.05 degrees
-                    elif self.angle_btw(new_point - self.point, vel) <= 0.001 and self.time_step <= self.max_time_step:
-                        # print('Increasing time step. Low deflection wrt velocity')
-                        self.streamline.append(new_point)
-                        self.svelocity.append(new_vel)
-                        self.fvelocity.append(new_fvel)
-                        self.point = new_point
-                        vel = new_vel.copy()
-                        fvel = new_fvel.copy()
-                        self.time_step = 2 * self.time_step
-                        loop_check = 0
-                    # Decrease time step when angle is above 1.4 degrees
-                    # Make sure time step does not go to zero; 1 pico-second
-                    elif self.angle_btw(new_point - self.point, vel) >= 0.01 and self.time_step >= 1e-12:
-                        # print('Decreasing time step. High deflection wrt velocity')
-                        self.time_step = 0.5 * self.time_step
-                    # Save if none of the above conditions meet
-                    else:
-                        self.streamline.append(new_point)
-                        self.svelocity.append(new_vel)
-                        self.fvelocity.append(new_fvel)
-                        self.point = new_point
-                        vel = new_vel.copy()
-                        fvel = new_fvel.copy()
-                        loop_check = 0
+                # Adaptive algorithm starts
+                # Save results and continue the loop
+                elif vel is None:
+                    # For the first step in the loop
+                    self.streamline.append(new_point)
+                    self.svelocity.append(new_vel)
+                    self.fvelocity.append(new_fvel)
+                    self.point = new_point
+                    vel = new_vel.copy()
+                    fvel = new_fvel.copy()
+                # Check for if the points are identical because of tiny time step and deflection
+                elif self.angle_btw(new_point - self.point, vel) is None:
+                    # print('Increasing time step. Successive points are same')
+                    self.time_step = 10 * self.time_step
+                    loop_check += 1
+                    if loop_check == 70:
+                        print(f'Successive points did not change for too long. Integration ends! for particle '
+                              f'{self.task}')
+                        break
+                # Increase time step when angle is below 0.05 degrees
+                elif self.angle_btw(new_point - self.point, vel) <= 0.001 and self.time_step <= self.max_time_step:
+                    # print('Increasing time step. Low deflection wrt velocity')
+                    self.streamline.append(new_point)
+                    self.svelocity.append(new_vel)
+                    self.fvelocity.append(new_fvel)
+                    self.point = new_point
+                    vel = new_vel.copy()
+                    fvel = new_fvel.copy()
+                    self.time_step = 2 * self.time_step
+                    loop_check = 0
+                # Decrease time step when angle is above 1.4 degrees
+                # Make sure time step does not go to zero; 1 pico-second
+                elif self.angle_btw(new_point - self.point, vel) >= 0.01 and self.time_step >= 1e-12:
+                    # print('Decreasing time step. High deflection wrt velocity')
+                    self.time_step = 0.5 * self.time_step
+                # Save if none of the above conditions meet
+                else:
+                    self.streamline.append(new_point)
+                    self.svelocity.append(new_vel)
+                    self.fvelocity.append(new_fvel)
+                    self.point = new_point
+                    vel = new_vel.copy()
+                    fvel = new_fvel.copy()
+                    loop_check = 0
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             if self.filepath is not None:
@@ -502,8 +516,13 @@ class Streamlines:
                 udata = np.array(self.fvelocity)
                 _data_save = np.hstack((xdata, vdata, udata))
 
-                np.save(self.filepath + 'ppath_' + str(self.point), _data_save)
-                print('** SUCCESS ** Done writing for start point - ' + str(self.point) + ' ** SUCCESS **')
+                np.save(self.filepath + 'ppath_' + str(self.task), _data_save)
+                print('** SUCCESS ** Done writing file for particle number - ' + str(self.task) + ' ** SUCCESS **')
+                # set self to None to clear up memory after saving required data
+                self.streamline = None
+                self.svelocity = None
+                self.fvelocity = None
+            t.stop()
 
         if method == 'ppath-c-space':
             pvel = None

@@ -37,23 +37,29 @@ class StochasticModel(Streamlines):
         self.method = method
         self.filepath = filepath
 
-    def setup(self, spawn_location, particle_dia):
+    def setup(self, spawn_location, particle_dia, task):
         """
         Sets up the function to be run in parallel
         Args:
             self:
             spawn_location:
             particle_dia:
+            task: same as particle.n_concentration, used to track progress of computation
 
         Returns:
 
         """
         # TODO: Have to use inheritance properties. Currently, just calling in another object
-        sl = Streamlines(None, None, point=spawn_location, diameter=particle_dia, time_step=self.time_step)
+        print(f'Execution started for particle number - {task}')
+        sl = Streamlines(None, None, point=spawn_location, diameter=particle_dia, time_step=self.time_step,
+                         task=task)
         sl.density = self.particles.density
         sl.drag_model = self.drag_model
         sl.max_time_step = self.max_time_step
         sl.filepath = self.filepath
+        sl.search = self.search
+        sl.interpolation = self.interpolation
+        sl.integration = self.integration
         sl.compute(method=self.method, grid=self.grid, flow=self.flow)
 
         return sl
@@ -65,7 +71,8 @@ class StochasticModel(Streamlines):
 
         """
         with Pool(mp.cpu_count() - 1) as pool:
-            lpt_data = pool.starmap(self.setup, zip(self.spawn_locations.locations, self.particles.particle_field))
+            lpt_data = pool.starmap(self.setup, zip(self.spawn_locations.locations, self.particles.particle_field,
+                                                    np.arange(self.particles.n_concentration)))
 
         return lpt_data
 
