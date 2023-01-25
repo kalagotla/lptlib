@@ -55,10 +55,11 @@ class Streamlines:
 
 
     """
+
     def __init__(self, grid_file=None, flow_file=None, point=None,
                  search='block_distance', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000, viscosity=1.827e-5,
-                 time_step=1e-3, max_time_step=1, drag_model='stokes',
+                 time_step=1e-3, max_time_step=1, drag_model='stokes', adaptivity=0.001,
                  filepath=None, task=None):
         self.grid_file = grid_file
         self.flow_file = flow_file
@@ -75,6 +76,7 @@ class Streamlines:
         self.streamline = []
         self.fvelocity = []
         self.svelocity = []
+        self.adaptivity = adaptivity
         self.filepath = filepath
         self.task = task
 
@@ -475,16 +477,17 @@ class Streamlines:
                     vel = new_vel.copy()
                     fvel = new_fvel.copy()
                 # Check for if the points are identical because of tiny time step and deflection
-                elif self.angle_btw(new_point - self.point, vel) is None:
+                elif self.angle_btw(new_vel, vel) is None:
                     # print('Increasing time step. Successive points are same')
-                    self.time_step = 10 * self.time_step
+                    self.time_step = 2 * self.time_step
                     loop_check += 1
                     if loop_check == 70:
                         print(f'Successive points did not change for too long. Integration ends! for particle '
                               f'{self.task}')
                         break
+                # Check for strong acceleration and reduce time-step
                 # Increase time step when angle is below 0.05 degrees
-                elif self.angle_btw(new_point - self.point, vel) <= 0.001 and self.time_step <= self.max_time_step:
+                elif self.angle_btw(new_vel, vel) <= 0.1*self.adaptivity and self.time_step <= self.max_time_step:
                     # print('Increasing time step. Low deflection wrt velocity')
                     self.streamline.append(new_point)
                     self.svelocity.append(new_vel)
@@ -496,7 +499,7 @@ class Streamlines:
                     loop_check = 0
                 # Decrease time step when angle is above 1.4 degrees
                 # Make sure time step does not go to zero; 1 pico-second
-                elif self.angle_btw(new_point - self.point, vel) >= 0.01 and self.time_step >= 1e-12:
+                elif self.angle_btw(new_vel, vel) >= self.adaptivity and self.time_step >= 1e-12:
                     # print('Decreasing time step. High deflection wrt velocity')
                     self.time_step = 0.5 * self.time_step
                 # Save if none of the above conditions meet

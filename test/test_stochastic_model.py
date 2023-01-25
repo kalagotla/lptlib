@@ -36,7 +36,9 @@ class TestStochasticModel(unittest.TestCase):
         sm.drag_model = "henderson"
         sm.search = 'p-space'
         sm.time_step = 1e-10
-        sm.max_time_step = 1e-1
+        sm.max_time_step = 1
+        sm.adaptivity = 0.001
+        # this saves data after every process is done. This will open up memory as well
         sm.filepath = '../data/shocks/particle_data/multi_process_test/'
 
         # Run multiprocess
