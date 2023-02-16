@@ -9,12 +9,12 @@ class TestStochasticModel(unittest.TestCase):
     def test_stochastic_model(self):
         # Test particle class
         p = Particle()
-        p.min_dia = 177e-9
-        p.max_dia = 573e-9
+        p.min_dia = 281e-9
+        p.max_dia = 281e-9
         p.mean_dia = 281e-9
-        p.std_dia = 97e-9
+        p.std_dia = 0
         p.density = 813
-        p.n_concentration = 5
+        p.n_concentration = 1300
         p.compute_distribution()
 
         # Test SpawnLocations class
@@ -39,19 +39,19 @@ class TestStochasticModel(unittest.TestCase):
         sm.max_time_step = 1
         sm.adaptivity = 0.001
         # this saves data after every process is done. This will open up memory as well
-        sm.filepath = '../data/shocks/particle_data/multi_process_test/'
+        sm.filepath = '../data/shocks/particle_data/281nm_time_step_adaptive/'
 
         # Run multiprocess
         lpt_data = sm.multi_process()
 
         # save data
-        for i in range(p.n_concentration):
-            xdata = np.array(lpt_data[i].streamline)
-            vdata = np.array(lpt_data[i].svelocity)
-            udata = np.array(lpt_data[i].fvelocity)
-            data_save = np.hstack((xdata, vdata, udata))
-            np.save('../data/shocks/particle_data/multi_process_test/final_data/' + 'particle_number_' + str(i),
-                    data_save)
+        # for i in range(p.n_concentration):
+        #     xdata = np.array(lpt_data[i].streamline)
+        #     vdata = np.array(lpt_data[i].svelocity)
+        #     udata = np.array(lpt_data[i].fvelocity)
+        #     data_save = np.hstack((xdata, vdata, udata))
+            # np.save('../data/shocks/particle_data/multi_process_test/final_data/' + 'particle_number_' + str(i),
+            #         data_save)
 
 
 if __name__ == '__main__':

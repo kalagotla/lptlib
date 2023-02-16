@@ -75,7 +75,7 @@ class StochasticModel(Streamlines):
         """
         with Pool(mp.cpu_count() - 1) as pool:
             lpt_data = pool.starmap(self.setup, zip(self.spawn_locations.locations, self.particles.particle_field,
-                                                    np.arange(self.particles.n_concentration)))
+                                                    np.arange(self.particles.n_concentration)), chunksize=1)
 
         return lpt_data
 

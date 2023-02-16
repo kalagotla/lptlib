@@ -7,6 +7,7 @@ from multiprocessing.pool import ThreadPool as Pool
 import multiprocessing as mp
 from scipy.interpolate import griddata
 import os
+import re
 
 
 class DataIO:
@@ -58,7 +59,7 @@ class DataIO:
     date: 12-28/2022
     """
 
-    def __init__(self, grid, flow, read_file=None, location=None,
+    def __init__(self, grid, flow, read_file=None, location='.',
                  x_refinement: int = 50, y_refinement: int = 40):
         self.grid = grid
         self.flow = flow
@@ -66,6 +67,21 @@ class DataIO:
         self.location = location
         self.x_refinement = x_refinement
         self.y_refinement = y_refinement
+
+    @staticmethod
+    def _natural_sort(_l: list):
+        """
+        Sorts a list in natural order of things. Humanity is weird
+        Args:
+            _l: list of strings
+
+        Returns:
+            sorted list in natural order
+
+        """
+        convert = lambda text: int(text) if text.isdigit() else text.lower()
+        alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+        return sorted(_l, key=alphanum_key)
 
     def compute(self):
         """
@@ -81,13 +97,22 @@ class DataIO:
             print('Read from the combined file!!')
         except:
             print('Reading from a group of files... This will take a while!')
-            _files = os.listdir(self.location)
+            # Sort in natural order to stack particles in order
+            _files = np.array(self._natural_sort(os.listdir(self.location)))
+            _bool = []
+            for _i, _name in enumerate(_files):
+                if not _name.endswith(".npy"):
+                    _bool.append(_i)
+            _files = np.delete(_files, _bool)
+
             _p_data = np.load(self.location + _files[0])
             for infile in _files[1:]:
-                if infile.endswith(".npy"):
-                    _temp = np.load(self.location + infile)
-                    _p_data = np.vstack((_p_data, _temp))
+                _temp = np.load(self.location + infile)
+                _p_data = np.vstack((_p_data, _temp))
+                print('Done with - ' + infile)
             print('Done reading files into an array from a group of files!')
+            np.save(self.location + 'combined_file', _p_data)
+            print('**SUCCESS** combined_file.npy saved to the given location.')
 
         _x_min, _x_max = _p_data[:, 0].min(), _p_data[:, 0].max()
         _y_min, _y_max = _p_data[:, 1].min(), _p_data[:, 1].max()
@@ -95,7 +120,7 @@ class DataIO:
         # Get density and energy for plot3d file at locations
         _locations = _p_data[:, :3]
 
-        def _flow_data(_point):
+        def _flow_data(_point, _index, _size):
             """
             Internal function that interpolates data to scattered points
             Args:
@@ -108,10 +133,10 @@ class DataIO:
             _idx = Search(self.grid, _point)
             _idx.compute(method='p-space')
             _interp = Interpolation(self.flow, _idx)
-            _interp.compute(method='c-space')
+            _interp.compute(method='p-space')
 
             try:
-                print(f'Done with {_point}')
+                print(f'Done with {_index}/{_size}')
                 return _interp.q.reshape(-1)
             except:
                 print('Returned None. Exception occurred')
@@ -119,15 +144,19 @@ class DataIO:
 
         try:
             # Read back the saved file
-            _q_list = np.load('interpolated_q_data.npy', allow_pickle=False)
-            _p_data = np.load('new_p_data.npy', allow_pickle=False)
+            _q_list = np.load(self.location + 'dataio/interpolated_q_data.npy', allow_pickle=False)
+            _p_data = np.load(self.location + 'dataio/new_p_data.npy', allow_pickle=False)
             print('Read the available interpolated data to continue with the griddata algorithm')
         except:
             print('Interpolated data file is unavailable. Continuing with interpolation to scattered data!\n'
                   'This is going to take sometime. Sit back and relax!\n'
                   'Your PC will take off because of multi-process. Let it breathe...\n')
-            _pool = Pool(mp.cpu_count())
-            _q_list = _pool.map(_flow_data, _locations)
+            _processors = mp.cpu_count()
+            _pool = Pool(_processors)
+            _loc_len = len(_locations)
+            # Passing extra parameters to keep track of the progress. Chunk-size helps to keep it orderly
+            _q_list = _pool.starmap(_flow_data, zip(_locations, np.arange(0, _loc_len), np.repeat(_loc_len, _loc_len)),
+                                    chunksize=1)
             _pool.close()
 
             # Fluid data at scattered points/particle locations
@@ -137,8 +166,12 @@ class DataIO:
             _p_data = np.delete(_p_data, _remove_index, axis=0)
             # _q_list = np.array([i for i in _q_list if np.all(i != 1)])
             # Save both interpolated data and new particle data for easy future computations
-            np.save('interpolated_q_data', _q_list)
-            np.save('new_p_data', _p_data)
+            try:
+                # Try creating the directory; if exists errors out and except
+                os.mkdir(self.location + 'dataio')
+            except:
+                np.save(self.location + 'dataio/interpolated_q_data', _q_list)
+                np.save(self.location + 'dataio/new_p_data', _p_data)
             print('Done with interpolating flow data to scattered points. ')
 
         # Particle data at the scattered points/particle locations
@@ -170,28 +203,33 @@ class DataIO:
             """
             _data = _data.reshape(-1)
             # Transposing to keep consistency with default xy indexing of meshgrid
-            _q = griddata(_points, _data, (_x_grid, _y_grid), method=method, fill_value=_data.max()*2)
+            _q = griddata(_points, _data, (_x_grid, _y_grid), method=method, fill_value=_data.max() * 2)
 
             return _q
 
-
         try:
             # Read to see if data is available
-            _qf = np.load('flow_data.npy')
-            _qp = np.load('particle_data.npy')
+            _qf = np.load(self.location + 'dataio/flow_data.npy')
+            _qp = np.load(self.location + 'dataio/particle_data.npy')
             print('Loaded available flow/particle data from numpy residual files\n')
         except:
             print('Interpolating data to the grid provided...\n')
             # Interpolate scattered data onto the grid -- for flow
             _pool = Pool(mp.cpu_count())
             _qf = _pool.map(_grid_interp,
-                            [_q_f_list[:, 0], _q_f_list[:, 1], _q_f_list[:, 2], _q_f_list[:, 3], _q_f_list[:, 4]])
+                            [_q_f_list[:, 0], _q_f_list[:, 1], _q_f_list[:, 2], _q_f_list[:, 3], _q_f_list[:, 4]],
+                            chunksize=1)
             _pool.close()
             print(f'Done with flow data interpolation to grid.\n')
 
+            # Save the array to a file
+            # This will only happen when there are files in dataio directory
+            _qf = np.array(_qf)
+            np.save(self.location + 'dataio/flow_data', _qf)
+
             # Interpolate scattered data onto the grid -- for particles
             _pool = Pool(mp.cpu_count())
-            _qp_123 = _pool.map(_grid_interp, [_q_p_list[:, 1], _q_p_list[:, 2], _q_p_list[:, 3]])
+            _qp_123 = _pool.map(_grid_interp, [_q_p_list[:, 1], _q_p_list[:, 2], _q_p_list[:, 3]], chunksize=1)
             _pool.close()
             print(f'Done with particle data interpolation to grid.\n')
 
@@ -199,15 +237,15 @@ class DataIO:
             _qp = np.dstack((_qf[0], _qp_123[0], _qp_123[1], _qp_123[2], _qf[-1])).transpose((2, 0, 1))
 
             # Save data to a temporary file
-            _qf = np.array(_qf)
             _qp = np.array(_qp)
-            np.save('flow_data', _qf)
-            np.save('particle_data', _qp)
+
+            # This will only happen when there are files in dataio directory
+            np.save(self.location + 'dataio/particle_data', _qp)
 
         # Write out to plot3d format for further processing
-        self.grid.mgrd_to_p3d(_xi, _yi)
-        self.flow.mgrd_to_p3d(_qf, mode='fluid')
-        self.flow.mgrd_to_p3d(_qp, mode='particle')
+        self.grid.mgrd_to_p3d(_xi, _yi, out_file=self.location + 'dataio/mgrd_to_p3d.x')
+        self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d')
+        self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d')
         print('Files written to the working directory')
 
         return
