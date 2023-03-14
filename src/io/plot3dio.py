@@ -481,6 +481,7 @@ class FlowIO:
         return
 
     def read_formatted_txt(self, grid, data_type='f8'):
+        import os
         """
         Reads the formatted flow file generated from Tecplot. Needs grid object
         Generate data from tecplot without the header, delimiter as space and have 5 variables
@@ -494,10 +495,27 @@ class FlowIO:
             None
 
         """
-        # Read the formatted data till the file ends and reshape it to (ni, nj, nk, 5, nb)
-        with open(self.filename, 'r') as flow:
-            self.q = np.fromfile(flow, sep=' ', dtype=data_type, count=-1)\
-                .reshape((int(grid.ni), int(grid.nj), int(grid.nk), 5, 1))
+        try:
+            # load the flow file if available
+            self.q = np.load(self.filename + '_temp/flow_data.npy')
+            print('**IMPORTANT** Read data from existing temp flow_data.npy file.\n')
+        except:
+            # Read the formatted data till the file ends and reshape it to (ni, nj, nk, 5, nb)
+            print('Starting flow read from the formatted text. Please wait...\n')
+            with open(self.filename, 'r') as flow:
+                self.q = np.fromfile(flow, sep=' ', dtype=data_type, count=-1)\
+                    .reshape((int(grid.nk), int(grid.nj), int(grid.ni), 5, 1)).transpose(2, 1, 0, 3, 4)
+
+            # Save as numpy file for future computations
+            try:
+                # Try creating the directory; if exists errors out and except
+                print('Trying to save to npy for future use\n')
+                os.mkdir(self.filename + '_temp')
+                np.save(self.filename + '_temp/flow_data', self.q)
+                print('Created _temp folder and saved flow data for future use.\n')
+            except:
+                np.save(self.filename + '_temp/flow_data', self.q)
+                print('Saved file for future use.\n')
 
         # Fill in other variables
         if self.mach is not None and self.rey is not None and self.alpha is not None and self.time is not None:
