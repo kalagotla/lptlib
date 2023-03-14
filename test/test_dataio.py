@@ -16,8 +16,8 @@ class TestDataIO(unittest.TestCase):
 
         # data module test
         # data = DataIO(grid, flow, location='../data/shocks/particle_data/multi_process_test/')
-        data = DataIO(grid, flow, location='../data/shocks/particle_data/random_seed_7_time_step_1e-10/',
-                      read_file='../data/shocks/particle_data/random_seed_7_time_step_1e-10/combined_file.npy')
+        data = DataIO(grid, flow, location='../data/shocks/particle_data/281nm_time_step_adaptive/',
+                      read_file='../data/shocks/particle_data/281nm_time_step_adaptive/combined_file.npy')
         # Increased refinement for better resolution
         data.x_refinement = 500
         data.y_refinement = 400

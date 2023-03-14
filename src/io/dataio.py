@@ -169,10 +169,13 @@ class DataIO:
             try:
                 # Try creating the directory; if exists errors out and except
                 os.mkdir(self.location + 'dataio')
+                np.save(self.location + 'dataio/interpolated_q_data', _q_list)
+                np.save(self.location + 'dataio/new_p_data', _p_data)
+                print('Created dataio and saved interpolated flow data to scattered points.\n')
             except:
                 np.save(self.location + 'dataio/interpolated_q_data', _q_list)
                 np.save(self.location + 'dataio/new_p_data', _p_data)
-            print('Done with interpolating flow data to scattered points. ')
+            print('Done with interpolating flow data to scattered points.\n')
 
         # Particle data at the scattered points/particle locations
         # rho, x,y,z - momentum, energy per unit volume (q-file data)
