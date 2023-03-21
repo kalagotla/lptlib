@@ -342,10 +342,12 @@ class Search:
             _delta_cpoint = np.matmul(_J_inv, _delta_ppoint)
 
             # Save old point
-            _cpoint_old = _cpoint
+            _cpoint_old = _cpoint.copy()
 
             # Update point
             _cpoint += _delta_cpoint
+            # Update the point to zero if less than zero
+            _cpoint[_cpoint < 0] = 0
             _cpoint = abs(_cpoint)
             _iter += 1
 
