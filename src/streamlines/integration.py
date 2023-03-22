@@ -438,6 +438,8 @@ class Integration:
                             interim RK4 variables
 
                     """
+                    if np.any(x < 0):
+                        return None, None, None, None, None
                     idx = Search(self.interp.idx.grid, x)
                     idx.block = self.interp.idx.block
                     idx.c2p(x)  # This will change the cell attribute

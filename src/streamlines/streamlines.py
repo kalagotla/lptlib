@@ -1,7 +1,6 @@
 # Uses the program API to extract streamlines
 import numpy as np
 from src.function.timer import Timer
-from src.function.timer import Timer
 from src.io.plot3dio import GridIO
 from src.io.plot3dio import FlowIO
 from src.streamlines.search import Search
@@ -116,14 +115,18 @@ class Streamlines:
             None
         """
         if self.filepath is not None:
-            xdata = np.array(self.streamline)
+            p_xdata = np.array(self.streamline)
             vdata = np.array(self.svelocity)
             udata = np.array(self.fvelocity)
-            tdata = np.array(self.time_step)
-            _data_save = np.hstack((xdata, vdata, udata, tdata))
+            tdata = np.array(self.time).reshape(-1, 1)
+            f_xdata = p_xdata.copy()
+            for _i in range(1, len(f_xdata)):
+                f_xdata[_i] = f_xdata[_i-1] + udata[_i-1] * tdata[_i-1]
+            # Data is added towards the end because of the development cycle. Mostly to work with dataio
+            _data_save = np.hstack((p_xdata, vdata, udata, tdata, f_xdata))
 
-            np.save(self.filepath + 'ppath_' + str(self.point), _data_save)
-            print('** SUCCESS ** Done writing for start point - ' + str(self.point) + ' ** SUCCESS **')
+            np.save(self.filepath + 'ppath_' + str(self.task), _data_save)
+            print('** SUCCESS ** Done writing file for particle number - ' + str(self.task) + ' ** SUCCESS **')
             # set self to None to clear up memory after saving required data
             self.streamline = []
             self.svelocity = []
@@ -163,6 +166,7 @@ class Streamlines:
         uf = q_interp.velocity.reshape(3)
         self.fvelocity.append(uf)
         self.svelocity.append(uf)
+        self.time.append(self.time_step)
         loop_check = 0
 
         if method == 'p-space':
@@ -490,7 +494,7 @@ class Streamlines:
                     vel = new_vel.copy()
                     fvel = new_fvel.copy()
                 # Check for if the points are identical because of tiny time step and deflection
-                elif self.angle_btw(new_vel, vel) is None:
+                elif self.angle_btw(new_fvel, fvel) is None:
                     # print('Increasing time step. Successive points are same')
                     self.time_step = 2 * self.time_step
                     loop_check += 1
@@ -500,7 +504,7 @@ class Streamlines:
                         break
                 # Check for strong acceleration and reduce time-step
                 # Increase time step when angle is below 0.05 degrees
-                elif self.angle_btw(new_vel, vel) <= 0.1*self.adaptivity and self.time_step <= self.max_time_step:
+                elif self.angle_btw(new_fvel, fvel) <= 0.1*self.adaptivity and self.time_step <= self.max_time_step:
                     # print('Increasing time step. Low deflection wrt velocity')
                     self.streamline.append(new_point)
                     self.svelocity.append(new_vel)
@@ -513,7 +517,7 @@ class Streamlines:
                     loop_check = 0
                 # Decrease time step when angle is above 1.4 degrees
                 # Make sure time step does not go to zero; 1 pico-second
-                elif self.angle_btw(new_vel, vel) >= self.adaptivity and self.time_step >= 1e-12:
+                elif self.angle_btw(new_fvel, fvel) >= self.adaptivity and self.time_step >= 1e-12:
                     # print('Decreasing time step. High deflection wrt velocity')
                     self.time_step = 0.5 * self.time_step
                 # Save if none of the above conditions meet
@@ -556,7 +560,7 @@ class Streamlines:
                     idx = Search(grid, save_point)
                     interp = Interpolation(flow, idx)
                     intg = Integration(interp)
-                    idx.compute(method='block_distance')
+                    idx.compute(method='p-space')
                     interp.compute()
                     new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
                                                                        density=self.density,
@@ -601,6 +605,10 @@ class Streamlines:
                         pvel = new_pvel.copy()
                         fvel = new_fvel.copy()
                         idx.point = new_point
+                        if loop_check > 0:
+                            print('Resetting time step')
+                            self.time_step = self.time_step / 0.5**loop_check
+                            loop_check = 0
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
@@ -646,7 +654,7 @@ class Streamlines:
                         idx = Search(grid, save_point)
                         interp = Interpolation(flow, idx)
                         intg = Integration(interp)
-                        idx.compute(method='block_distance')
+                        idx.compute(method='p-space')
                         interp.compute()
                         new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
                                                                            density=self.density,
@@ -665,6 +673,7 @@ class Streamlines:
                             self.streamline.append(new_point)
                             self.fvelocity.append(new_fvel)
                             self.svelocity.append(new_pvel)
+                            self.time.append(self.time_step)
                             pvel = new_pvel.copy()
                             fvel = new_fvel.copy()
                             self.point = save_point
@@ -675,7 +684,8 @@ class Streamlines:
 
                     # Check for mid-rk4 blowup
                     if intg.rk4_bool is True:
-                        print('Mid-RK4 blow up! Reducing time-step')
+                        print(f'**WARNING** Large residual. Mid-RK4 blow up! Reducing time-step for particle number'
+                              f' - {self.task}')
                         intg.rk4_bool = False
                         self.time_step = 0.5 * self.time_step
                         loop_check += 1
@@ -691,29 +701,31 @@ class Streamlines:
                         self.streamline.append(save_point)
                         self.svelocity.append(new_pvel)
                         self.fvelocity.append(new_fvel)
+                        self.time.append(self.time_step)
                         self.point = new_point
                         pvel = new_pvel.copy()
                         fvel = new_fvel.copy()
-                    elif self.angle_btw(save_point - self.point, pvel) is None:
+                    elif self.angle_btw(new_fvel, fvel) is None:
                         print('Increasing time step. Successive points are same')
-                        self.time_step = 10 * self.time_step
+                        self.time_step = 2 * self.time_step
                         loop_check += 1
                         if loop_check == 70:
-                            print('Stuck in the same loop for too long. Integration ends!')
+                            print(f'Successive points did not change for too long. Integration ends! for particle '
+                                  f'{self.task}')
                             break
-                    elif self.angle_btw(save_point - self.point, pvel) <= 0.01 \
-                            and self.time_step <= self.max_time_step:
+                    elif self.angle_btw(new_fvel, fvel) <= 0.1*self.adaptivity and self.time_step <= self.max_time_step:
                         self.point = save_point
                         save_point = idx.c2p(new_point)
                         self.streamline.append(save_point)
                         self.fvelocity.append(new_fvel)
                         self.svelocity.append(new_pvel)
+                        self.time.append(self.time_step)
                         idx.point = new_point.copy()
                         pvel = new_pvel.copy()
                         fvel = new_fvel.copy()
                         self.time_step = 2 * self.time_step
                         loop_check = 0
-                    elif self.angle_btw(save_point - self.point, pvel) >= 0.1 and self.time_step >= 1e-12:
+                    elif self.angle_btw(new_fvel, fvel) >= self.adaptivity and self.time_step >= 1e-12:
                         self.time_step = 0.5 * self.time_step
                     else:
                         self.point = save_point
@@ -721,6 +733,7 @@ class Streamlines:
                         self.streamline.append(save_point)
                         self.fvelocity.append(new_fvel)
                         self.svelocity.append(new_pvel)
+                        self.time.append(self.time_step)
                         idx.point = new_point.copy()
                         pvel = new_pvel.copy()
                         fvel = new_fvel.copy()
