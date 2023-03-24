@@ -32,6 +32,8 @@ class Streamlines:
             Default is p-space; can specify c-space
         time_step : float
             Default is 1e-3
+        magnitude_adaptivity : float
+            Set to override the adaptivity value
 
     Output:
         streamline : numpy.ndarray
@@ -59,7 +61,7 @@ class Streamlines:
                  search='block_distance', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000, viscosity=1.827e-5,
                  time_step=1e-3, max_time_step=1, drag_model='stokes', adaptivity=0.001,
-                 filepath=None, task=None):
+                 magnitude_adaptivity=None, filepath=None, task=None):
         self.grid_file = grid_file
         self.flow_file = flow_file
         self.point = np.array(point)
@@ -77,6 +79,7 @@ class Streamlines:
         self.svelocity = []
         self.time = []
         self.adaptivity = adaptivity
+        self.magnitude_adaptivity = magnitude_adaptivity
         self.filepath = filepath
         self.task = task
 
@@ -121,7 +124,7 @@ class Streamlines:
             tdata = np.array(self.time).reshape(-1, 1)
             f_xdata = p_xdata.copy()
             for _i in range(1, len(f_xdata)):
-                f_xdata[_i] = f_xdata[_i-1] + udata[_i-1] * tdata[_i-1]
+                f_xdata[_i] = f_xdata[_i - 1] + udata[_i - 1] * tdata[_i - 1]
             # Data is added towards the end because of the development cycle. Mostly to work with dataio
             _data_save = np.hstack((p_xdata, vdata, udata, tdata, f_xdata))
 
@@ -133,6 +136,14 @@ class Streamlines:
             self.fvelocity = []
             self.time = []
         return
+
+    @staticmethod
+    def _magnitude(self, v1, v2):
+        # return the magnitude of the vector
+        _r = np.linalg.norm(v1 - v2) / min(np.linalg.norm(v1), np.linalg.norm(v2))
+        if _r < 1e-6 * self.magnitude_adaptivity:
+            _r = 1e-6 * self.magnitude_adaptivity
+        return _r
 
     def compute(self, method='p-space', grid=None, flow=None):
         """
@@ -154,6 +165,8 @@ class Streamlines:
             flow.read_flow()
             grid.compute_metrics()
 
+        if self.magnitude_adaptivity is None:
+            self.magnitude_adaptivity = abs(np.min(np.gradient(grid.grd[..., 0])))
         # Add data to output at the given point
         # This is the assumption where particle velocity is same as the fluid
         self.streamline.append(self.point)
@@ -504,7 +517,8 @@ class Streamlines:
                         break
                 # Check for strong acceleration and reduce time-step
                 # Increase time step when angle is below 0.05 degrees
-                elif self.angle_btw(new_fvel, fvel) <= 0.1*self.adaptivity and self.time_step <= self.max_time_step:
+                elif self.angle_btw(new_fvel, fvel) <= 0.1 * self.adaptivity and self.time_step <= self.max_time_step \
+                        and self._magnitude(self, new_fvel, fvel) <= 0.01 * self.magnitude_adaptivity:
                     # print('Increasing time step. Low deflection wrt velocity')
                     self.streamline.append(new_point)
                     self.svelocity.append(new_vel)
@@ -517,7 +531,8 @@ class Streamlines:
                     loop_check = 0
                 # Decrease time step when angle is above 1.4 degrees
                 # Make sure time step does not go to zero; 1 pico-second
-                elif self.angle_btw(new_fvel, fvel) >= self.adaptivity and self.time_step >= 1e-12:
+                elif self.angle_btw(new_fvel, fvel) >= self.adaptivity and self.time_step >= 1e-12 \
+                        and self._magnitude(self, new_fvel, fvel) >= 0.1 * self.magnitude_adaptivity:
                     # print('Decreasing time step. High deflection wrt velocity')
                     self.time_step = 0.5 * self.time_step
                 # Save if none of the above conditions meet
@@ -607,7 +622,7 @@ class Streamlines:
                         idx.point = new_point
                         if loop_check > 0:
                             print('Resetting time step')
-                            self.time_step = self.time_step / 0.5**loop_check
+                            self.time_step = self.time_step / 0.5 ** loop_check
                             loop_check = 0
 
             # Save files for each particle; can be used for multiprocessing large number of particles
@@ -713,7 +728,8 @@ class Streamlines:
                             print(f'Successive points did not change for too long. Integration ends! for particle '
                                   f'{self.task}')
                             break
-                    elif self.angle_btw(new_fvel, fvel) <= 0.1*self.adaptivity and self.time_step <= self.max_time_step:
+                    elif self.angle_btw(new_fvel,
+                                        fvel) <= 0.1 * self.adaptivity and self.time_step <= self.max_time_step:
                         self.point = save_point
                         save_point = idx.c2p(new_point)
                         self.streamline.append(save_point)

@@ -12,7 +12,7 @@ class TestPlot(unittest.TestCase):
         fig1, ax1 = plt.subplots(2, 2)
         fig2 = plt.figure()
         ax2 = plt.axes(projection='3d')
-        for i in range(9, 10):
+        for i in range(5):
             # data = np.load(filepath + 'particle_number_' + str(i) + '.npy')
             data = np.load(filepath + 'ppath_' + str(i) + '.npy')
             xp, yp, zp = data[:, 0], data[:, 1], data[:, 2]
@@ -25,8 +25,8 @@ class TestPlot(unittest.TestCase):
             ax[0, 0].plot(xp, yp, 'r')
             ax[0, 0].plot(xf, yf, 'b')
             ax[0, 0].set_title('paths')
-            ax[0, 1].plot(xp, vx, 'r')
-            ax[0, 1].plot(xp, ux, 'b')
+            ax[0, 1].plot(xp, vx, '.-r')
+            ax[0, 1].plot(xp, ux, '.-b')
             ax[0, 1].set_title('x-velocity')
             ax[1, 0].plot(xp, vy, 'r')
             ax[1, 0].plot(xp, uy, 'b')
