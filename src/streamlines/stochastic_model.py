@@ -72,7 +72,19 @@ class StochasticModel(Streamlines):
 
     def multi_process(self):
         """
-        To parallelize the setup function
+        To parallelize using multiprocessing approach; the setup function
+        Returns:
+
+        """
+        with mp.Pool(mp.cpu_count() - 1) as pool:
+            lpt_data = pool.starmap(self.setup, zip(self.spawn_locations.locations, self.particles.particle_field,
+                                                    np.arange(self.particles.n_concentration)), chunksize=1)
+
+        return lpt_data
+
+    def multi_thread(self):
+        """
+        To parallelize using multithreading approach; the setup function
         Returns:
 
         """

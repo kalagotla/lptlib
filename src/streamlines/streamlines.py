@@ -172,8 +172,8 @@ class Streamlines:
         self.streamline.append(self.point)
         idx = Search(grid, self.point)
         interp = Interpolation(flow, idx)
-        idx.compute()
-        interp.compute()
+        idx.compute(method=self.search)
+        interp.compute(method=self.interpolation)
         q_interp = Variables(interp)
         q_interp.compute_velocity()
         uf = q_interp.velocity.reshape(3)
@@ -507,7 +507,7 @@ class Streamlines:
                     vel = new_vel.copy()
                     fvel = new_fvel.copy()
                 # Check for if the points are identical because of tiny time step and deflection
-                elif self.angle_btw(new_fvel, fvel) is None:
+                elif self.angle_btw(new_vel, vel) is None:
                     # print('Increasing time step. Successive points are same')
                     self.time_step = 2 * self.time_step
                     loop_check += 1
@@ -517,8 +517,8 @@ class Streamlines:
                         break
                 # Check for strong acceleration and reduce time-step
                 # Increase time step when angle is below 0.05 degrees
-                elif self.angle_btw(new_fvel, fvel) <= 0.1 * self.adaptivity and self.time_step <= self.max_time_step \
-                        and self._magnitude(self, new_fvel, fvel) <= 0.01 * self.magnitude_adaptivity:
+                elif self.angle_btw(new_vel, vel) <= 0.1 * self.adaptivity and self.time_step <= self.max_time_step \
+                        and self._magnitude(self, new_vel, vel) <= 0.01 * self.magnitude_adaptivity:
                     # print('Increasing time step. Low deflection wrt velocity')
                     self.streamline.append(new_point)
                     self.svelocity.append(new_vel)
@@ -531,8 +531,8 @@ class Streamlines:
                     loop_check = 0
                 # Decrease time step when angle is above 1.4 degrees
                 # Make sure time step does not go to zero; 1 pico-second
-                elif self.angle_btw(new_fvel, fvel) >= self.adaptivity and self.time_step >= 1e-12 \
-                        and self._magnitude(self, new_fvel, fvel) >= 0.1 * self.magnitude_adaptivity:
+                elif self.angle_btw(new_vel, vel) >= self.adaptivity and self.time_step >= 1e-12 \
+                        and self._magnitude(self, new_vel, vel) >= 0.1 * self.magnitude_adaptivity:
                     # print('Decreasing time step. High deflection wrt velocity')
                     self.time_step = 0.5 * self.time_step
                 # Save if none of the above conditions meet
