@@ -58,7 +58,7 @@ class Streamlines:
     """
 
     def __init__(self, grid_file=None, flow_file=None, point=None,
-                 search='block_distance', interpolation='p-space', integration='pRK4',
+                 search='p-space', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000, viscosity=1.827e-5,
                  time_step=1e-3, max_time_step=1, drag_model='stokes', adaptivity=0.001,
                  magnitude_adaptivity=None, filepath=None, task=None):
@@ -386,12 +386,12 @@ class Streamlines:
                     # RK4 depends on future points for integration and this adjustment moves it forward
                     if self.angle_btw(save_point - self.point, new_pvel) is None:
                         print('Increasing time step. Successive points are same')
-                        self.time_step = 10 * self.time_step
+                        self.time_step = 2 * self.time_step
                         loop_check += 1
                         if loop_check == 70:
                             print('Stuck in the same loop for too long. Integration ends!')
                             break
-                    elif self.angle_btw(save_point - self.point, new_pvel) <= 0.001 \
+                    elif self.angle_btw(save_point - self.point, new_pvel) <= 0.1 * self.adaptivity \
                             and self.time_step <= self.max_time_step:
                         self.point = save_point
                         save_point = idx.c2p(new_point)
@@ -403,7 +403,8 @@ class Streamlines:
                         pvel = new_pvel.copy()
                         self.time_step = 2 * self.time_step
                         loop_check = 0
-                    elif self.angle_btw(save_point - self.point, new_pvel) >= 0.01 and self.time_step >= 1e-12:
+                    elif self.angle_btw(save_point - self.point, new_pvel) >= self.adaptivity and\
+                            self.time_step >= 1e-12:
                         self.time_step = 0.5 * self.time_step
                     else:
                         self.point = save_point

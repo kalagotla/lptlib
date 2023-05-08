@@ -19,19 +19,26 @@ class TestObliqueShock(unittest.TestCase):
     @Timer()
     def test_oblique_shock(self, name, method='adaptive-ppath', time_step=1e-4):
         from src.streamlines.streamlines import Streamlines
-        sl = Streamlines('../../data/shocks/shock_test.sb.sp.x', '../../data/shocks/shock_test.sb.sp.q',
+        sl = Streamlines('../../data/shocks/m5_d20_strong.sb.sp.x', '../../data/shocks/m5_d20_strong.sb.sp.q',
                          [15e-4, 2e-4, 2e-4])
-        sl.diameter = 5e-7
-        sl.density = 1000
+        # Best TiO2 specs
+        sl.diameter = 250e-9
+        sl.density = 4200
         sl.time_step = time_step
-        sl.max_time_step = 1e-3
+        # sl.max_time_step = 1e-10
+        sl.adaptivity = 0.0001
+        sl.magnitude_adaptivity = 0.0001
+        sl.drag_model = 'henderson'
         sl.compute(method=method)
 
         xdata = np.array(sl.streamline)
         vdata = np.array(sl.svelocity)
         udata = np.array(sl.fvelocity)
-        np.save('../../data/shocks/' + name + str(sl.diameter), xdata)
-        print('Data written to file: ' + name + str(sl.diameter))
+        tdata = np.array(sl.time).reshape(-1, 1)
+
+        data = np.hstack((xdata, vdata, udata, tdata))
+        np.save('../../data/shocks/' + name + str(sl.diameter) + '_' + sl.drag_model, data)
+        print('Data written to file: ' + name + str(sl.diameter) + sl.drag_model)
         xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
         vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
         ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]

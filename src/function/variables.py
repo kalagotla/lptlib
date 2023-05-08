@@ -67,7 +67,7 @@ class Variables:
         Function to compute velocity and velocity magnitude
         :return: None
         """
-        self.velocity = self.flow.q[..., 1:4, :] / (self.flow.q[..., 0, :, None] * self.flow.mach)
+        self.velocity = self.flow.q[..., 1:4, :] / (self.flow.q[..., 0, :, None])
         self.velocity_magnitude = (self.velocity[..., 0, :]**2 + self.velocity[..., 1, :]**2 + self.velocity[..., 2, :]**2)**0.5
 
     def compute_temperature(self):
@@ -77,9 +77,8 @@ class Variables:
         :return: None
         """
         self.compute_velocity()
-        _R = 1 / (self.gamma * self.flow.mach**2)
-        _E_T = self.flow.q[..., 4, :] / self.flow.mach**2
-        self.temperature = (self.gamma - 1) * (_E_T/self.flow.q[..., 0, :] - self.velocity_magnitude/2) / _R
+        _E_T = self.flow.q[..., 4, :]
+        self.temperature = (self.gamma - 1) * (_E_T/self.flow.q[..., 0, :] - self.velocity_magnitude/2) / self.gas_constant
 
     def compute_mach(self):
         """
@@ -96,7 +95,7 @@ class Variables:
         :return: None
         """
         self.compute_mach()
-        self.pressure = self.flow.q[..., 0, :] * self.temperature
+        self.pressure = self.flow.q[..., 0, :] * self.temperature * self.gas_constant
 
     def compute(self):
         # implicitly runs compute_velocity() and compute_temperature()

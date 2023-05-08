@@ -197,7 +197,7 @@ class Integration:
     def compute_ppath(self, diameter=1e-6, density=1000, viscosity=1.827e-5, velocity=None,
                       method='pRK4', time_step=1e-4, drag_model='stokes'):
 
-        def _drag_constant(_re, _mach=None, _gamma=None, _model=drag_model):
+        def _drag_constant(_re, _q_interp=None, _mach=None, _gamma=None, _mu=None, _model=drag_model):
             """
             Coefficient of drag for a spherical particle
 
@@ -219,7 +219,7 @@ class Integration:
                 case 'sphere':
                     # ref: Fluid Mechanics, Frank M. White
                     # This was decided by trail-and-error from VISUAL3 code
-                    if _re <= 1e-4:
+                    if _re <= 1e-9:
                         return 0
                     if _re < 1e-3:
                         return 24 / _re
@@ -240,21 +240,21 @@ class Integration:
 
                 case 'stokes':
                     # Stokes Drag; for creeping flow regime; Re << 1
-                    if _re <= 1e-4:
+                    if _re <= 1e-9:
                         return 0
                     else:
                         return 24/_re
 
                 case 'oseen':
                     # Oseen's model; for creeping flow regime; Re < 1
-                    if _re <= 1e-4:
+                    if _re <= 1e-9:
                         return 0
                     else:
                         return 24/_re * (1 + 3/16 * _re)
 
-                case 'schiller_nauman':
+                case 'schiller-nauman':
                     # Schiller and Nauman's model; for Re <~ 200 & M <~ 0.25
-                    if _re <= 1e-4:
+                    if _re <= 1e-9:
                         return 0
                     else:
                         return 24/_re * (1 + 0.15 * _re**0.687)
@@ -262,19 +262,22 @@ class Integration:
                 case 'cunningham':
                     # Cunningham model; for Re << 1; M << 1; Kn <~ 0.1
                     # Knudsen number
-                    if _re <= 1e-4:
+                    _r = _q_interp.density * _q_interp.velocity_magnitude * diameter / _mu
+                    if _re <= 1e-9:
                         return 0
-                    if _re <= 1:
-                        _kn = _mach / _re * np.sqrt(q_interp.gamma * np.pi/2)
+                    if _r <= 1:
+                        _kn = _q_interp.mach / _r * np.sqrt(_q_interp.gamma * np.pi/2)
+                        _kn = _kn.reshape(-1)
                         return 24/_re * (1 + 4.5*_kn)**-1
-                    if _re > 1:
-                        _kn = _mach / np.sqrt(_re)
+                    if _r > 1:
+                        _kn = _q_interp.mach / np.sqrt(_r)
+                        _kn = _kn.reshape(-1)
                         return 24/_re * (1 + 4.5*_kn)**-1
 
                 case 'henderson':
                     # Henderson model; for all flow regimes
                     # Simplified by ignoring sphere temperature
-                    if _re < 1e-4:
+                    if _re < 1e-9:
                         return 0
 
                     # For Mach < 1
@@ -289,8 +292,8 @@ class Integration:
                         return _cd1
 
                     # For Mach >= 1.75
-                    _mach_inf = self.interp.flow.mach
-                    _re_inf = self.interp.flow.rey
+                    _mach_inf = _mach
+                    _re_inf = _re
                     _s_inf = _mach_inf * np.sqrt(_gamma/2)
                     _g1 = 0.9 + 0.34/_mach_inf**2
                     _g2 = 1.86 * np.sqrt(_mach_inf/_re_inf) * (2 + 2/_s_inf**2 + 1.058/_s_inf - 1/_s_inf**4)
@@ -302,6 +305,27 @@ class Integration:
                     # For 1 <= Mach < 1.75; linear interpolation
                     if 1 <= _mach < 1.75:
                         return _cd1 + 4/3 * (_mach_inf - 1) * (_cd2 - _cd1)
+
+                case 'subramaniam-balachandar':
+                    # Model from their new book
+                    if _re < 1e-9:
+                        return 0
+
+                    if _re < 0.5:
+                        # Stokes
+                        return 24/_re
+
+                    if _re < 20:
+                        # Clift
+                        return 24/_re * (1 + 0.1315 * _re**(0.82-0.05*np.log10(_re)))
+
+                    if _re < 800:
+                        # Schiller-Naumann
+                        return 24/_re * (1 + 0.15 * _re**0.687)
+
+                    if _re < 3e5:
+                        # Clift-Gauvin
+                        return 24/_re * (1 + 0.15 * _re**0.687 + 0.42/24 * _re * (1 + 4.25e4 * _re**(-1.16))**-1)
 
 
                     return
@@ -334,21 +358,20 @@ class Integration:
                     interp = Interpolation(self.interp.flow, idx)
                     interp.compute()
                     q_interp = Variables(interp)
-                    q_interp.compute_velocity()
+                    # Compute all variables
+                    q_interp.compute_mach()
                     uf = q_interp.velocity.reshape(3)
                     # particle dynamics
                     _rhof = q_interp.density.reshape(-1)
                     dp = diameter
                     rhop = density
-                    q_interp.compute_temperature()
                     mu = _viscosity(viscosity, q_interp.temperature.reshape(-1))
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(vp - uf) * dp / mu
-                    # Relative Mach Number
-                    q_interp.compute_mach()
                     _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) /\
                             q_interp.velocity_magnitude.reshape(-1)
-                    _cd = _drag_constant(re, _mach=_mach, _gamma=q_interp.gamma, _model=drag_model)
+                    _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach,
+                                         _gamma=q_interp.gamma, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
                     return _vk, uf, None
@@ -453,24 +476,23 @@ class Integration:
                     _J_inv = interp.J_inv
                     _J = interp.J
                     q_interp = Variables(interp)
-                    q_interp.compute_velocity()
+                    # Computing mach get all the necessary variables
+                    q_interp.compute_mach()
                     p_uf = q_interp.velocity.reshape(3)
                     c_uf = np.matmul(_J_inv, p_uf)
                     # particle dynamics
                     _rhof = q_interp.density.reshape(-1)
                     dp = diameter
                     rhop = density
-                    # Transform particle velocity to c-space
+                    # Transform particle velocity to p-space
                     p_vp = np.matmul(_J, c_vp)
-                    q_interp.compute_temperature()
                     mu = _viscosity(viscosity, q_interp.temperature.reshape(-1))
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(c_vp - c_uf) * dp / mu
-                    # Relative Mach Number
-                    q_interp.compute_mach()
-                    _mach = np.linalg.norm(p_vp - p_uf) * q_interp.mach.reshape(-1) /\
+                    _mach = np.linalg.norm(c_vp - c_uf) * q_interp.mach.reshape(-1) /\
                             q_interp.velocity_magnitude.reshape(-1)
-                    _cd = _drag_constant(re, _mach=_mach, _gamma=q_interp.gamma, _model=drag_model)
+                    _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach,
+                                         _gamma=q_interp.gamma, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (c_vp - c_uf) * np.linalg.norm(c_vp - c_uf) * time_step
                     return _vk, p_uf, c_uf, p_vp, c_vp
