@@ -277,7 +277,7 @@ class Search:
         Returns:
             eps: c-space co-ordinates
         """
-
+        global _cpoint
         self.ppoint = _ppoint
 
         if self.block is None:
@@ -286,8 +286,11 @@ class Search:
         # Start Newton-Raphson
         _iter = 0
         # Initial guess
-        _cpoint = np.array([self.grid.ni[self.block], self.grid.nj[self.block], self.grid.nk[self.block]]) / 2 + \
-            np.random.randn(3)
+        try:
+            _cpoint is not None
+        except:
+            _cpoint = np.array([self.grid.ni[self.block], self.grid.nj[self.block], self.grid.nk[self.block]]) / 2 + \
+                np.random.randn(3)
 
         # TODO: Replace the compute method with a better initial guess to speed up
 
