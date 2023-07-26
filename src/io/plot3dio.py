@@ -359,6 +359,7 @@ class FlowIO:
         self.rey = None
         self.time = None
         self.q = None
+        self.unsteady_flow = None
 
     def __str__(self):
         doc = "This instance has the filename " + self.filename + "\n" + \
@@ -526,4 +527,32 @@ class FlowIO:
             exit()
 
         return
+
+    def read_unsteady_flow(self, data_type='f4'):
+        """
+        Reads in the unsteady flow files and changes the instance attributes
+        Args:
+            data_type: data type of the flow file
+
+        Returns:
+            None
+            Fills up unsteady_flow attribute with a list of flow objects
+
+        """
+        import os
+        import glob
+        self.read_flow(data_type=data_type)
+
+        # Find all the files relevant to initial flow file
+        # get file extension
+        _ext = os.path.splitext(self.filename)[-1]
+        # extract all the files with the same extension in the working directory
+        _filenames = glob.glob('*' + _ext)
+        # sort filenames
+        _filenames.sort()
+        # Read all the flow files into a list as objects
+        self.unsteady_flow = [FlowIO(filename) for filename in _filenames]
+        # Read all the flow files
+        for _flowfile in self.unsteady_flow:
+            _flowfile.read_flow(data_type=data_type)
 

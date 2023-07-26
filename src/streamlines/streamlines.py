@@ -1,12 +1,13 @@
 # Uses the program API to extract streamlines
 import numpy as np
+
 from src.function.timer import Timer
-from src.io.plot3dio import GridIO
-from src.io.plot3dio import FlowIO
-from src.streamlines.search import Search
-from src.streamlines.interpolation import Interpolation
-from src.streamlines.integration import Integration
 from src.function.variables import Variables
+from src.io.plot3dio import FlowIO
+from src.io.plot3dio import GridIO
+from src.streamlines.integration import Integration
+from src.streamlines.interpolation import Interpolation
+from src.streamlines.search import Search
 
 
 class Streamlines:
@@ -149,11 +150,14 @@ class Streamlines:
         """
         Method to compute particle paths. Contains multiple algorithms
         Args:
-            method:
-            grid:
-            flow:
+            method: str (default: p-space) - can be p-space, c-space, adaptive-p-space,
+             adaptive-c-space, ppath, adaptive-ppath, ppath-c-space, adaptive-ppath-c-space
+            grid: GridIO object (default: None) - if grid is already read in and metrics are computed pass the object
+            flow: FlowIO object (default: None) - if flow is already read in pass the object
 
         Returns:
+            None - saves the data in the object itself and can be accessed using the object attributes
+            streamline, fvelocity, svelocity, time, point, task, search, interpolation, integration, time_step, etc
 
         """
         if grid is None or flow is None:
@@ -171,7 +175,11 @@ class Streamlines:
         # This is the assumption where particle velocity is same as the fluid
         self.streamline.append(self.point)
         idx = Search(grid, self.point)
-        interp = Interpolation(flow, idx)
+        # if list use the first element if not use the same object
+        if isinstance(flow, list):
+            interp = Interpolation(flow[0], idx)
+        else:
+            interp = Interpolation(flow, idx)
         idx.compute(method=self.search)
         interp.compute(method=self.interpolation)
         q_interp = Variables(interp)
@@ -755,6 +763,36 @@ class Streamlines:
                         pvel = new_pvel.copy()
                         fvel = new_fvel.copy()
                         loop_check = 0
+
+            # Save files for each particle; can be used for multiprocessing large number of particles
+            self._save_data(self)
+            t.stop()
+
+        if method == 'unsteady-p-space':
+            import glob
+            import os
+            t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
+            t.start()
+            while True:
+                # break the loop if the loop exceeds length of flow files
+                if len(self.streamline) == len(flow):
+                    print('Integration complete!')
+                    break
+                idx = Search(grid, self.point)
+                # Skip the first object from _flowfiles and change the flow object with every iteration in interp
+                interp = Interpolation(flow[len(self.streamline)-1], idx)
+                intg = Integration(interp)
+                idx.compute(method=self.search)
+                interp.compute(method=self.interpolation)
+                new_point, new_vel = intg.compute(method=self.integration, time_step=self.time_step)
+                if new_point is None:
+                    print('Integration complete!')
+                    break
+                self.streamline.append(new_point)
+                self.fvelocity.append(new_vel)
+                self.svelocity.append(new_vel)
+                self.time.append(self.time_step)
+                self.point = new_point
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
