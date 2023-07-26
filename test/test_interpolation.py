@@ -18,7 +18,7 @@ class TestInterpolation(unittest.TestCase):
         grid.read_grid()
         flow.read_flow()
         idx.compute()
-        point_data.compute()
+        point_data.compute(method='p-space')
 
         self.assertEqual(
             sum(abs(point_data.q.reshape(5)

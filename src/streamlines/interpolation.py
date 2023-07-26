@@ -205,3 +205,19 @@ class Interpolation:
                                     'Index of the node will be returned by cell attribute\n':
                     self.q = _cell_q
                     self.q = self.q.reshape((1, 1, 1, -1, 1))
+
+            case 'rbf':
+                """
+                
+                """
+                # if the point is node return node data
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
+                                    'Interpolation will assign node properties for integration.\n' \
+                                    'Index of the node will be returned by cell attribute\n':
+                    self.q = _cell_q
+                    self.q = self.q.reshape((1, 1, 1, -1, 1))
+
+                from scipy.interpolate import RBFInterpolator as rbf
+                _rbf = rbf(_cell_grd, _cell_q)
+                self.q = _rbf(np.array(self.idx.ppoint).reshape(1, -1))
+                self.q = self.q.reshape((1, 1, 1, -1, 1))
