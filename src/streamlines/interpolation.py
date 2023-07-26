@@ -174,6 +174,14 @@ class Interpolation:
                 Equation can be found in Sadarjoen et al.
                 """
 
+                # if the point is node return node data
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
+                                    'Interpolation will assign node properties for integration.\n' \
+                                    'Index of the node will be returned by cell attribute\n':
+                    self.q = _cell_q
+                    self.q = self.q.reshape((1, 1, 1, -1, 1))
+                    return
+
                 # Interpolate m1 and m2 for use in integration; m1 is used in ppath only!
                 # m1 -- indicated as J (determinant of m1 is J)
                 _cell_J = self.idx.grid.m1[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :, self.idx.block]
@@ -199,16 +207,9 @@ class Interpolation:
 
                 self.q = self.q.reshape((1, 1, 1, -1, 1))
 
-                # if the point is node return node data
-                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
-                                    'Interpolation will assign node properties for integration.\n' \
-                                    'Index of the node will be returned by cell attribute\n':
-                    self.q = _cell_q
-                    self.q = self.q.reshape((1, 1, 1, -1, 1))
-
-            case 'rbf':
+            case 'rbf-p-space':
                 """
-                
+                Raidal basis function interpolation in physical space
                 """
                 # if the point is node return node data
                 if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
@@ -216,8 +217,47 @@ class Interpolation:
                                     'Index of the node will be returned by cell attribute\n':
                     self.q = _cell_q
                     self.q = self.q.reshape((1, 1, 1, -1, 1))
+                    return
 
                 from scipy.interpolate import RBFInterpolator as rbf
                 _rbf = rbf(_cell_grd, _cell_q)
                 self.q = _rbf(np.array(self.idx.ppoint).reshape(1, -1))
                 self.q = self.q.reshape((1, 1, 1, -1, 1))
+
+            case 'rbf-c-space':
+                """
+                Raidal basis function interpolation in c-space
+                """
+                # if the point is node return node data
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
+                                    'Interpolation will assign node properties for integration.\n' \
+                                    'Index of the node will be returned by cell attribute\n':
+                    self.q = _cell_q
+                    self.q = self.q.reshape((1, 1, 1, -1, 1))
+                    return
+
+                # Interpolate m1 and m2 for use in integration; m1 is used in ppath only!
+                # m1 -- indicated as J (determinant of m1 is J)
+                _cell_J = self.idx.grid.m1[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :,
+                          self.idx.block]
+                # m2 -- indicated as J_inv (determinant of m2 is J_inv)
+                _cell_J_inv = self.idx.grid.m2[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :,
+                              self.idx.block]
+                # _alpha, _beta, _gamma and reshape for rbf intepolator to work
+                _fractions = (self.idx.cpoint - self.idx.cell[0]).reshape(1, -1)
+
+                # Start RBF interpolation
+                from scipy.interpolate import RBFInterpolator as rbf
+                _unit_cell = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0],
+                                       [0, 1, 0], [0, 0, 1], [1, 0, 1],
+                                       [1, 1, 1], [0, 1, 1]])
+                _rbf_q = rbf(_unit_cell, _cell_q)
+                self.q = _rbf_q(_fractions)
+                self.q = self.q.reshape((1, 1, 1, -1, 1))
+
+                _rbf_J = rbf(_unit_cell, _cell_J)
+                self.J = _rbf_J(_fractions)
+                _rbf_J_inv = rbf(_unit_cell, _cell_J_inv)
+                self.J_inv = _rbf_J_inv(_fractions)
+
+

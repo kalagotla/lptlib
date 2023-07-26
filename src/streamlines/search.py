@@ -292,8 +292,6 @@ class Search:
             _cpoint = np.array([self.grid.ni[self.block], self.grid.nj[self.block], self.grid.nk[self.block]]) / 2 + \
                 np.random.randn(3)
 
-        # TODO: Replace the compute method with a better initial guess to speed up
-
         while True:
             # Check if taking too long
             if _iter >= 1e3:
