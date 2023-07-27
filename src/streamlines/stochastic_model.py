@@ -157,3 +157,14 @@ class SpawnLocations:
             _y_temp = np.linspace(self.y_min, self.y_max, _size).reshape(_size, 1)
 
             self.locations = np.hstack((_x_temp, _y_temp, _z_temp))
+
+        # Draw a plane between given points
+        # if xmax is not then use the other two point pairs to draw a plane
+        elif self.z_max is None:
+            # create scattered points between given min and max values
+            _x_temp = rng.uniform(self.x_min, self.x_max, _size).reshape(_size, 1)
+            _y_temp = rng.uniform(self.y_min, self.y_max, _size).reshape(_size, 1)
+            _z_temp = np.repeat(self.z_min, _size).reshape(_size, 1)
+
+            self.locations = np.hstack((_x_temp, _y_temp, _z_temp))
+
