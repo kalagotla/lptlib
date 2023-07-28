@@ -94,6 +94,18 @@ class StochasticModel(Streamlines):
 
         return lpt_data
 
+    def serial(self):
+        """
+        Serial execution of the LPT
+        Returns:
+
+        """
+        lpt_data = []
+        for i in range(self.particles.n_concentration):
+            lpt_data.append(self.setup(self.spawn_locations.locations[i], self.particles.particle_field[i], i))
+
+        return lpt_data
+
 
 class Particle:
     """

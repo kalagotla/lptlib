@@ -176,8 +176,8 @@ class Streamlines:
         self.streamline.append(self.point)
         idx = Search(grid, self.point)
         # if list use the first element if not use the same object
-        if isinstance(flow, list):
-            interp = Interpolation(flow[0], idx)
+        if isinstance(flow.unsteady_flow, list):
+            interp = Interpolation(flow.unsteady_flow[0], idx)
         else:
             interp = Interpolation(flow, idx)
         idx.compute(method=self.search)
