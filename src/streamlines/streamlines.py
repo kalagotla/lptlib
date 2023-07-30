@@ -62,7 +62,7 @@ class Streamlines:
                  search='p-space', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000, viscosity=1.827e-5,
                  time_step=1e-3, max_time_step=1, drag_model='stokes', adaptivity=0.001,
-                 magnitude_adaptivity=None, filepath=None, task=None):
+                 magnitude_adaptivity=None, filepath=None, task=None, unsteady_time_step=0.1):
         self.grid_file = grid_file
         self.flow_file = flow_file
         self.point = np.array(point)
@@ -83,6 +83,11 @@ class Streamlines:
         self.magnitude_adaptivity = magnitude_adaptivity
         self.filepath = filepath
         self.task = task
+        # unsteady parameters
+        self.unsteady_time_step = unsteady_time_step
+        self.unsteady_time = []
+        # Shaped based on the interp class q attribute
+        self.flow_old = None
 
     # TODO: Need to add doc for streamlines
 
@@ -132,10 +137,7 @@ class Streamlines:
             np.save(self.filepath + 'ppath_' + str(self.task), _data_save)
             print('** SUCCESS ** Done writing file for particle number - ' + str(self.task) + ' ** SUCCESS **')
             # set self to None to clear up memory after saving required data
-            self.streamline = []
-            self.svelocity = []
-            self.fvelocity = []
-            self.time = []
+            self = None
         return
 
     @staticmethod
@@ -803,24 +805,29 @@ class Streamlines:
             t.start()
             vel = None
             fvel = None
+            _temp = 0
             while True:
-                # break the loop if the loop exceeds length of flow files
-                if len(self.streamline) == len(flow.unsteady_flow):
-                    print('Integration complete!')
+                if (flow.unsteady_flow[_temp].time - np.sum(self.time)) < 0:
+                    _temp += 1
+                    self.flow_old = flow.unsteady_flow[_temp-1]
+                if _temp == len(flow.unsteady_flow):
+                    print('Integration complete! for particle ' + str(self.task))
                     break
                 idx = Search(grid, self.point)
-                interp = Interpolation(flow.unsteady_flow[len(self.streamline)-1], idx)
+                interp = Interpolation(flow.unsteady_flow[_temp], idx)
+                interp.time = self.time
+                interp.flow_old = self.flow_old
                 intg = Integration(interp)
                 idx.compute(method=self.search)
                 interp.compute(method=self.interpolation)
                 new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter,
                                                                   density=self.density,
                                                                   viscosity=self.viscosity,
-                                                                  velocity=vel, method='pRK4',
+                                                                  velocity=vel, method='unsteady-pRK4',
                                                                   time_step=self.time_step,
                                                                   drag_model=self.drag_model)
                 if new_point is None:
-                    print('Integration complete!')
+                    print('Integration complete! Out of domain for particle ' + str(self.task))
                     break
 
                 # Save results and continue the loop
@@ -828,6 +835,7 @@ class Streamlines:
                 self.svelocity.append(new_vel)
                 self.fvelocity.append(new_fvel)
                 self.time.append(self.time_step)
+                self.unsteady_time.append(self.unsteady_time_step)
                 self.point = new_point
                 vel = new_vel.copy()
                 fvel = new_fvel.copy()

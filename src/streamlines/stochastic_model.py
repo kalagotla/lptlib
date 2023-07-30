@@ -19,27 +19,18 @@ class StochasticModel(Streamlines):
 
     """
 
-    def __init__(self, particles, spawn_locations, method='adaptive-p-space',
-                 grid=None, flow=None, point=None,
-                 search='p-space', interpolation='p-space', integration='pRK4',
-                 diameter=1e-7, density=1000, viscosity=1.827e-5,
-                 time_step=1e-3, max_time_step=1, drag_model='henderson', adaptivity=0.001,
-                 magnitude_adaptivity=0.001,
-                 filepath: str = None
-                 ):
-        super().__init__(point=point,
-                         search=search, interpolation=interpolation, integration=integration,
-                         diameter=diameter, density=density, viscosity=viscosity,
-                         time_step=time_step, max_time_step=max_time_step, drag_model=drag_model)
+    def __init__(self, particles, spawn_locations, grid=None, flow=None, method='adaptive-p-space'):
+        super().__init__(grid_file=None, flow_file=None, point=None,
+                         search='p-space', interpolation='p-space', integration='pRK4',
+                         diameter=1e-7, density=1000, viscosity=1.827e-5,
+                         time_step=1e-3, max_time_step=1, drag_model='stokes', adaptivity=0.001,
+                         magnitude_adaptivity=None, filepath=None, task=None, unsteady_time_step=1e-6)
         self.particles = particles
         self.spawn_locations = spawn_locations
         # Read-in grid and flow files
         self.grid = grid
         self.flow = flow
         self.method = method
-        self.filepath = filepath
-        self.adaptivity = adaptivity
-        self.magnitude_adaptivity = magnitude_adaptivity
 
     def setup(self, spawn_location, particle_dia, task):
         """
@@ -55,9 +46,10 @@ class StochasticModel(Streamlines):
         """
         # TODO: Have to use inheritance properties. Currently, just calling in another object
         print(f'Execution started for particle number - {task}')
-        sl = Streamlines(None, None, point=spawn_location, diameter=particle_dia, time_step=self.time_step,
-                         task=task)
+        sl = Streamlines(self.grid_file, self.flow_file, point=spawn_location, diameter=particle_dia,
+                         time_step=self.time_step, task=task)
         sl.density = self.particles.density
+        sl.viscosity = self.viscosity
         sl.drag_model = self.drag_model
         sl.max_time_step = self.max_time_step
         sl.filepath = self.filepath
@@ -66,6 +58,7 @@ class StochasticModel(Streamlines):
         sl.integration = self.integration
         sl.adaptivity = self.adaptivity
         sl.magnitude_adaptivity = self.magnitude_adaptivity
+        sl.unsteady_time_step = self.unsteady_time_step
         sl.compute(method=self.method, grid=self.grid, flow=self.flow)
 
         return sl

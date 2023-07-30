@@ -56,6 +56,9 @@ class Interpolation:
         self.mach, self.alpha, self.rey, self.time = [None] * 4
         self.J = None
         self.J_inv = None
+        # for unsteady case
+        self.flow_old = None
+        self.time = []
 
     def __str__(self):
         doc = "This instance uses " + self.flow.filename + " as the flow file " \
@@ -259,5 +262,34 @@ class Interpolation:
                 self.J = _rbf_J(_fractions)
                 _rbf_J_inv = rbf(_unit_cell, _cell_J_inv)
                 self.J_inv = _rbf_J_inv(_fractions)
+
+            case 'unsteady-rbf-p-space':
+                """
+                Raidal basis function interpolation in physical space for unsteady problems
+                """
+                # if the point is node return node data
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
+                                    'Interpolation will assign node properties for integration.\n' \
+                                    'Index of the node will be returned by cell attribute\n':
+                    self.q = _cell_q
+                    self.q = self.q.reshape((1, 1, 1, -1, 1))
+                    return
+
+                from scipy.interpolate import RBFInterpolator as rbf
+                _rbf = rbf(_cell_grd, _cell_q)
+                self.q = _rbf(np.array(self.idx.ppoint).reshape(1, -1))
+                self.q = self.q.reshape((1, 1, 1, -1, 1))
+                # Equation is linear interpolation between time steps in unsteady data
+                try:
+                    _tau = (np.sum(self.time) - self.flow_old.time) / (self.flow.time - self.flow_old.time)
+                    _cell_q_old = self.flow_old.q[
+                        self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, self.idx.block
+                    ]
+                    _rbf_old = rbf(_cell_grd, _cell_q_old)
+                    _q_old = _rbf_old(np.array(self.idx.ppoint).reshape(1, -1))
+                    _q_old = _q_old.reshape((1, 1, 1, -1, 1))
+                    self.q = _tau * self.q + (1 - _tau) * _q_old
+                except:
+                    return
 
 
