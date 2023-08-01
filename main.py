@@ -1,121 +1,77 @@
-# This is the main script. Run this and follow the steps
-# TODO: Use this to guide a user
-#  Ask for the filename, what to do? like get streamline data
-#  or compute some properties etc...
-
-from src.function.timer import Timer
 import numpy as np
+from src.streamlines.stochastic_model import StochasticModel, Particle, SpawnLocations
+import matplotlib.pyplot as plt
 
 
-@Timer(text="Elapsed time for main program: {:.4f} seconds")
-def main(grid_file, flow_file, point, method='c-space'):
-    from src.io.plot3dio import GridIO
-    from src.io.plot3dio import FlowIO
-    from src.streamlines.search import Search
-    from src.streamlines.interpolation import Interpolation
-    from src.streamlines.integration import Integration
+def shock_interaction():
+    # Test particle class
+    p = Particle()
+    p.min_dia = 250e-9
+    p.max_dia = 550e-9
+    p.mean_dia = 340e-9
+    p.std_dia = 10e-9
+    p.density = 4200
+    p.n_concentration = 1
+    p.compute_distribution()
 
-    # Read-in the data and compute grid metrics
+    # Test SpawnLocations class
+    l = SpawnLocations(p)
+    l.x_min = 0.0001
+    l.z_min = 0.0005
+    l.y_min, l.y_max = 0.001, 0.0016
+    l.compute()
+
+    # Run the model in parallel
+    grid_file, flow_file = 'coarse_python.x', '37500_overflow_eqn_corrected.txt'
+    from src.io.plot3dio import GridIO, FlowIO
     grid = GridIO(grid_file)
-    flow = FlowIO(flow_file)
-
-    # Read in the grid and flow data
-    grid.read_grid()
-    flow.read_flow()
+    grid.read_grid(data_type='f8')
     grid.compute_metrics()
+    flow = FlowIO(flow_file)
+    flow.mach = 5.0
+    flow.rey = 1.188e8
+    flow.alpha = 0.0
+    flow.time = 1.0
+    flow.read_formatted_txt(grid=grid, data_type='f8')
+    sm = StochasticModel(p, l, grid=grid, flow=flow)
+    sm.method = 'adaptive-ppath'
+    # sm.method = 'ppath-c-space'
+    sm.drag_model = 'henderson'
+    sm.search = 'p-space'
+    sm.time_step = 1e-10
+    sm.max_time_step = 1
+    sm.adaptivity = 0.001
+    sm.magnitude_adaptivity = 0.001
+    # this saves data after every process is done. This will open up memory as well
+    # sm.filepath = './tio2_normal_distribution/'
+    # To test multiple drag models
+    sm.filepath = './drag_models/'
 
-    streamline = [point]
-    if method == 'p-space':
-        while True:
-            with Timer(text="Elapsed time for loop number " + str(len(streamline)) + ": {:.8f}"):
-                idx = Search(grid, point)
-                interp = Interpolation(flow, idx)
-                intg = Integration(interp)
-                t = Timer(text="Elapsed time for search number " + str(len(streamline)) + ": {:.8f} seconds")
-                t.start()
-                idx.compute(method='p-space')
-                t.stop()
-                interp.compute()
-                new_point = intg.compute(method='pRK4', time_step=1)
-                if new_point is None:
-                    print('Integration complete!')
-                    break
-                streamline.append(new_point)
-                point = new_point
+    # Run multiprocess
+    lpt_data = sm.multi_process()
 
-    if method == 'c-space':
-        # Use c-space search to convert and find the location of given point
-        # All the idx attributes are converted to c-space -- point, cell, block
-        save_point = point
-        idx = Search(grid, point)
-        idx.compute(method='c-space')
-        while True:
-            with Timer(text="Elapsed time for loop number " + str(len(streamline)) + ": {:.8f}"):
-                interp = Interpolation(flow, idx)
-                interp.compute(method='c-space')
-                intg = Integration(interp)
-                new_point = intg.compute(method='cRK4', time_step=1)
-                if new_point is None:
-                    # For multi-block case if the point is out-of-block
-                    # Use previous point and run one-step of p-space algo
-                    print('Point exited the block! Searching for new position...')
-                    idx = Search(grid, save_point)
-                    interp = Interpolation(flow, idx)
-                    intg = Integration(interp)
-                    idx.compute(method='block_distance')
-                    interp.compute()
-                    new_point = intg.compute(method='pRK4', time_step=1)
-                    if new_point is None:
-                        print('No location found. Point out-of-domain. Integration complete!')
-                        break
-                    else:
-                        # Update the block in idx
-                        idx = Search(grid, new_point)
-                        idx.compute(method='c-space')
-                        streamline.append(new_point)
-                        # new_point = idx.p2c(new_point)  # Move point obtained to c-space
-                else:
-                    save_point = idx.c2p(new_point)
-                    streamline.append(save_point)
-                    idx.point = new_point
+    print('**** DONE ******'*5)
 
-    return np.array(streamline), grid
-
-
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    slc, gridc = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [0.5, 0.5, 0.01], method='c-space')
-    slp, gridp = main('data/plate_data/plate.sp.x', 'data/plate_data/sol-0000010.q', [0.5, 0.5, 0.01], method='p-space')
-    slmbc, gridmbc = main('data/multi_block/plate/plate.mb.sp.x', 'data/multi_block/plate/plate.mb.sp.q',
-                          [0.5, 0.5, 0.01], method='c-space')
-    slmbp, gridmbp = main('data/multi_block/plate/plate.mb.sp.x', 'data/multi_block/plate/plate.mb.sp.q',
-                          [0.5, 0.5, 0.01], method='p-space')
-    # Uncomment lines below to test cylinder grid
-    # slc, gridc = main('data/cylinder_data/cylinder.sp.x', 'data/cylinder_data/sol-0010000.q',
-    #                   [0.5, 1.5, 0.5], method='c-space')
-    # slp, gridp = main('data/cylinder_data/cylinder.sp.x', 'data/cylinder_data/sol-0010000.q',
-    #                   [0.5, 1.5, 0.5], method='p-space')
-
-
-    xc, yc, zc = slc[:, 0], slc[:, 1], slc[:, 2]
-    xp, yp, zp = slp[:, 0], slp[:, 1], slp[:, 2]
-    xmbc, ymbc, zmbc = slmbc[:, 0], slmbc[:, 1], slmbc[:, 2]
-    xmbp, ymbp, zmbp = slmbp[:, 0], slmbp[:, 1], slmbp[:, 2]
-
-    import matplotlib.pyplot as plt
-
-    ax = plt.axes(projection='3d')
-    ax.plot3D(xc, yc, zc, 'r', label='SB-C')
-    ax.plot3D(xp, yp, zp, 'b', label='SB-P')
-    ax.plot3D(xmbc, ymbc, zmbc, 'g', label='MB-C')
-    ax.plot3D(xmbp, ymbp, zmbp, 'k', label='MB-P')
-    # ax.set_xlim([gridc.grd_min[0, 0], gridc.grd_max[0, 0]])
-    # ax.set_ylim([gridc.grd_min[0, 1], gridc.grd_max[0, 1]])
-    # ax.set_zlim([gridc.grd_min[0, 2], gridc.grd_max[0, 2]])
-    ax.set_title('Comparing different particle path algorithms')
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
+    ax = plt.axes()
+    fig1 = plt.figure()
+    ax1 = plt.axes()
+    for i in range(p.n_concentration):
+        xdata = np.array(lpt_data[i].streamline)
+        vdata = np.array(lpt_data[i].svelocity)
+        udata = np.array(lpt_data[i].fvelocity)
+        xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
+        vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
+        ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
+        #
+        ax.plot(xp, vx, '.-r', label='Particle')
+        ax.plot(xp, ux, '.-b', label='Fluid')
+        ax1.plot(xp, yp, '.-', label='Path')
+    #     ax.set_xlabel('x')
+    #     ax.set_ylabel('y')
     ax.legend()
+    ax.set_title(sm.method)
     plt.show()
 
+
+if __name__ == '__main__':
+    shock_interaction()
