@@ -239,7 +239,7 @@ class ObliqueShockData:
         # mach, aoa/alpha, re, t
         self.flow.mach = self.oblique_shock.mach
         self.flow.alpha = 0.0
-        self.flow.rey = (_density * _velocity * (self.grid.grd[1,0,0,0,0] - self.grid.grd[0,0,0,0,0])) / 1.8e-5
+        self.flow.rey = (_density * _velocity * (self.grid.grd[1, 0, 0, 0, 0] - self.grid.grd[0, 0, 0, 0, 0])) / 1.8e-5
         self.flow.t = 1.0
         # flow
         self.flow.q = np.zeros((self.flow.ni[0], self.flow.nj[0], self.flow.nk[0], 5, self.flow.nb), dtype='f8')

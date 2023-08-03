@@ -282,7 +282,7 @@ class Integration:
 
                     # For Mach < 1
                     _s = _mach * np.sqrt(_gamma/2)
-                    _f1 = 24 * (_re + _s * (5.897 * np.exp(-0.247 * _re/_s)))**-1
+                    _f1 = 24 * (_re + _s * (5.89688 * np.exp(-0.247 * _re/_s)))**-1
                     _f2 = np.exp(-0.5*_mach/np.sqrt(_re)) * \
                                 ((4.5 + 0.38*(0.03*_re + 0.48*np.sqrt(_re))) / (1 + 0.03*_re + 0.48*np.sqrt(_re)) +
                                  0.1*_mach**2 + 0.2*_mach**8)
@@ -327,6 +327,37 @@ class Integration:
                         # Clift-Gauvin
                         return 24/_re * (1 + 0.15 * _re**0.687 + 0.42/24 * _re * (1 + 4.25e4 * _re**(-1.16))**-1)
 
+                case 'loth':
+                    # Loth's model; for all flow regimes
+                    if _re < 1e-9:
+                        return 0
+
+                    if _re < 45:
+                    # Rarefraction dominated domain
+                        import math
+                        _s = _mach * np.sqrt(_gamma/2)
+                        _cd_fm = (1 + 2 * _s**2) * np.exp(-_s**2) / (_s**3 * np.pi**0.5) + \
+                                 (4*_s**4 + 4*_s**2 - 1) * math.erf(_s) / (2*_s**4) + 2 * np.pi**0.5 / (3 * _s)
+                        _cd_fm_re = _cd_fm / (1 + (_cd_fm/1.63 - 1) * (_re/45)**0.5)
+                        _kn = (np.pi * _gamma / 2)**0.5 * _mach / _re
+                        _f_kn = (1 + _kn * (2.514 + 0.8 * np.exp(-0.55/_kn)))**-1
+                        _cd_kn_re = 24/_re * (1 + 0.15 * _re**0.687) * _f_kn
+                        _cd = (_cd_kn_re + _mach**4 * _cd_fm_re) / (1 + _mach**4)
+                        return _cd
+
+                    if _re > 45:
+                    # compression-dominated regime
+                        if _mach <= 1.45:
+                            _cm = 5/3 + 2/3 * np.tanh(3 * np.log(_mach - 0.1))
+                        if _mach > 1.45:
+                            _cm = 2.044 + 0.2 * np.exp(-1.8 * (np.log(_mach/1.5))**2)
+                        if _mach <= 0.89:
+                            _gm = 1 - 1.525 * _mach**4
+                        if _mach > 0.89:
+                            _gm = 2e-4 + 8e-4 * np.tanh(12.77 * (_mach - 2.02))
+                        _hm = 1 - 0.258 * _cm / (1 + 514 * _gm)
+                        _cd = 24/_re * (1 + 0.15 * _re**0.687) * _hm + 0.42 * _cm / (1 + 42000 * _gm / _re**1.16)
+                        return _cd
 
                     return
 
