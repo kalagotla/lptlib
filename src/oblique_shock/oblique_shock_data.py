@@ -207,8 +207,9 @@ class ObliqueShockData:
         _x_velocity = _velocity * np.sin(np.radians(self.oblique_shock.shock_angle))
         _y_velocity = _velocity * np.cos(np.radians(self.oblique_shock.shock_angle))
         _z_velocity = 0
-        _energy = self.inlet_pressure / ((self.oblique_shock.gamma - 1) * _density) + 0.5 * (
-                _x_velocity ** 2 + _y_velocity ** 2 + _z_velocity ** 2)
+        _energy = _density * (self.oblique_shock.gamma * self.inlet_temperature / (self.oblique_shock.gamma - 1)
+                              + 0.5 * (_x_velocity ** 2 + _y_velocity ** 2 + _z_velocity ** 2))
+        # _pre_shock properties
         _pre_shock = np.array([_density, _x_velocity * _density, _y_velocity * _density, _z_velocity * _density,
                                _energy])
 
@@ -222,9 +223,9 @@ class ObliqueShockData:
         _y_velocity_post = _velocity_post * np.cos(np.radians(self.oblique_shock.shock_angle
                                                               - self.oblique_shock.deflection))
         _z_velocity_post = 0
-        _energy_post = self.inlet_pressure * self.oblique_shock.pressure_ratio \
-                       / ((self.oblique_shock.gamma - 1) * _density_post) + 0.5 * (
-                               _x_velocity_post ** 2 + _y_velocity_post ** 2 + _z_velocity_post ** 2)
+        _energy_post = _density_post * (self.oblique_shock.gamma * self.inlet_temperature *
+                                        self.oblique_shock.temperature_ratio / (self.oblique_shock.gamma - 1)
+                                        + 0.5 * (_x_velocity_post ** 2 + _y_velocity_post ** 2 + _z_velocity_post ** 2))
         _post_shock = np.array([_density_post, _x_velocity_post * _density_post, _y_velocity_post * _density_post,
                                 _z_velocity_post * _density_post, _energy_post])
 
