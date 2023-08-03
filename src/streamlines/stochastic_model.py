@@ -22,14 +22,14 @@ class StochasticModel(Streamlines):
     def __init__(self, particles, spawn_locations, method='adaptive-p-space',
                  grid=None, flow=None, point=None,
                  search='p-space', interpolation='p-space', integration='pRK4',
-                 diameter=1e-7, density=1000, viscosity=1.827e-5,
+                 diameter=1e-7, density=1000,
                  time_step=1e-3, max_time_step=1, drag_model='henderson', adaptivity=0.001,
                  magnitude_adaptivity=0.001,
                  filepath: str = None
                  ):
         super().__init__(point=point,
                          search=search, interpolation=interpolation, integration=integration,
-                         diameter=diameter, density=density, viscosity=viscosity,
+                         diameter=diameter, density=density,
                          time_step=time_step, max_time_step=max_time_step, drag_model=drag_model)
         self.particles = particles
         self.spawn_locations = spawn_locations

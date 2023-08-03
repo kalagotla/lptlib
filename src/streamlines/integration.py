@@ -194,7 +194,7 @@ class Integration:
 
                 return self.cpoint, pv4, cv4
 
-    def compute_ppath(self, diameter=1e-6, density=1000, viscosity=1.827e-5, velocity=None,
+    def compute_ppath(self, diameter=1e-6, density=1000, velocity=None,
                       method='pRK4', time_step=1e-4, drag_model='stokes'):
 
         def _drag_constant(_re, _q_interp=None, _mach=None, _gamma=None, _mu=None, _model=drag_model):
@@ -367,10 +367,12 @@ class Integration:
 
                     return
 
-        def _viscosity(_mu_ref, _temperature):
+        def _viscosity(_temperature):
             # Sutherland's viscosity law
             # All temperatures must be in kelvin
-            _mu = _mu_ref * ((_temperature + 273.15) / 291.15)**1.5 * (291.15 + 120) / (120 + _temperature + 273.15)
+            # Formula from cfd-online
+            _c1 = 1.716e-5 * (273.15 + 110.4) / 273.15**1.5
+            _mu = _c1 * _temperature**1.5 / (_temperature + 110.4)
             return _mu
 
         match method:
@@ -402,7 +404,7 @@ class Integration:
                     _rhof = q_interp.density.reshape(-1)
                     dp = diameter
                     rhop = density
-                    mu = _viscosity(viscosity, q_interp.temperature.reshape(-1))
+                    mu = _viscosity(q_interp.temperature.reshape(-1))
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(vp - uf) * dp / mu
                     _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) /\
@@ -523,7 +525,7 @@ class Integration:
                     rhop = density
                     # Transform particle velocity to p-space
                     p_vp = np.matmul(_J, c_vp)
-                    mu = _viscosity(viscosity, q_interp.temperature.reshape(-1))
+                    mu = _viscosity(q_interp.temperature.reshape(-1))
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(c_vp - c_uf) * dp / mu
                     _mach = np.linalg.norm(c_vp - c_uf) * q_interp.mach.reshape(-1) /\

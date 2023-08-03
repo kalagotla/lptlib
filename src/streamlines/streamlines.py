@@ -59,7 +59,7 @@ class Streamlines:
 
     def __init__(self, grid_file=None, flow_file=None, point=None,
                  search='p-space', interpolation='p-space', integration='pRK4',
-                 diameter=1e-7, density=1000, viscosity=1.827e-5,
+                 diameter=1e-7, density=1000,
                  time_step=1e-3, max_time_step=1, drag_model='stokes', adaptivity=0.001,
                  magnitude_adaptivity=None, filepath=None, task=None):
         self.grid_file = grid_file
@@ -70,7 +70,6 @@ class Streamlines:
         self.integration = integration
         self.diameter = diameter
         self.density = density
-        self.viscosity = viscosity
         self.time_step = time_step
         self.max_time_step = max_time_step
         self.drag_model = drag_model
@@ -433,7 +432,6 @@ class Streamlines:
                 interp.compute(method=self.interpolation)
                 new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter,
                                                                   density=self.density,
-                                                                  viscosity=self.viscosity,
                                                                   velocity=vel, method='pRK4',
                                                                   time_step=self.time_step,
                                                                   drag_model=self.drag_model)
@@ -468,14 +466,14 @@ class Streamlines:
                 idx.compute(method=self.search)
                 interp.compute(method=self.interpolation)
                 new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
-                                                                  viscosity=self.viscosity, velocity=vel,
+                                                                  velocity=vel,
                                                                   method='pRK4', time_step=self.time_step,
                                                                   drag_model=self.drag_model)
                 if new_point is None:
                     # print('Checking if the end of the domain is reached...')
                     self.time_step = 1e-9 * self.time_step
                     new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
-                                                                      viscosity=self.viscosity, velocity=vel,
+                                                                      velocity=vel,
                                                                       method='pRK4', time_step=self.time_step,
                                                                       drag_model=self.drag_model)
                     if new_point is not None:
@@ -565,7 +563,6 @@ class Streamlines:
                 intg = Integration(interp)
                 new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
                                                                    density=self.density,
-                                                                   viscosity=self.viscosity,
                                                                    velocity=pvel, method='cRK4',
                                                                    time_step=self.time_step,
                                                                    drag_model=self.drag_model)
@@ -580,7 +577,6 @@ class Streamlines:
                     interp.compute()
                     new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
                                                                        density=self.density,
-                                                                       viscosity=self.viscosity,
                                                                        velocity=pvel, method='pRK4',
                                                                        time_step=self.time_step,
                                                                        drag_model=self.drag_model)
@@ -644,7 +640,6 @@ class Streamlines:
                 intg = Integration(interp)
                 new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
                                                                    density=self.density,
-                                                                   viscosity=self.viscosity,
                                                                    velocity=pvel, method='cRK4',
                                                                    time_step=self.time_step,
                                                                    drag_model=self.drag_model)
@@ -655,7 +650,6 @@ class Streamlines:
                     self.time_step = 1e-9 * self.time_step
                     new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
                                                                        density=self.density,
-                                                                       viscosity=self.viscosity,
                                                                        velocity=pvel, method='cRK4',
                                                                        time_step=self.time_step,
                                                                        drag_model=self.drag_model)
@@ -674,7 +668,6 @@ class Streamlines:
                         interp.compute()
                         new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
                                                                            density=self.density,
-                                                                           viscosity=self.viscosity,
                                                                            velocity=pvel, method='pRK4',
                                                                            time_step=self.time_step,
                                                                            drag_model=self.drag_model)
