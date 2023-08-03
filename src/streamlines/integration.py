@@ -245,6 +245,14 @@ class Integration:
                     else:
                         return 24/_re
 
+                case 'melling':
+                # The popular melling correction
+                    if _re <= 1e-9:
+                        return 0
+                    else:
+                        knd = _mach / _re * np.sqrt(np.pi*_gamma/2)
+                        return 24/_re * (1 + knd)**-1
+
                 case 'oseen':
                     # Oseen's model; for creeping flow regime; Re < 1
                     if _re <= 1e-9:
@@ -262,16 +270,14 @@ class Integration:
                 case 'cunningham':
                     # Cunningham model; for Re << 1; M << 1; Kn <~ 0.1
                     # Knudsen number
-                    _r = _q_interp.density * _q_interp.velocity_magnitude * diameter / _mu
+                    # _r = _q_interp.density * _q_interp.velocity_magnitude * diameter / _mu
                     if _re <= 1e-9:
                         return 0
-                    if _r <= 1:
-                        _kn = _q_interp.mach / _r * np.sqrt(_q_interp.gamma * np.pi/2)
-                        _kn = _kn.reshape(-1)
+                    if _re <= 1:
+                        _kn = _mach / _re * np.sqrt(_q_interp.gamma * np.pi/2)
                         return 24/_re * (1 + 4.5*_kn)**-1
-                    if _r > 1:
-                        _kn = _q_interp.mach / np.sqrt(_r)
-                        _kn = _kn.reshape(-1)
+                    if _re > 1:
+                        _kn = _mach / np.sqrt(_re)
                         return 24/_re * (1 + 4.5*_kn)**-1
 
                 case 'henderson':

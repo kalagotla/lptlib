@@ -135,6 +135,7 @@ class ObliqueShock:
 
         # Change the shock angle to degrees
         self.shock_angle = np.degrees(self.shock_angle)
+        self.deflection = np.degrees(self.deflection)
 
         return
 
