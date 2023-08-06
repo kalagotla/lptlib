@@ -18,7 +18,7 @@ setup(
     # needs to be installed along with your package. Eg: 'caer'
     keywords=["python", "first package"],
     classifiers=[
-        "Development Status :: Work in Progress",
+        "Development Status :: 2 - Pre-Alpha",
         "Intended Audience :: Education",
         "Programming Language :: Python :: 3",
         "Operating System :: MacOS :: MacOS X",
