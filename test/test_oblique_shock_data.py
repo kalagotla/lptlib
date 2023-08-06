@@ -4,7 +4,7 @@ import numpy as np
 
 class TestObliqueShockResponse(unittest.TestCase):
     def test_oblique_shock(self):
-        from src.oblique_shock.oblique_shock_data import ObliqueShock
+        from src.test_cases.oblique_shock_data import ObliqueShock
         os = ObliqueShock()
         os.mach = 2.3
         os.deflection = 10
@@ -12,8 +12,8 @@ class TestObliqueShockResponse(unittest.TestCase):
         self.assertAlmostEqual(os.shock_angle.all(), np.array([34.32642717, 85.02615188]).all(), places=4)
 
     def test_oblique_shock_relation(self):
-        from src.oblique_shock.oblique_shock_data import ObliqueShock
-        from src.oblique_shock.oblique_shock_data import ObliqueShockData
+        from src.test_cases.oblique_shock_data import ObliqueShock
+        from src.test_cases.oblique_shock_data import ObliqueShockData
         os = ObliqueShock()
         os.mach = 2.3
         os.deflection = 10
