@@ -6,3 +6,24 @@
 /.idea/
 # Ignore .ipynb files
 .ipynb
+
+# PyPi
+dist/*
+caer.egg-info/*
+pythonenv3.8/*
+build/*
+*.pyc
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+.installed.cfg
+*.egg
+MANIFEST

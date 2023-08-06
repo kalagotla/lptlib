@@ -1,6 +1,8 @@
+# TODO: Data files to run this script are to be added to the repository
+
 import numpy as np
-from src.streamlines.stochastic_model import StochasticModel, Particle, SpawnLocations
 import matplotlib.pyplot as plt
+from src import StochasticModel, Particle, SpawnLocations, GridIO, FlowIO
 
 
 def shock_interaction():
@@ -22,8 +24,8 @@ def shock_interaction():
     l.compute()
 
     # Run the model in parallel
-    grid_file, flow_file = 'coarse_python.x', '37500_overflow_eqn_corrected.txt'
-    from src.io.plot3dio import GridIO, FlowIO
+    path = './data/shock_interaction/final_grid_coarse/'
+    grid_file, flow_file = path + 'coarse_python.x', path + '37500_overflow_eqn_corrected.txt'
     grid = GridIO(grid_file)
     grid.read_grid(data_type='f8')
     grid.compute_metrics()
@@ -43,9 +45,8 @@ def shock_interaction():
     sm.adaptivity = 0.001
     sm.magnitude_adaptivity = 0.001
     # this saves data after every process is done. This will open up memory as well
-    # sm.filepath = './tio2_normal_distribution/'
     # To test multiple drag models
-    sm.filepath = './drag_models/'
+    sm.filepath = path + 'drag_models/'
 
     # Run multiprocess
     lpt_data = sm.multi_process()
@@ -66,8 +67,6 @@ def shock_interaction():
         ax.plot(xp, vx, '.-r', label='Particle')
         ax.plot(xp, ux, '.-b', label='Fluid')
         ax1.plot(xp, yp, '.-', label='Path')
-    #     ax.set_xlabel('x')
-    #     ax.set_ylabel('y')
     ax.legend()
     ax.set_title(sm.method)
     plt.show()
