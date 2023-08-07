@@ -24,6 +24,7 @@ class Timer(ContextDecorator):
 
     def __post_init__(self) -> None:
         """Initialization: add timer to dict of timers"""
+        self.elapsed_time = 0
         if self.name:
             self.timers.setdefault(self.name, 0)
 
@@ -40,16 +41,16 @@ class Timer(ContextDecorator):
             raise TimerError(f"Timer is not running. Use .start() to start it")
 
         # Calculate elapsed time
-        elapsed_time = time.perf_counter() - self._start_time
+        self.elapsed_time = time.perf_counter() - self._start_time
         self._start_time = None
 
         # Report elapsed time
         if self.logger:
-            self.logger(self.text.format(elapsed_time))
+            self.logger(self.text.format(self.elapsed_time))
         if self.name:
-            self.timers[self.name] += elapsed_time
+            self.timers[self.name] += self.elapsed_time
 
-        return elapsed_time
+        return self.elapsed_time
 
     def __enter__(self) -> "Timer":
         """Start a new timer as a context manager"""
