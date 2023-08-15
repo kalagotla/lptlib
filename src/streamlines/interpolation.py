@@ -56,6 +56,7 @@ class Interpolation:
         self.mach, self.alpha, self.rey, self.time = [None] * 4
         self.J = None
         self.J_inv = None
+        self.level = [0, 0, 0]
 
     def __str__(self):
         doc = "This instance uses " + self.flow.filename + " as the flow file " \
@@ -220,6 +221,65 @@ class Interpolation:
                     return
 
                 from scipy.interpolate import RBFInterpolator as rbf
+                # add adjacent cells to the cell list
+                # TODO: debug for multiblock case -- currently defaults to single block; if not enough cells in
+                #  the block, it default to using rbf
+                if np.any(np.array(self.level) > 0):
+                    _level_cell = self.idx.cell
+                    if (np.any(self.idx.cell[:, 0] + self.level[0] >= self.idx.grid.ni - 1) or
+                            np.any(self.idx.cell[:, 0] - self.level[0] <= 0)):
+                        pass
+                    else:
+                        for _i in range(self.level[0]):
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[1] + [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[2] + [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[5] + [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[6] + [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[0] - [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[3] - [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[4] - [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[7] - [_i+1, 0, 0]))
+                    if (np.any(self.idx.cell[:, 1] + self.level[1] >= self.idx.grid.nj - 1) or
+                            np.any(self.idx.cell[:, 1] - self.level[1] <= 0)):
+                        pass
+                    else:
+                        for _i in range(self.level[1]):
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[2] + [0, _i+1, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[3] + [0, _i+1, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[6] + [0, _i+1, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[7] + [0, _i+1, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[1] - [0, _i+1, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[0] - [0, _i+1, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[5] - [0, _i+1, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[4] - [0, _i+1, 0]))
+                    if (np.any(self.idx.cell[:, 2] + self.level[2] >= self.idx.grid.nk - 1) or
+                            np.any(self.idx.cell[:, 2] - self.level[2] <= 0)):
+                        pass
+                    else:
+                        for _i in range(self.level[2]):
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[4] + [0, 0, _i+1]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[5] + [0, 0, _i+1]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[6] + [0, 0, _i+1]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[7] + [0, 0, _i+1]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[0] - [0, 0, _i+1]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[1] - [0, 0, _i+1]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[2] - [0, 0, _i+1]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[3] - [0, 0, _i+1]))
+                    # only unique rows to remove singularity issue -- This doesn't happen anymore
+                    # Leave it here for now until more testing is done
+                    _level_cell = np.unique(_level_cell, axis=0)
+                    # remove rows with negative values -- This doesn't happen anymore
+                    # Leave it here for now until more testing is done
+                    _level_cell = _level_cell[~np.any(_level_cell < 0, axis=1)]
+                    _cell_grd = self.idx.grid.grd[_level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2],
+                                :, self.idx.block]
+                    _cell_q = self.flow.q[_level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2],
+                                :, self.idx.block]
+                    # print('**SUCCESS Interpolating with {} levels'.format(self.level))
+                # if -ve values; use the whole grid
+                elif np.any(np.array(self.level) < 0):
+                    _cell_grd = self.idx.grid.grd[..., self.idx.block].reshape(-1, 3)
+                    _cell_q = self.flow.q[..., self.idx.block].reshape(-1, 5)
                 _rbf = rbf(_cell_grd, _cell_q)
                 self.q = _rbf(np.array(self.idx.ppoint).reshape(1, -1))
                 self.q = self.q.reshape((1, 1, 1, -1, 1))
@@ -248,9 +308,90 @@ class Interpolation:
 
                 # Start RBF interpolation
                 from scipy.interpolate import RBFInterpolator as rbf
+                # add adjacent cells to the cell list
+                # TODO: debug for multiblock case -- currently defaults to single block
                 _unit_cell = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0],
                                        [0, 1, 0], [0, 0, 1], [1, 0, 1],
                                        [1, 1, 1], [0, 1, 1]])
+                if np.any(np.array(self.level) > 0):
+                    _level_cell = self.idx.cell
+                    if (np.any(self.idx.cell[:, 0] + self.level[0] >= self.idx.grid.ni - 1) or
+                            np.any(self.idx.cell[:, 0] - self.level[0] <= 0)):
+                        pass
+                    else:
+                        for _i in range(self.level[0]):
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[1] + [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[2] + [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[5] + [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[6] + [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[0] - [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[3] - [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[4] - [_i+1, 0, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[7] - [_i+1, 0, 0]))
+                            _unit_cell = np.vstack((_unit_cell, [_i + 2, 0, 0]))
+                            _unit_cell = np.vstack((_unit_cell, [_i + 2, 1, 0]))
+                            _unit_cell = np.vstack((_unit_cell, [_i + 2, 0, 1]))
+                            _unit_cell = np.vstack((_unit_cell, [_i + 2, 1, 1]))
+                            _unit_cell = np.vstack((_unit_cell, [-_i -1, 0, 0]))
+                            _unit_cell = np.vstack((_unit_cell, [-_i -1, 1, 0]))
+                            _unit_cell = np.vstack((_unit_cell, [-_i -1, 0, 1]))
+                            _unit_cell = np.vstack((_unit_cell, [-_i -1, 1, 1]))
+
+                    if (np.any(self.idx.cell[:, 1] + self.level[1] >= self.idx.grid.nj - 1) or
+                            np.any(self.idx.cell[:, 1] - self.level[1] <= 0)):
+                        pass
+                    else:
+                        for _i in range(self.level[1]):
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[2] + [0, _i, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[3] + [0, _i, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[6] + [0, _i, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[7] + [0, _i, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[0] - [0, _i, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[1] - [0, _i, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[4] - [0, _i, 0]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[5] - [0, _i, 0]))
+                            _unit_cell = np.vstack((_unit_cell, [0, _i + 2, 0]))
+                            _unit_cell = np.vstack((_unit_cell, [1, _i + 2, 0]))
+                            _unit_cell = np.vstack((_unit_cell, [0, _i + 2, 1]))
+                            _unit_cell = np.vstack((_unit_cell, [1, _i + 2, 1]))
+                            _unit_cell = np.vstack((_unit_cell, [0, -_i - 1, 0]))
+                            _unit_cell = np.vstack((_unit_cell, [1, -_i - 1, 0]))
+                            _unit_cell = np.vstack((_unit_cell, [0, -_i - 1, 1]))
+                            _unit_cell = np.vstack((_unit_cell, [1, -_i - 1, 1]))
+                    if (np.any(self.idx.cell[:, 2] + self.level[2] >= self.idx.grid.nk - 1) or
+                            np.any(self.idx.cell[:, 2] - self.level[2] <= 0)):
+                        pass
+                    else:
+                        for _i in range(self.level[2]):
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[4] + [0, 0, _i]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[5] + [0, 0, _i]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[6] + [0, 0, _i]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[7] + [0, 0, _i]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[0] - [0, 0, _i]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[1] - [0, 0, _i]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[2] - [0, 0, _i]))
+                            _level_cell = np.vstack((_level_cell, self.idx.cell[3] - [0, 0, _i]))
+                            _unit_cell = np.vstack((_unit_cell, [0, 0, _i + 2]))
+                            _unit_cell = np.vstack((_unit_cell, [1, 0, _i + 2]))
+                            _unit_cell = np.vstack((_unit_cell, [0, 1, _i + 2]))
+                            _unit_cell = np.vstack((_unit_cell, [1, 1, _i + 2]))
+                            _unit_cell = np.vstack((_unit_cell, [0, 0, -_i - 1]))
+                            _unit_cell = np.vstack((_unit_cell, [1, 0, -_i - 1]))
+                            _unit_cell = np.vstack((_unit_cell, [0, 1, -_i - 1]))
+                            _unit_cell = np.vstack((_unit_cell, [1, 1, -_i - 1]))
+                    _cell_grd = self.idx.grid.grd[
+                        _level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, self.idx.block
+                    ]
+                    _cell_q = self.flow.q[
+                        _level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, self.idx.block
+                    ]
+                    _cell_J = self.idx.grid.m1[
+                        _level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, :, self.idx.block
+                    ]
+                    _cell_J_inv = self.idx.grid.m2[
+                        _level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, :, self.idx.block
+                    ]
+                    # print('**SUCCESS Interpolating with {} levels'.format(self.level))
                 _rbf_q = rbf(_unit_cell, _cell_q)
                 self.q = _rbf_q(_fractions)
                 self.q = self.q.reshape((1, 1, 1, -1, 1))
