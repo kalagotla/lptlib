@@ -295,8 +295,8 @@ class Search:
         while True:
             # Check if taking too long
             if _iter >= 1e3:
-                # print('Newton-Raphson did not converge. Try again!\n'
-                #       'Possible reason might be the point might be too close to the end of a domain')
+                print('**ERROR** Newton-Raphson did not converge. Try again!\n'
+                      'Possible reason might be the point might be too close to the end of a domain')
                 self.ppoint, self.cpoint = None, None
                 return
 
@@ -332,7 +332,11 @@ class Search:
             _delta_ppoint = _ppoint - _pred_ppoint
 
             # End newton-raphson if condition is met
-            if sum(abs(_delta_ppoint)) <= 1e-12:
+            # TODO: Condition needs to be adapted based on Jacobian
+            _tol = 1e-12 * self.grid.J[self.cell[0, 0], self.cell[0, 1], self.cell[0, 2], self.block]
+            if _tol <= 1e-12:
+                _tol = 1e-12
+            if sum(abs(_delta_ppoint)) <= _tol:
                 _eps0, _eps1, _eps2 = _cpoint.astype(int)
                 self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
                 self.cpoint = _cpoint
