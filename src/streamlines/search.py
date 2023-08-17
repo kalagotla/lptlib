@@ -333,8 +333,9 @@ class Search:
 
             # End newton-raphson if condition is met
             # TODO: Condition needs to be adapted based on Jacobian
+            # TODO: Need to improve by normalizing the data
             _tol = 1e-12 * self.grid.J[self.cell[0, 0], self.cell[0, 1], self.cell[0, 2], self.block]
-            if _tol <= 1e-12:
+            if _tol <= 1e-11:
                 _tol = 1e-12
             if sum(abs(_delta_ppoint)) <= _tol:
                 _eps0, _eps1, _eps2 = _cpoint.astype(int)
