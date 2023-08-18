@@ -402,3 +402,45 @@ class Interpolation:
                 self.J_inv = _rbf_J_inv(_fractions)
 
 
+            case 'rgi-p-space':
+                # implement cublic spline interpolation in p-space
+                # _cell_grd and _cell_q are known
+
+                _level_cell = np.unique(self.idx.cell, axis=0)
+                _cell_grd = self.idx.grid.grd[_level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, self.idx.block]
+                _cell_q = self.flow.q[_level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, self.idx.block]
+
+                from scipy.interpolate import RegularGridInterpolator
+                _x = np.unique(_cell_grd[:, 0])
+                _y = np.unique(_cell_grd[:, 1])
+                _z = np.unique(_cell_grd[:, 2])
+
+
+                def _msg_grd_shape(_array):
+                    """
+
+                    Args:
+                        _array: 1D array of shape (8,)
+
+                    Returns:
+                        3D array of shape (2, 2, 2) to comply with meshgrid
+
+                    """
+                    _array_rgi = np.array([_array[0], _array[4],   # [0,0,0], [0,0,1]
+                                           _array[3], _array[7],   # [0,1,0], [0,1,1]
+                                           _array[1], _array[5],   # [1,0,0], [1,0,1]
+                                           _array[2], _array[6]])  # [1,1,0], [1,1,1]
+
+                    return _array_rgi.reshape((2, 2, 2))
+
+                _rgi_rho = RegularGridInterpolator((_x, _y, _z), _msg_grd_shape(_cell_q[:, 0]), method='linear')
+                _rgi_rho_u = RegularGridInterpolator((_x, _y, _z), _msg_grd_shape(_cell_q[:, 1]), method='linear')
+                _rgi_rho_v = RegularGridInterpolator((_x, _y, _z), _msg_grd_shape(_cell_q[:, 2]), method='linear')
+                _rgi_rho_w = RegularGridInterpolator((_x, _y, _z), _msg_grd_shape(_cell_q[:, 3]), method='linear')
+                _rgi_e = RegularGridInterpolator((_x, _y, _z), _msg_grd_shape(_cell_q[:, 4]), method='linear')
+
+                self.q = np.array([_rgi_rho(self.idx.ppoint), _rgi_rho_u(self.idx.ppoint),
+                                   _rgi_rho_v(self.idx.ppoint), _rgi_rho_w(self.idx.ppoint),
+                                   _rgi_e(self.idx.ppoint)])
+                self.q = self.q.reshape((1, 1, 1, -1, 1))
+
