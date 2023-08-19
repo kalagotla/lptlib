@@ -405,40 +405,95 @@ class Interpolation:
             case 'rgi-p-space':
                 # implement cublic spline interpolation in p-space
                 # _cell_grd and _cell_q are known
+                # get _level_grd and _level_q
+                # TODO: debug for multiblock case -- currently defaults to single block; if not enough cells in
+                #  the block, it defaults to the single cell case
+                if np.any(np.array(self.level) > 0):
+                    _level_cell = self.idx.cell
+                    # add cells in i-direction
+                    if np.any(self.idx.cell[:, 0] + self.level[0] >= self.idx.grid.ni - 1) or np.any(
+                        self.idx.cell[:, 0] - self.level[0] <= 0
+                    ):
+                        _i_cell = np.unique(self.idx.cell[:, 0])
+                        pass
+                    else:
+                        _i_cell = np.unique(self.idx.cell[:, 0])
+                        for _i in range(self.level[0]):
+                            _i_cell = np.hstack((_i_cell, self.idx.cell[1, 0] + _i + 1))
+                            _i_cell = np.hstack((_i_cell, self.idx.cell[0, 0] - _i - 1))
+                    # add nodes in j-direction
+                    if np.any(self.idx.cell[:, 1] + self.level[1] >= self.idx.grid.nj - 1) or np.any(
+                        self.idx.cell[:, 1] - self.level[1] <= 0
+                    ):
+                        _j_cell = np.unique(self.idx.cell[:, 1])
+                        pass
+                    else:
+                        _j_cell = np.unique(self.idx.cell[:, 1])
+                        for _i in range(self.level[1]):
+                            _j_cell = np.hstack((_j_cell, self.idx.cell[2, 1] + _i + 1))
+                            _j_cell = np.hstack((_j_cell, self.idx.cell[0, 1] - _i - 1))
+                    # add nodes in k-direction
+                    if np.any(self.idx.cell[:, 2] + self.level[2] >= self.idx.grid.nk - 1) or np.any(
+                        self.idx.cell[:, 2] - self.level[2] <= 0
+                    ):
+                        _k_cell = np.unique(self.idx.cell[:, 2])
+                        pass
+                    else:
+                        _k_cell = np.unique(self.idx.cell[:, 2])
+                        for _i in range(self.level[2]):
+                            _k_cell = np.hstack((_k_cell, self.idx.cell[4, 2] + _i + 1))
+                            _k_cell = np.hstack((_k_cell, self.idx.cell[0, 2] - _i - 1))
+                    # create a meshgrid of all possible combinations
+                    _level_cell = np.meshgrid(np.sort(_i_cell), np.sort(_j_cell), np.sort(_k_cell))
+                    # re-order back to an array with coordinates
+                    _level_cell = np.moveaxis(np.array(_level_cell), 0, _level_cell[0].ndim).reshape(-1, len(_level_cell))
+                    _level_cell = np.unique(_level_cell, axis=0)
+                    # remove rows with negative values -- This doesn't happen anymore
+                    # Leave it here for now until more testing is done
+                    _level_cell = _level_cell[~np.any(_level_cell < 0, axis=1)]
+                    _cell_grd = self.idx.grid.grd[
+                        _level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, self.idx.block
+                    ]
+                    _cell_q = self.flow.q[
+                        _level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, self.idx.block
+                    ]
+                # if -ve values; use the whole grid
+                elif np.any(np.array(self.level) < 0):
+                    _cell_grd = self.idx.grid.grd[..., self.idx.block].reshape(-1, 3)
+                    _cell_q = self.flow.q[..., self.idx.block].reshape(-1, 5)
+                # if all zeros; use the cell
+                elif np.all(np.array(self.level) == 0):
+                    _level_cell = np.unique(self.idx.cell, axis=0)
+                    _cell_grd = self.idx.grid.grd[
+                                _level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, self.idx.block]
+                    _cell_q = self.flow.q[
+                                _level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, self.idx.block]
 
-                _level_cell = np.unique(self.idx.cell, axis=0)
-                _cell_grd = self.idx.grid.grd[_level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, self.idx.block]
-                _cell_q = self.flow.q[_level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, self.idx.block]
-
+                # Start the RGI
                 from scipy.interpolate import RegularGridInterpolator
+                # Find the unique values in each direction
                 _x = np.unique(_cell_grd[:, 0])
                 _y = np.unique(_cell_grd[:, 1])
                 _z = np.unique(_cell_grd[:, 2])
+                # Set the shape for reshaping q
+                _shape = np.array([len(_x), len(_y), len(_z)])
 
+                # Depending on the shape set the best possible interpolation method
+                if np.all(_shape >= 6):
+                    _method = 'quintic'
+                elif np.all(_shape >= 4):
+                    _method = 'cubic'
+                else:
+                    _method = 'linear'
 
-                def _msg_grd_shape(_array):
-                    """
+                # Create the RGI for each variable
+                _rgi_rho = RegularGridInterpolator((_x, _y, _z), _cell_q[:, 0].reshape(_shape), method=_method)
+                _rgi_rho_u = RegularGridInterpolator((_x, _y, _z), _cell_q[:, 1].reshape(_shape), method=_method)
+                _rgi_rho_v = RegularGridInterpolator((_x, _y, _z), _cell_q[:, 2].reshape(_shape), method=_method)
+                _rgi_rho_w = RegularGridInterpolator((_x, _y, _z), _cell_q[:, 3].reshape(_shape), method=_method)
+                _rgi_e = RegularGridInterpolator((_x, _y, _z), _cell_q[:, 4].reshape(_shape), method=_method)
 
-                    Args:
-                        _array: 1D array of shape (8,)
-
-                    Returns:
-                        3D array of shape (2, 2, 2) to comply with meshgrid
-
-                    """
-                    _array_rgi = np.array([_array[0], _array[4],   # [0,0,0], [0,0,1]
-                                           _array[3], _array[7],   # [0,1,0], [0,1,1]
-                                           _array[1], _array[5],   # [1,0,0], [1,0,1]
-                                           _array[2], _array[6]])  # [1,1,0], [1,1,1]
-
-                    return _array_rgi.reshape((2, 2, 2))
-
-                _rgi_rho = RegularGridInterpolator((_x, _y, _z), _msg_grd_shape(_cell_q[:, 0]), method='linear')
-                _rgi_rho_u = RegularGridInterpolator((_x, _y, _z), _msg_grd_shape(_cell_q[:, 1]), method='linear')
-                _rgi_rho_v = RegularGridInterpolator((_x, _y, _z), _msg_grd_shape(_cell_q[:, 2]), method='linear')
-                _rgi_rho_w = RegularGridInterpolator((_x, _y, _z), _msg_grd_shape(_cell_q[:, 3]), method='linear')
-                _rgi_e = RegularGridInterpolator((_x, _y, _z), _msg_grd_shape(_cell_q[:, 4]), method='linear')
-
+                # Find the values at the point and reshape
                 self.q = np.array([_rgi_rho(self.idx.ppoint), _rgi_rho_u(self.idx.ppoint),
                                    _rgi_rho_v(self.idx.ppoint), _rgi_rho_w(self.idx.ppoint),
                                    _rgi_e(self.idx.ppoint)])
