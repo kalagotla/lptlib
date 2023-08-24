@@ -172,7 +172,7 @@ class ObliqueShockData:
         # ni, nj, nk
         self.grid.ni = np.array([2*self.points], dtype='i4')
         self.grid.nj = np.array([self.points], dtype='i4')
-        self.grid.nk = np.array([2], dtype='i4')
+        self.grid.nk = np.array([self.points], dtype='i4')
         # grd
         # expand dimensions and stack along the last axis
         self.grid.grd = np.stack((_xx[..., None], _yy[..., None], _zz[..., None]), axis=3)
@@ -237,7 +237,7 @@ class ObliqueShockData:
         # ni, nj, nk
         self.flow.ni = np.array([2*self.points], dtype='i4')
         self.flow.nj = np.array([self.points], dtype='i4')
-        self.flow.nk = np.array([2], dtype='i4')
+        self.flow.nk = np.array([self.points], dtype='i4')
         # mach, aoa/alpha, re, t
         self.flow.mach = self.oblique_shock.mach
         self.flow.alpha = 0.0
