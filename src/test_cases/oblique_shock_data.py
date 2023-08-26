@@ -152,7 +152,9 @@ class ObliqueShockData:
         self.nx_max = None
         self.ny_max = None
         self.nz_max = None
-        self.points = None
+        self.xpoints = None
+        self.ypoints = None
+        self.zpoints = None
         self.grid = GridIO('dummy')
         self.flow = FlowIO('dummy')
         self.shock_strength = 'weak'
@@ -163,16 +165,16 @@ class ObliqueShockData:
     def create_grid(self):
         # create a structured grid from -nx_max to nx_max, 0 to ny_max, 0 to nz_max
         # spacing is the grid spacing
-        _xx, _yy, _zz = np.meshgrid(np.linspace(-self.nx_max, self.nx_max, 2*self.points),
-                                    np.linspace(0, self.ny_max, self.points),
-                                    np.linspace(0, self.nz_max, 2), indexing='ij')
+        _xx, _yy, _zz = np.meshgrid(np.linspace(-self.nx_max, self.nx_max, 2*self.xpoints),
+                                    np.linspace(0, self.ny_max, self.ypoints),
+                                    np.linspace(0, self.nz_max, self.zpoints), indexing='ij')
         # Create a plot3dio similar object
         # n-blocks - one for the current case
         self.grid.nb = 1
         # ni, nj, nk
-        self.grid.ni = np.array([2*self.points], dtype='i4')
-        self.grid.nj = np.array([self.points], dtype='i4')
-        self.grid.nk = np.array([self.points], dtype='i4')
+        self.grid.ni = np.array([2*self.xpoints], dtype='i4')
+        self.grid.nj = np.array([self.ypoints], dtype='i4')
+        self.grid.nk = np.array([self.zpoints], dtype='i4')
         # grd
         # expand dimensions and stack along the last axis
         self.grid.grd = np.stack((_xx[..., None], _yy[..., None], _zz[..., None]), axis=3)
@@ -207,7 +209,7 @@ class ObliqueShockData:
         _x_velocity = _velocity * np.sin(np.radians(self.oblique_shock.shock_angle))
         _y_velocity = _velocity * np.cos(np.radians(self.oblique_shock.shock_angle))
         _z_velocity = 0
-        _energy = _density * (self.oblique_shock.gamma * self.inlet_temperature / (self.oblique_shock.gamma - 1)
+        _energy = _density * (self.oblique_shock.gas_constant * self.inlet_temperature / (self.oblique_shock.gamma - 1)
                               + 0.5 * (_x_velocity ** 2 + _y_velocity ** 2 + _z_velocity ** 2))
         # _pre_shock properties
         _pre_shock = np.array([_density, _x_velocity * _density, _y_velocity * _density, _z_velocity * _density,
@@ -223,7 +225,7 @@ class ObliqueShockData:
         _y_velocity_post = _velocity_post * np.cos(np.radians(self.oblique_shock.shock_angle
                                                               - self.oblique_shock.deflection))
         _z_velocity_post = 0
-        _energy_post = _density_post * (self.oblique_shock.gamma * self.inlet_temperature *
+        _energy_post = _density_post * (self.oblique_shock.gas_constant * self.inlet_temperature *
                                         self.oblique_shock.temperature_ratio / (self.oblique_shock.gamma - 1)
                                         + 0.5 * (_x_velocity_post ** 2 + _y_velocity_post ** 2 + _z_velocity_post ** 2))
         _post_shock = np.array([_density_post, _x_velocity_post * _density_post, _y_velocity_post * _density_post,
@@ -235,9 +237,9 @@ class ObliqueShockData:
         # create plot3dio flow similar object
         self.flow.nb = 1
         # ni, nj, nk
-        self.flow.ni = np.array([2*self.points], dtype='i4')
-        self.flow.nj = np.array([self.points], dtype='i4')
-        self.flow.nk = np.array([self.points], dtype='i4')
+        self.flow.ni = np.array([2*self.xpoints], dtype='i4')
+        self.flow.nj = np.array([self.ypoints], dtype='i4')
+        self.flow.nk = np.array([self.zpoints], dtype='i4')
         # mach, aoa/alpha, re, t
         self.flow.mach = self.oblique_shock.mach
         self.flow.alpha = 0.0
@@ -245,8 +247,8 @@ class ObliqueShockData:
         self.flow.t = 1.0
         # flow
         self.flow.q = np.zeros((self.flow.ni[0], self.flow.nj[0], self.flow.nk[0], 5, self.flow.nb), dtype='f8')
-        self.flow.q[:self.points, ...] = _pre_shock[..., None]
-        self.flow.q[self.points:, ...] = _post_shock[..., None]
+        self.flow.q[:self.xpoints, ...] = _pre_shock[..., None]
+        self.flow.q[self.xpoints:, ...] = _post_shock[..., None]
         return
 
 
