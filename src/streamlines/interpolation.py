@@ -59,6 +59,7 @@ class Interpolation:
         self.level = [0, 0, 0]
         self.rbf_kernel = 'thin_plate_spline'
         self.rgi_method = 'adaptive'
+        self.rbf_epsilon = 1  # Default for RBF interpolation
 
     def __str__(self):
         doc = "This instance uses " + self.flow.filename + " as the flow file " \
@@ -282,7 +283,7 @@ class Interpolation:
                 elif np.any(np.array(self.level) < 0):
                     _cell_grd = self.idx.grid.grd[..., self.idx.block].reshape(-1, 3)
                     _cell_q = self.flow.q[..., self.idx.block].reshape(-1, 5)
-                _rbf = rbf(_cell_grd, _cell_q, kernel=self.rbf_kernel)
+                _rbf = rbf(_cell_grd, _cell_q, kernel=self.rbf_kernel, epsilon=self.rbf_epsilon)
                 self.q = _rbf(np.array(self.idx.ppoint).reshape(1, -1))
                 self.q = self.q.reshape((1, 1, 1, -1, 1))
 
@@ -394,13 +395,13 @@ class Interpolation:
                         _level_cell[:, 0], _level_cell[:, 1], _level_cell[:, 2], :, :, self.idx.block
                     ]
                     # print('**SUCCESS Interpolating with {} levels'.format(self.level))
-                _rbf_q = rbf(_unit_cell, _cell_q, kernel=self.rbf_kernel)
+                _rbf_q = rbf(_unit_cell, _cell_q, kernel=self.rbf_kernel, epsilon=self.rbf_epsilon)
                 self.q = _rbf_q(_fractions)
                 self.q = self.q.reshape((1, 1, 1, -1, 1))
 
-                _rbf_J = rbf(_unit_cell, _cell_J, kernel=self.rbf_kernel)
+                _rbf_J = rbf(_unit_cell, _cell_J, kernel=self.rbf_kernel, epsilon=self.rbf_epsilon)
                 self.J = _rbf_J(_fractions).reshape(3, 3)
-                _rbf_J_inv = rbf(_unit_cell, _cell_J_inv, kernel=self.rbf_kernel)
+                _rbf_J_inv = rbf(_unit_cell, _cell_J_inv, kernel=self.rbf_kernel, epsilon=self.rbf_epsilon)
                 self.J_inv = _rbf_J_inv(_fractions).reshape(3, 3)
 
 
