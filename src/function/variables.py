@@ -78,7 +78,7 @@ class Variables:
         """
         self.compute_velocity()
         _E_T = self.flow.q[..., 4, :]
-        self.temperature = (self.gamma - 1) * (_E_T/self.flow.q[..., 0, :] - self.velocity_magnitude/2) / self.gas_constant
+        self.temperature = (self.gamma - 1) * (_E_T/self.flow.q[..., 0, :] - self.velocity_magnitude**2/2) / self.gas_constant
 
     def compute_mach(self):
         """
