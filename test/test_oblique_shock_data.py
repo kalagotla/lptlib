@@ -27,7 +27,9 @@ class TestObliqueShockResponse(unittest.TestCase):
         osd.inlet_density = 1.273
         osd.inlet_temperature = 300
         osd.inlet_pressure = 101325
-        osd.points = 100
+        osd.xpoints = 100  # creates 100 * 2 points
+        osd.ypoints = 100  # creates 100 points
+        osd.zpoints = 8  # creates 8 points
         osd.oblique_shock = os
         osd.create_grid()
         osd.create_flow()
