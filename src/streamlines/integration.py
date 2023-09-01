@@ -367,7 +367,14 @@ class Integration:
                     if _re <= 1e-9:
                         return 0
                     else:
-                        knd = _mach / _re * np.sqrt(np.pi*_gamma/2)
+                        # knd_1 = _mach / _re * np.sqrt(np.pi*_gamma/2)
+                        # number density of the air
+                        _boltzmann_k = 1.38064852e-23
+                        q_interp.compute()
+                        _n = q_interp.pressure.reshape(-1) / (_q_interp.temperature.reshape(-1) * _boltzmann_k)
+                        _dp = 3.66 * 10**-10
+                        _mfp = 1 / (2**0.5 * _n * np.pi * _dp**2)
+                        knd = _mfp / diameter
                         return 24/_re * (1 + knd)**-1
 
                 case 'oseen':
@@ -484,12 +491,29 @@ class Integration:
 
                     return
 
-        def _viscosity(_temperature):
-            # Sutherland's viscosity law
-            # All temperatures must be in kelvin
-            # Formula from cfd-online
-            _c1 = 1.716e-5 * (273.15 + 110.4) / 273.15**1.5
-            _mu = _c1 * _temperature**1.5 / (_temperature + 110.4)
+        def _viscosity(_temperature, law='sutherland'):
+            """
+            Viscosity of air as a function of temperature
+            Args:
+                _temperature: in Kelvin provided by default in the integration class
+                law: 'sutherland' or 'keyes' -- defaults to 'keyes'
+
+            Returns:
+                _mu: viscosity of air in kg/m-s
+
+            """
+            match law:
+                case 'sutherland':
+                    # Sutherland's viscosity law
+                    # All temperatures must be in kelvin
+                    # Formula from cfd-online
+                    _c1 = 1.716e-5 * (273.15 + 110.4) / 273.15**1.5
+                    _mu = _c1 * _temperature**1.5 * 0.4 / (_temperature + 110.4)
+                case 'keyes':
+                    # New formula from keyes et al.
+                    a0, a, a1 = 1.488, 122.1, 5.0
+                    _tau = 1/_temperature
+                    _mu = a0 * _temperature**0.5 * 10**-6 / (1 + a * _tau / 10 ** (a1 * _tau))
             return _mu
 
         match method:
