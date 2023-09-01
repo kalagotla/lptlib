@@ -160,7 +160,6 @@ class ObliqueShockData:
         self.shock_strength = 'weak'
         self.inlet_temperature = None
         self.inlet_density = None
-        self.inlet_pressure = None
 
     def create_grid(self):
         # create a structured grid from -nx_max to nx_max, 0 to ny_max, 0 to nz_max
@@ -210,7 +209,7 @@ class ObliqueShockData:
         _y_velocity = _velocity * np.cos(np.radians(self.oblique_shock.shock_angle))
         _z_velocity = 0
         _energy = _density * (self.oblique_shock.gas_constant * self.inlet_temperature / (self.oblique_shock.gamma - 1)
-                              + 0.5 * (_x_velocity ** 2 + _y_velocity ** 2 + _z_velocity ** 2))
+                              + 0.5 * _velocity**2)
         # _pre_shock properties
         _pre_shock = np.array([_density, _x_velocity * _density, _y_velocity * _density, _z_velocity * _density,
                                _energy])
@@ -227,7 +226,7 @@ class ObliqueShockData:
         _z_velocity_post = 0
         _energy_post = _density_post * (self.oblique_shock.gas_constant * self.inlet_temperature *
                                         self.oblique_shock.temperature_ratio / (self.oblique_shock.gamma - 1)
-                                        + 0.5 * (_x_velocity_post ** 2 + _y_velocity_post ** 2 + _z_velocity_post ** 2))
+                                        + 0.5 * _velocity_post**2)
         _post_shock = np.array([_density_post, _x_velocity_post * _density_post, _y_velocity_post * _density_post,
                                 _z_velocity_post * _density_post, _energy_post])
 
