@@ -367,7 +367,7 @@ class Integration:
                     if _re <= 1e-9:
                         return 0
                     else:
-                        knd_1 = _mach / _re * np.sqrt(np.pi*_gamma/2)
+                        knd = _mach / _re * np.sqrt(np.pi*_gamma/2)
                         return 24/_re * (1 + knd)**-1
 
                 case 'oseen':
