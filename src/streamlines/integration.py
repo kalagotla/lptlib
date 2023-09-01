@@ -367,14 +367,7 @@ class Integration:
                     if _re <= 1e-9:
                         return 0
                     else:
-                        # knd_1 = _mach / _re * np.sqrt(np.pi*_gamma/2)
-                        # number density of the air
-                        _boltzmann_k = 1.38064852e-23
-                        q_interp.compute()
-                        _n = q_interp.pressure.reshape(-1) / (_q_interp.temperature.reshape(-1) * _boltzmann_k)
-                        _dp = 3.66 * 10**-10
-                        _mfp = 1 / (2**0.5 * _n * np.pi * _dp**2)
-                        knd = _mfp / diameter
+                        knd_1 = _mach / _re * np.sqrt(np.pi*_gamma/2)
                         return 24/_re * (1 + knd)**-1
 
                 case 'oseen':
@@ -491,7 +484,7 @@ class Integration:
 
                     return
 
-        def _viscosity(_temperature, law='sutherland'):
+        def _viscosity(_temperature, law='keyes'):
             """
             Viscosity of air as a function of temperature
             Args:
