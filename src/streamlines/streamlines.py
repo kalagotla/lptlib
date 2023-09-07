@@ -574,7 +574,7 @@ class Streamlines:
                     interp = Interpolation(flow, idx)
                     intg = Integration(interp)
                     idx.compute(method='p-space')
-                    interp.compute()
+                    interp.compute(method='p-space')
                     new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
                                                                        density=self.density,
                                                                        velocity=pvel, method='pRK4',
@@ -619,7 +619,7 @@ class Streamlines:
                         idx.point = new_point
                         if loop_check > 0:
                             print('Resetting time step')
-                            self.time_step = self.time_step / 0.5 ** loop_check
+                            self.time_step = self.time_step / (0.5 * loop_check)
                             loop_check = 0
 
             # Save files for each particle; can be used for multiprocessing large number of particles

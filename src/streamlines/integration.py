@@ -314,7 +314,7 @@ class Integration:
     def compute_ppath(self, diameter=1e-6, density=1000, velocity=None,
                       method='pRK4', time_step=1e-4, drag_model='stokes'):
 
-        def _drag_constant(_re, _q_interp=None, _mach=None, _gamma=None, _mu=None, _model=drag_model):
+        def _drag_constant(_re, _q_interp=None, _mach=None, _mu=None, _model=drag_model):
             """
             Coefficient of drag for a spherical particle
 
@@ -329,6 +329,7 @@ class Integration:
                 coefficient of drag based on local flow/particle properties
 
             """
+            _gamma = q_interp.gamma
             match _model:
                 case 'zero-drag':
                     # zero drag model to simulate fluid
@@ -468,6 +469,9 @@ class Integration:
                         _cd = (_cd_kn_re + _mach**4 * _cd_fm_re) / (1 + _mach**4)
                         return _cd
 
+                    if _re == 45:
+                        return 1.63
+
                     if _re > 45:
                     # compression-dominated regime
                         if _mach <= 1.45:
@@ -533,7 +537,7 @@ class Integration:
                     q_interp = Variables(interp)
                     # Compute all variables
                     q_interp.compute_mach()
-                    uf = q_interp.velocity.reshape(3)
+                    uf = q_interp.velocity.reshape(-1)
                     # particle dynamics
                     _rhof = q_interp.density.reshape(-1)
                     dp = diameter
@@ -543,8 +547,7 @@ class Integration:
                     re = _rhof * np.linalg.norm(vp - uf) * dp / mu
                     _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) /\
                             q_interp.velocity_magnitude.reshape(-1)
-                    _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach,
-                                         _gamma=q_interp.gamma, _mu=mu, _model=drag_model)
+                    _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
                     return _vk, uf, None
@@ -626,6 +629,8 @@ class Integration:
 
                     Args:
                         self:
+                        c_vp: ndarray
+                            particle velocity in c-space
                         x: ndarray
                             point in c-space
 
@@ -635,7 +640,7 @@ class Integration:
 
                     """
                     if np.any(x < 0):
-                        return None, None, None, None, None
+                        return None, None, None, None
                     idx = Search(self.interp.idx.grid, x)
                     idx.block = self.interp.idx.block
                     idx.c2p(x)  # This will change the cell attribute
@@ -643,7 +648,7 @@ class Integration:
                     if idx.cpoint is None:
                         self.cpoint = None
                         self.ppoint = None
-                        return None, None, None, None, None
+                        return None, None, None, None
                     interp = Interpolation(self.interp.flow, idx)
                     interp.compute(method='c-space')
                     _J_inv = interp.J_inv
@@ -651,7 +656,7 @@ class Integration:
                     q_interp = Variables(interp)
                     # Computing mach get all the necessary variables
                     q_interp.compute_mach()
-                    p_uf = q_interp.velocity.reshape(3)
+                    p_uf = q_interp.velocity.reshape(-1)
                     c_uf = np.matmul(_J_inv, p_uf)
                     # particle dynamics
                     _rhof = q_interp.density.reshape(-1)
@@ -661,14 +666,14 @@ class Integration:
                     p_vp = np.matmul(_J, c_vp)
                     mu = _viscosity(q_interp.temperature.reshape(-1))
                     # Relative Reynolds Number
-                    re = _rhof * np.linalg.norm(c_vp - c_uf) * dp / mu
-                    _mach = np.linalg.norm(c_vp - c_uf) * q_interp.mach.reshape(-1) /\
+                    re = _rhof * np.linalg.norm(p_vp - p_uf) * dp / mu
+                    _mach = np.linalg.norm(p_vp - p_uf) * q_interp.mach.reshape(-1) /\
                             q_interp.velocity_magnitude.reshape(-1)
-                    _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach,
-                                         _gamma=q_interp.gamma, _mu=mu, _model=drag_model)
+                    _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
-                    _vk = _cd * _k * (c_vp - c_uf) * np.linalg.norm(c_vp - c_uf) * time_step
-                    return _vk, p_uf, c_uf, p_vp, c_vp
+                    p_vk = _cd * _k * (p_vp - p_uf) * np.linalg.norm(p_vp - p_uf) * time_step
+                    c_vk = np.matmul(_J_inv, p_vk)
+                    return c_vk, p_uf, c_uf, p_vp
 
                 # Start RK4 for c-space
                 x0 = self.interp.idx.cpoint
@@ -676,14 +681,14 @@ class Integration:
                     return None, None, None
                 q_interp = Variables(self.interp)
                 q_interp.compute_velocity()
-                p_u0 = q_interp.velocity.reshape(3)
+                p_u0 = q_interp.velocity.reshape(-1)
                 c_u0 = np.matmul(self.interp.J_inv, p_u0)
                 # Assign velocity to start Rk4 step
                 if velocity is None:
                     c_v0 = c_u0.copy()
                 else:
                     c_v0 = np.matmul(self.interp.J_inv, velocity)
-                vk0, p_u0, c_u0, p_v0, c_v0 = _rk4_step(self, c_v0, x0)
+                vk0, p_u0, c_u0, p_v0 = _rk4_step(self, c_v0, x0)
                 # Assign fluid velocity when vk is zero
                 # Theory: When zero drag particle is massless, hence fluid velocity
                 if np.linalg.norm(vk0) == 0:
@@ -693,7 +698,7 @@ class Integration:
                 x1 = x0 + 0.5 * xk0
 
                 # Integration starts
-                vk1, p_u1, c_u1, p_v1, c_v1 = _rk4_step(self, c_v1, x1)
+                vk1, p_u1, c_u1, p_v1 = _rk4_step(self, c_v1, x1)
                 # if the residual is none return; exited the domain
                 if vk1 is None:
                     return None, None, None
@@ -709,7 +714,7 @@ class Integration:
                     return x0, p_v0, p_u0
 
                 # Repeat three more times; RK4
-                vk2, p_u2, c_u2, p_v2, c_v2 = _rk4_step(self, c_v2, x2)
+                vk2, p_u2, c_u2, p_v2 = _rk4_step(self, c_v2, x2)
                 if vk2 is None:
                     return None, None, None
                 if np.linalg.norm(vk2) == 0:
@@ -721,7 +726,7 @@ class Integration:
                     self.rk4_bool = True
                     return x0, p_v0, p_u0
 
-                vk3, p_u3, c_u3, p_v3, c_v3 = _rk4_step(self, c_v3, x3)
+                vk3, p_u3, c_u3, p_v3 = _rk4_step(self, c_v3, x3)
                 if vk3 is None:
                     return None, None, None
                 if np.linalg.norm(vk3) == 0:
@@ -733,7 +738,7 @@ class Integration:
                     self.rk4_bool = True
                     return x0, p_v0, p_u0
 
-                _, p_u_new, c_u_new, p_v_new, c_v_new = _rk4_step(self, c_v_new, x_new)
+                _, p_u_new, c_u_new, p_v_new = _rk4_step(self, c_v_new, x_new)
 
                 self.cpoint = x_new
 
