@@ -480,8 +480,36 @@ class Interpolation:
                 # Set the shape for reshaping q
                 _shape = np.array([len(_x), len(_y), len(_z)])
 
+                if self.rgi_method =='shock_adaptive':
+                    # Inspect shock cell and assign nearest interpolation
+                    i0, j0, k0 = self.idx.cell[0, 0], self.idx.cell[0, 1], self.idx.cell[0, 2]
+                    i1, j1, k1 = self.idx.cell[1, 0], self.idx.cell[1, 1], self.idx.cell[1, 2]
+                    # compute velocity, mach
+                    from src.function.variables import Variables
+                    _var = Variables(self.flow)
+                    _var.compute_mach()
+                    # _grad_v = _J_inv * (v1 - v0)
+                    _grad_v = self.idx.grid.m2[i0, j0, k0, :, self.idx.block] * (
+                            _var.velocity[i1, j1, k1, :, self.idx.block]
+                        - _var.velocity[i0, j0, k0, :, self.idx.block]
+                    )
+                    # compute norm to get the unit vector
+                    _grad_v = _grad_v / np.linalg.norm(_grad_v)
+                    # mach vector -- mach * unit velocity vector
+                    _mach0 = (_var.mach[i0, j0, k0] * _var.velocity[i0, j0, k0, :, self.idx.block]
+                              / np.linalg.norm(_var.velocity[i0, j0, k0, :, self.idx.block]))
+                    _mach1 = (_var.mach[i1, j1, k1] * _var.velocity[i1, j1, k1, :, self.idx.block]
+                              / np.linalg.norm(_var.velocity[i1, j1, k1, :, self.idx.block]))
+                    # normal mach vector
+                    _mach_n0 = np.linalg.norm(np.dot(_mach0, _grad_v))
+                    _mach_n1 = np.linalg.norm(np.dot(_mach1, _grad_v))
+                    # if shock is in the cell _mach_n0 > 1 > _mach_n1
+                    if _mach_n0 > 1 > _mach_n1:
+                        _method = 'nearest'
+                    else:
+                        self.rgi_method = 'adaptive'
                 # Depending on the shape set the best possible interpolation method
-                if self.rgi_method == 'adaptive':
+                elif self.rgi_method == 'adaptive':
                     if np.all(_shape >= 6):
                         _method = 'quintic'
                     elif np.all(_shape >= 4):
@@ -603,8 +631,36 @@ class Interpolation:
                 # Set the shape for reshaping q
                 _shape = np.array([len(_x), len(_y), len(_z)])
 
+                if self.rgi_method =='shock_adaptive':
+                    # Inspect shock cell and assign nearest interpolation
+                    i0, j0, k0 = self.idx.cell[0, 0], self.idx.cell[0, 1], self.idx.cell[0, 2]
+                    i1, j1, k1 = self.idx.cell[1, 0], self.idx.cell[1, 1], self.idx.cell[1, 2]
+                    # compute velocity, mach
+                    from src.function.variables import Variables
+                    _var = Variables(self.flow)
+                    _var.compute_mach()
+                    # _grad_v = _J_inv * (v1 - v0)
+                    _grad_v = self.idx.grid.m2[i0, j0, k0, :, self.idx.block] * (
+                            _var.velocity[i1, j1, k1, :, self.idx.block]
+                            - _var.velocity[i0, j0, k0, :, self.idx.block]
+                    )
+                    # compute norm to get the unit vector
+                    _grad_v = _grad_v / np.linalg.norm(_grad_v)
+                    # mach vector -- mach * unit velocity vector
+                    _mach0 = (_var.mach[i0, j0, k0] * _var.velocity[i0, j0, k0, :, self.idx.block]
+                              / np.linalg.norm(_var.velocity[i0, j0, k0, :, self.idx.block]))
+                    _mach1 = (_var.mach[i1, j1, k1] * _var.velocity[i1, j1, k1, :, self.idx.block]
+                              / np.linalg.norm(_var.velocity[i1, j1, k1, :, self.idx.block]))
+                    # normal mach vector
+                    _mach_n0 = np.linalg.norm(np.dot(_mach0, _grad_v))
+                    _mach_n1 = np.linalg.norm(np.dot(_mach1, _grad_v))
+                    # if shock is in the cell _mach_n0 > 1 > _mach_n1
+                    if _mach_n0 > 1 > _mach_n1:
+                        _method = 'nearest'
+                    else:
+                        self.rgi_method = 'adaptive'
                 # Depending on the shape set the best possible interpolation method
-                if self.rgi_method == 'adaptive':
+                elif self.rgi_method == 'adaptive':
                     if np.all(_shape >= 6):
                         _method = 'quintic'
                     elif np.all(_shape >= 4):
