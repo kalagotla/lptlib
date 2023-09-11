@@ -81,7 +81,9 @@ class Integration:
                     # For p-space algos; the point-in-domain check was done in search
                     if idx.ppoint is None: return None, None
                     interp = Interpolation(self.interp.flow, idx)
-                    interp.compute()
+                    interp.adaptive = self.interp.adaptive
+                    interp.rbf_kernel = self.interp.rbf_kernel
+                    interp.compute(method=self.interp.method)
                     q_interp = Variables(interp)
                     q_interp.compute_velocity()
                     u = q_interp.velocity.reshape(3)
@@ -144,7 +146,9 @@ class Integration:
                         self.ppoint = None
                         return None, None, None
                     interp = Interpolation(self.interp.flow, idx)
-                    interp.compute(method='c-space')
+                    interp.adaptive = self.interp.adaptive
+                    interp.rbf_kernel = self.interp.rbf_kernel
+                    interp.compute(method=self.interp.method)
                     _J_inv = interp.J_inv
                     q_interp = Variables(interp)
                     q_interp.compute_velocity()
@@ -201,7 +205,7 @@ class Integration:
                     # For p-space algos; the point-in-domain check was done in search
                     if idx.ppoint is None: return None, None
                     interp = Interpolation(self.interp.flow, idx)
-                    interp.rgi_method = self.interp.rgi_method
+                    interp.adaptive = self.interp.adaptive
                     interp.rbf_kernel = self.interp.rbf_kernel
                     interp.compute(method=self.interp.method)
                     q_interp = Variables(interp)
@@ -272,7 +276,9 @@ class Integration:
                         self.ppoint = None
                         return None, None, None
                     interp = Interpolation(self.interp.flow, idx)
-                    interp.compute(method='c-space')
+                    interp.adaptive = self.interp.adaptive
+                    interp.rbf_kernel = self.interp.rbf_kernel
+                    interp.compute(method=self.interp.method)
                     _J_inv = interp.J_inv
                     q_interp = Variables(interp)
                     q_interp.compute_velocity()
@@ -535,7 +541,7 @@ class Integration:
                     if idx.ppoint is None:
                         return None, None, None
                     interp = Interpolation(self.interp.flow, idx)
-                    interp.rgi_method = self.interp.rgi_method
+                    interp.adaptive = self.interp.adaptive
                     interp.rbf_kernel = self.interp.rbf_kernel
                     interp.compute(method=self.interp.method)
                     q_interp = Variables(interp)
@@ -654,7 +660,9 @@ class Integration:
                         self.ppoint = None
                         return None, None, None, None
                     interp = Interpolation(self.interp.flow, idx)
-                    interp.compute(method='c-space')
+                    interp.adaptive = self.interp.adaptive
+                    interp.rbf_kernel = self.interp.rbf_kernel
+                    interp.compute(method=self.interp.method)
                     _J_inv = interp.J_inv
                     _J = interp.J
                     q_interp = Variables(interp)
