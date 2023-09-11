@@ -60,6 +60,7 @@ class Interpolation:
         self.rbf_kernel = 'thin_plate_spline'
         self.rgi_method = 'adaptive'
         self.rbf_epsilon = 1  # Default for RBF interpolation
+        self.method = None
 
     def __str__(self):
         doc = "This instance uses " + self.flow.filename + " as the flow file " \
@@ -79,6 +80,8 @@ class Interpolation:
             Has same ndim as q attribute from flow object
 
         """
+        # this object is used for integration without changing much of the code
+        self.method = method
 
         # Assign data from q file to keep the format for further computations
         self.nb = self.flow.nb
@@ -507,17 +510,20 @@ class Interpolation:
                     if _mach_n0 > 1 > _mach_n1:
                         _method = 'nearest'
                     else:
-                        self.rgi_method = 'adaptive'
+                        if np.all(_shape >= 6):
+                            _method = "quintic"
+                        elif np.all(_shape >= 4):
+                            _method = "cubic"
+                        else:
+                            _method = "linear"
                 # Depending on the shape set the best possible interpolation method
-                elif self.rgi_method == 'adaptive':
+                if self.rgi_method == 'adaptive':
                     if np.all(_shape >= 6):
                         _method = 'quintic'
                     elif np.all(_shape >= 4):
                         _method = 'cubic'
                     else:
                         _method = 'linear'
-                else:
-                    _method = self.rgi_method
 
                 # Create the RGI for each variable
                 _rgi_rho = RegularGridInterpolator((_x, _y, _z), _cell_q[:, 0].reshape(_shape), method=_method)
@@ -658,17 +664,20 @@ class Interpolation:
                     if _mach_n0 > 1 > _mach_n1:
                         _method = 'nearest'
                     else:
-                        self.rgi_method = 'adaptive'
+                        if np.all(_shape >= 6):
+                            _method = "quintic"
+                        elif np.all(_shape >= 4):
+                            _method = "cubic"
+                        else:
+                            _method = "linear"
                 # Depending on the shape set the best possible interpolation method
-                elif self.rgi_method == 'adaptive':
+                if self.rgi_method == 'adaptive':
                     if np.all(_shape >= 6):
                         _method = 'quintic'
                     elif np.all(_shape >= 4):
                         _method = 'cubic'
                     else:
                         _method = 'linear'
-                else:
-                    _method = self.rgi_method
 
                 # Create the RGI for each variable
                 _rgi_rho = RegularGridInterpolator((_x, _y, _z), _cell_q[:, 0].reshape(_shape), method=_method)

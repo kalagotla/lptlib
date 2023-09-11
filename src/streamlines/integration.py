@@ -201,7 +201,9 @@ class Integration:
                     # For p-space algos; the point-in-domain check was done in search
                     if idx.ppoint is None: return None, None
                     interp = Interpolation(self.interp.flow, idx)
-                    interp.compute()
+                    interp.rgi_method = self.interp.rgi_method
+                    interp.rbf_kernel = self.interp.rbf_kernel
+                    interp.compute(method=self.interp.method)
                     q_interp = Variables(interp)
                     q_interp.compute_velocity()
                     u = q_interp.velocity.reshape(3)
@@ -533,7 +535,9 @@ class Integration:
                     if idx.ppoint is None:
                         return None, None, None
                     interp = Interpolation(self.interp.flow, idx)
-                    interp.compute()
+                    interp.rgi_method = self.interp.rgi_method
+                    interp.rbf_kernel = self.interp.rbf_kernel
+                    interp.compute(method=self.interp.method)
                     q_interp = Variables(interp)
                     # Compute all variables
                     q_interp.compute_mach()
