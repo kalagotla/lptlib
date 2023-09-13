@@ -61,6 +61,7 @@ class Variables:
         self.velocity_magnitude = None
         self.temperature = None
         self.pressure = None
+        self.viscosity = None
 
     def compute_velocity(self):
         """
@@ -70,6 +71,8 @@ class Variables:
         # velocity = [q1, q2, q3] / q0
         self.velocity = self.flow.q[..., 1:4, :] / (self.flow.q[..., 0, :, None])
         self.velocity_magnitude = (self.velocity[..., 0, :]**2 + self.velocity[..., 1, :]**2 + self.velocity[..., 2, :]**2)**0.5
+
+        return
 
     def compute_temperature(self):
         """
@@ -81,6 +84,8 @@ class Variables:
         _q4 = self.flow.q[..., 4, :]
         self.temperature = (self.gamma - 1) * (_q4/self.density - self.velocity_magnitude**2/2) / self.gas_constant
 
+        return
+
     def compute_mach(self):
         """
         Function to compute local mach number
@@ -88,6 +93,8 @@ class Variables:
         """
         self.compute_temperature()
         self.mach = self.velocity_magnitude / np.sqrt(self.gamma * self.gas_constant * self.temperature)
+
+        return
 
     def compute_pressure(self):
         """
@@ -98,6 +105,36 @@ class Variables:
         self.compute_mach()
         self.pressure = self.density * self.temperature * self.gas_constant
 
+        return
+
+    def compute_viscosity(self, law='keyes'):
+        """
+        Function to compute viscosity
+
+        Viscosity of air as a function of temperature
+        Args:
+            _temperature: in Kelvin provided by default in the integration class
+            law: 'sutherland' or 'keyes' -- defaults to 'keyes'
+        :return: None
+
+        """
+        match law:
+            case 'sutherland':
+                # Sutherland's viscosity law
+                # All temperatures must be in kelvin
+                # Formula from cfd-online
+                _c1 = 1.716e-5 * (273.15 + 110.4) / 273.15**1.5
+                self.viscosity = _c1 * self.temperature**1.5 * 0.4 / (self.temperature + 110.4)
+            case 'keyes':
+                # New formula from keyes et al.
+                a0, a, a1 = 1.488, 122.1, 5.0
+                _tau = 1/self.temperature
+                self.viscosity = a0 * self.temperature**0.5 * 10**-6 / (1 + a * _tau / 10 ** (a1 * _tau))
+            case _:
+                raise ValueError('Viscosity law not supported')
+
+        return
+
     def compute(self):
         # implicitly runs compute_velocity() and compute_temperature()
         """
@@ -105,3 +142,6 @@ class Variables:
         :return: None
         """
         self.compute_pressure()
+        # This computes viscosity using the keyes formula
+        # To compute using sutherland's law, call compute_viscosity() separately, which will update the attribute
+        self.compute_viscosity()
