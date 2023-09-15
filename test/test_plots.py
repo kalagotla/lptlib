@@ -44,23 +44,23 @@ class TestPlots(unittest.TestCase):
 
         # plot paths
         ax = p.plot_paths(label='Particle')
-        ax = f.plot_paths(ax=ax, label='Fluid')
+        ax = f.plot_paths(ax=ax, label='Fluid', c='r')
         ax.set_title('Paths')
         ax.legend()
 
         # plot velocity
-        ax = p.plot_velocity(label='Particle')
+        ax = p.plot_velocity(label='Particle', color_by='knudsen_number')
         ax = p.plot_fluid_velocity(ax=ax, label='Fluid')
         ax = f.plot_velocity(ax=ax, label='Fluid from p-space')
         ax.set_title('Velocity')
         ax.legend()
 
         # plot relative mach
-        ax = p.plot_relative_mach()
+        ax = p.plot_relative_mach(color_by='knudsen_number')
         ax.set_title('Relative Mach')
 
         # plot relative Reynolds
-        ax = p.plot_relative_reynolds()
+        ax = p.plot_relative_reynolds(color_by='knudsen_number')
         ax.set_title('Relative Reynolds')
         plt.show()
         return

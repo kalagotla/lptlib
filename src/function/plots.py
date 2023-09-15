@@ -2,7 +2,6 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import matplotlib.colors as colors
 import matplotlib.patches as patches
 import matplotlib.gridspec as gridspec
@@ -51,45 +50,7 @@ class Plots:
 
         return
 
-    # plot particle paths
-    def plot_paths(self, ax=None, **kwargs):
-        """
-        Plot the particle paths
-        """
-        if ax is None:
-            fig, ax = plt.subplots()
-        ax.plot(self.data['x_p'], self.data['y_p'], **kwargs)
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_title('Particle paths')
-        return ax
-
-    # plot particle velocity
-    def plot_velocity(self, ax=None, **kwargs):
-        """
-        Plot the particle velocity
-        """
-        if ax is None:
-            fig, ax = plt.subplots()
-        ax.plot(self.data['x_p'], self.data['v_x'], **kwargs)
-        ax.set_xlabel('x')
-        ax.set_ylabel('v_x')
-        return ax
-
-    # plot fluid velocity on top of particle path
-    def plot_fluid_velocity(self, ax=None, **kwargs):
-        """
-        Plot the fluid velocity
-        """
-        if ax is None:
-            fig, ax = plt.subplots()
-        ax.plot(self.data['x_p'], self.data['u_x'], **kwargs)
-        ax.set_xlabel('x')
-        ax.set_ylabel('u_x')
-        return ax
-
-    # compute required variables as a static method and add it to the dataframe
-    @staticmethod
+    # compute required variables as a method and add it to the dataframe
     def compute_variables(self):
         """
         Compute the required variables
@@ -100,7 +61,9 @@ class Plots:
 
         """
         mach, pressure, temperature, density, velocity_magnitude = [], [], [], [], []
-        viscosity = []
+        viscosity, gamma = [], 1.4
+
+        # loop over the data and compute the variables
         for i in range(len(self.data['x_p'])):
             idx = Search(self.grid, [self.data['x_p'][i], self.data['y_p'][i], self.data['z_p'][i]])
             interp = Interpolation(self.flow, idx)
@@ -115,31 +78,150 @@ class Plots:
             density.append(var.density)
             velocity_magnitude.append(var.velocity_magnitude)
             viscosity.append(var.viscosity)
+            gamma = var.gamma
+
+        # add those variables to the dataframe
         self.data['mach'] = mach
         self.data['pressure'] = pressure
         self.data['temperature'] = temperature
         self.data['density'] = density
         self.data['velocity_magnitude'] = velocity_magnitude
         self.data['viscosity'] = viscosity
+        self.data['relative_velocity'] = ((self.data['v_x'] - self.data['u_x'])**2 +
+                                          (self.data['v_y'] - self.data['u_y'])**2 +
+                                          (self.data['v_z'] - self.data['u_z'])**2)**0.5
+        self.data['relative_mach'] = (self.data['relative_velocity'] * self.data['mach']
+                                      / self.data['velocity_magnitude'])
+        # Extract diameter from the file name
+        # Find the values that surround the exponential notation
+        matches = re.findall(r'([-+]?\d*\.\d*|\d+)e([-+]?\d+)', self.file)
+        # Create the diameter from the matches
+        diameter = float(matches[0][0])*10**int(matches[0][1])
+        self.data['relative_reynolds'] = (self.data['relative_velocity'] * self.data['density'] * diameter
+                                          / self.data['viscosity'] * self.data['velocity_magnitude'])
+        self.data['knudsen_number'] = ((self.data['relative_mach'] / self.data['relative_reynolds'])
+                                       * np.sqrt(np.pi * gamma / 2))
+        # apply map to convert the elements in the dataframe to floats only if the data is an array or list
+        self.data = self.data.map(lambda x: x.reshape(-1)[0] if isinstance(x, np.ndarray) else x)
+        # convert all NaN values to zero
+        self.data = self.data.fillna(0)
 
         return
+
+    # get color code for the plots
+    def get_color_code(self, **kwargs):
+        """
+        Get the color code for the plots
+        Args:
+            kwargs: arguments
+                c: color code (variable name)
+                cmap: color map
+
+        Returns:
+            color code
+        """
+        # Checks for the default color code
+        # This is the case when c is not used to plot
+        if kwargs.get("c") is not None:
+            sm = None
+            new_cmap = None
+            return new_cmap, sm
+        # This is the case when plot is used without any kwargs
+        if kwargs.get('c') is None and kwargs.get('color_by') is None:
+            sm = None
+            new_cmap = None
+            return sm, new_cmap
+
+        # Compute the variables if not already computed
+        if kwargs.get('color_by') not in self.data.columns:
+            self.compute_variables()
+
+        # get the color map -- This is basically setting default values if nothing is provided
+        if kwargs.get('cmap') is None:
+            cmap = plt.get_cmap('viridis')
+        else:
+            cmap = plt.get_cmap(kwargs.get('cmap'))
+
+        # Create new color map based on the color_by variable
+        norm = colors.Normalize(vmin=self.data[kwargs.get('color_by')].min(),
+                                vmax=self.data[kwargs.get('color_by')].max())
+        new_cmap = []
+        for i in range(len(self.data['x_p']) - 1):
+            new_cmap.append(cmap(norm(self.data[kwargs.get('color_by')][i])))
+        # create a map for colorbar
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+
+        return new_cmap, sm
+
+    def plots(self, x, y, ax=None, **kwargs):
+        """
+        Plot the data
+        Args:
+            self: class
+            x: x data
+            y: y data
+            ax: axis
+            kwargs: arguments
+
+        Returns:
+            axis
+        """
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        new_cmap, sm = self.get_color_code(**kwargs)
+        if sm is None:
+            ax.plot(x, y, **kwargs)
+        else:
+            for i in range(len(x) - 1):
+                ax.plot(x[i:i+2], y[i:i+2], c=new_cmap[i])
+            cbar = plt.colorbar(sm, ax=ax)
+            cbar.set_label(kwargs.get('color_by'))
+            if kwargs.get('color_by') is not None:
+                kwargs.pop('color_by')
+            ax.plot(**kwargs)
+        return ax
+
+    # plot particle paths
+    def plot_paths(self, ax=None, **kwargs):
+        """
+        Plot the particle paths
+        """
+        ax = self.plots(self.data['x_p'], self.data['y_p'], ax=ax, **kwargs)
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_title('Particle paths')
+        return ax
+
+    # plot particle velocity
+    def plot_velocity(self, ax=None, **kwargs):
+        """
+        Plot the particle velocity
+        """
+        ax = self.plots(self.data['x_p'], self.data['v_x'], ax=ax, **kwargs)
+        ax.set_xlabel('x')
+        ax.set_ylabel('v_x')
+        return ax
+
+    # plot fluid velocity on top of particle path
+    def plot_fluid_velocity(self, ax=None, **kwargs):
+        """
+        Plot the fluid velocity
+        """
+        ax = self.plots(self.data['x_p'], self.data['u_x'], ax=ax, **kwargs)
+        ax.set_xlabel('x')
+        ax.set_ylabel('u_x')
+        return ax
 
     # plot relative mach number
     def plot_relative_mach(self, ax=None, **kwargs):
         """
         Plot the relative mach number
         """
-        if ax is None:
-            fig, ax = plt.subplots()
-
-        # compute relative mach and add it to the dataframe
-        self.compute_variables(self)
-        self.data['relative_mach'] = (((self.data['v_x'] - self.data['u_x'])**2 +
-                                      (self.data['v_y'] - self.data['u_y'])**2 +
-                                      (self.data['v_z'] - self.data['u_z'])**2)**0.5 * self.data['mach']
-                                      / self.data['velocity_magnitude'])
-
-        ax.plot(self.data['x_p'], self.data['relative_mach'], **kwargs)
+        if 'relative_mach' not in self.data.columns:
+            self.compute_variables()
+        ax = self.plots(self.data['x_p'], self.data['relative_mach'], ax=ax, **kwargs)
         ax.set_xlabel('x')
         ax.set_ylabel('Relative Mach')
         return ax
@@ -149,26 +231,9 @@ class Plots:
         """
         Plot the relative reynolds number
         """
-        if ax is None:
-            fig, ax = plt.subplots()
-
-        # Extract diameter from the file name
-        matches = re.findall(r'([-+]?\d*\.\d*|\d+)e([-+]?\d+)', self.file)
-        # Create the diameter from the matches
-        diameter = float(matches[0][0])*10**int(matches[0][1])
-
-        # if plot_relative_mach is not called before, run compute_variables
-        if 'relative_mach' not in self.data.columns:
-            self.compute_variables(self)
-
-        # compute relative mach and add it to the dataframe
-        self.data['relative_reynolds'] = (((self.data['v_x'] - self.data['u_x'])**2 +
-                                           (self.data['v_y'] - self.data['u_y'])**2 +
-                                           (self.data['v_z'] - self.data['u_z'])**2)**0.5 *
-                                          self.data['density'] * diameter
-                                          / (self.data['viscosity']) * self.data['velocity_magnitude'])
-
-        ax.plot(self.data['x_p'], self.data['relative_reynolds'], **kwargs)
+        if 'relative_reynolds' not in self.data.columns:
+            self.compute_variables()
+        ax = self.plots(self.data['x_p'], self.data['relative_reynolds'], ax=ax, **kwargs)
         ax.set_xlabel('x')
         ax.set_ylabel('Relative Reynolds')
         return ax
