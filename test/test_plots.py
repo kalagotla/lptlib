@@ -62,6 +62,18 @@ class TestPlots(unittest.TestCase):
         # plot relative Reynolds
         ax = p.plot_relative_reynolds(color_by='knudsen_number')
         ax.set_title('Relative Reynolds')
+
+        # plot drag coefficient
+        ax = p.plot_drag_coefficient(label="loth")
+        ax = p.plot_drag_coefficient(ax=ax, label='stokes')
+        ax.set_title("Drag Coefficient")
+        ax.legend()
+
+        # plot drag
+        ax = p.plot_drag(label="loth")
+        ax = p.plot_drag(ax=ax, label='stokes')
+        ax.set_title("Drag")
+        ax.legend()
         plt.show()
         return
 

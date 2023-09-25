@@ -96,9 +96,9 @@ class Plots:
         # Find the values that surround the exponential notation
         matches = re.findall(r'([-+]?\d*\.\d*|\d+)e([-+]?\d+)', self.file)
         # Create the diameter from the matches
-        diameter = float(matches[0][0])*10**int(matches[0][1])
+        diameter = float(matches[-1][0])*10**int(matches[-1][1])
         self.data['relative_reynolds'] = (self.data['relative_velocity'] * self.data['density'] * diameter
-                                          / self.data['viscosity'] * self.data['velocity_magnitude'])
+                                          / self.data['viscosity'])
         self.data['knudsen_number'] = ((self.data['relative_mach'] / self.data['relative_reynolds'])
                                        * np.sqrt(np.pi * gamma / 2))
         # apply map to convert the elements in the dataframe to floats only if the data is an array or list
@@ -122,6 +122,7 @@ class Plots:
         """
         # Checks for the default color code
         # This is the case when c is not used to plot
+        # This gives color_by precedence over c
         if kwargs.get("c") is not None:
             sm = None
             new_cmap = None
@@ -178,9 +179,6 @@ class Plots:
                 ax.plot(x[i:i+2], y[i:i+2], c=new_cmap[i])
             cbar = plt.colorbar(sm, ax=ax)
             cbar.set_label(kwargs.get('color_by'))
-            if kwargs.get('color_by') is not None:
-                kwargs.pop('color_by')
-            ax.plot(**kwargs)
         return ax
 
     # plot particle paths
@@ -236,5 +234,62 @@ class Plots:
         ax = self.plots(self.data['x_p'], self.data['relative_reynolds'], ax=ax, **kwargs)
         ax.set_xlabel('x')
         ax.set_ylabel('Relative Reynolds')
+        return ax
+
+    def plot_drag_coefficient(self, ax=None, **kwargs):
+        """
+        Plot the drag coefficient
+        """
+        if 'relative_reynolds' not in self.data.columns:
+            self.compute_variables()
+        # Need to compute it here to get the label tag for setting the model
+        var = Variables(self.flow)
+        drag_coefficient = []
+        for _re, _mach in zip(self.data['relative_reynolds'], self.data['relative_mach']):
+            drag_coefficient.append(var.compute_drag_coefficient(_re=_re, _mach=_mach, _model=kwargs.get('label')))
+        self.data['drag_coefficient'] = drag_coefficient
+        # convert all NaN values to zero
+        self.data = self.data.fillna(0)
+        ax = self.plots(self.data['x_p'], self.data['drag_coefficient'], ax=ax, **kwargs)
+        ax.set_xlabel('x')
+        ax.set_ylabel('Drag Coefficient')
+        return ax
+
+    def plot_drag(self, particle_density=4230, ax=None, **kwargs):
+        """
+        Plot the drag
+        Args:
+            particle_density:
+            ax:
+            **kwargs:
+
+        Returns:
+
+        """
+        if 'drag_coefficient' not in self.data.columns:
+            if 'relative_reynolds' not in self.data.columns:
+                self.compute_variables()
+            else:
+                # Need to compute it here to get the label tag for setting the model
+                var = Variables(self.flow)
+                drag_coefficient = []
+                for _re, _mach in zip(self.data["relative_reynolds"], self.data["relative_mach"]):
+                    drag_coefficient.append(
+                        var.compute_drag_coefficient(_re=_re, _mach=_mach, _model=kwargs.get("label"))
+                    )
+                self.data["drag_coefficient"] = drag_coefficient
+                # convert all NaN values to zero
+                self.data = self.data.fillna(0)
+
+        # Extract diameter from the file name
+        # Find the values that surround the exponential notation
+        matches = re.findall(r'([-+]?\d*\.\d*|\d+)e([-+]?\d+)', self.file)
+        # Create the diameter from the matches
+        diameter = float(matches[-1][0])*10**int(matches[-1][1])
+        self.data["drag"] = (0.125 * np.pi * diameter**2 * particle_density
+                             * self.data["relative_velocity"] ** 2 * self.data["drag_coefficient"])
+        ax = self.plots(self.data["x_p"], self.data["drag"], ax=ax, **kwargs)
+        ax.set_xlabel("x")
+        ax.set_ylabel("Drag")
         return ax
 
