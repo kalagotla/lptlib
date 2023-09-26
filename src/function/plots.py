@@ -240,16 +240,25 @@ class Plots:
         """
         Plot the drag coefficient
         """
-        if 'relative_reynolds' not in self.data.columns:
-            self.compute_variables()
-        # Need to compute it here to get the label tag for setting the model
-        var = Variables(self.flow)
-        drag_coefficient = []
-        for _re, _mach in zip(self.data['relative_reynolds'], self.data['relative_mach']):
-            drag_coefficient.append(var.compute_drag_coefficient(_re=_re, _mach=_mach, _model=kwargs.get('label')))
-        self.data['drag_coefficient'] = drag_coefficient
-        # convert all NaN values to zero
-        self.data = self.data.fillna(0)
+        # added if in case drag is called before drag coefficient
+        if 'drag_coefficient' not in self.data.columns:
+            if 'relative_reynolds' not in self.data.columns:
+                self.compute_variables()
+            # Need to compute it here to get the label tag for setting the model
+            var = Variables(self.flow)
+            drag_coefficient = []
+            if kwargs.get('model') is None:
+                for _re, _mach in zip(self.data['relative_reynolds'], self.data['relative_mach']):
+                    drag_coefficient.append(var.compute_drag_coefficient(_re=_re, _mach=_mach, _model=kwargs.get('label')))
+            else:
+                for _re, _mach in zip(self.data['relative_reynolds'], self.data['relative_mach']):
+                    drag_coefficient.append(var.compute_drag_coefficient(_re=_re, _mach=_mach, _model=kwargs.get('model')))
+                kwargs.pop('model')  # Do this to remove model; so that it doesn't get passed to plots
+            self.data['drag_coefficient'] = drag_coefficient
+            # convert all NaN values to zero
+            self.data = self.data.fillna(0)
+
+        # do the actual plotting
         ax = self.plots(self.data['x_p'], self.data['drag_coefficient'], ax=ax, **kwargs)
         ax.set_xlabel('x')
         ax.set_ylabel('Drag Coefficient')
@@ -269,17 +278,27 @@ class Plots:
         if 'drag_coefficient' not in self.data.columns:
             if 'relative_reynolds' not in self.data.columns:
                 self.compute_variables()
-            else:
-                # Need to compute it here to get the label tag for setting the model
-                var = Variables(self.flow)
-                drag_coefficient = []
+            # Need to compute it here to get the label tag for setting the model
+            var = Variables(self.flow)
+            drag_coefficient = []
+            if kwargs.get("model") is None:
                 for _re, _mach in zip(self.data["relative_reynolds"], self.data["relative_mach"]):
                     drag_coefficient.append(
                         var.compute_drag_coefficient(_re=_re, _mach=_mach, _model=kwargs.get("label"))
                     )
-                self.data["drag_coefficient"] = drag_coefficient
-                # convert all NaN values to zero
-                self.data = self.data.fillna(0)
+            else:
+                for _re, _mach in zip(self.data["relative_reynolds"], self.data["relative_mach"]):
+                    drag_coefficient.append(
+                        var.compute_drag_coefficient(_re=_re, _mach=_mach, _model=kwargs.get("model"))
+                    )
+                kwargs.pop("model")  # Do this to remove model; so that it doesn't get passed to plots
+            self.data["drag_coefficient"] = drag_coefficient
+            # convert all NaN values to zero
+            self.data = self.data.fillna(0)
+
+        # Need to make sure that the model is not passed to plots
+        if kwargs.get("model") is not None:
+            kwargs.pop("model")
 
         # Extract diameter from the file name
         # Find the values that surround the exponential notation

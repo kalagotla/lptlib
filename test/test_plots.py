@@ -64,14 +64,15 @@ class TestPlots(unittest.TestCase):
         ax.set_title('Relative Reynolds')
 
         # plot drag coefficient
-        ax = p.plot_drag_coefficient(label="loth")
-        ax = p.plot_drag_coefficient(ax=ax, label='stokes')
+        ax = p.plot_drag_coefficient(label="Loth", model='loth')
+        ax = p.plot_drag_coefficient(ax=ax, label='Stokes', model='stokes')
         ax.set_title("Drag Coefficient")
         ax.legend()
 
         # plot drag
-        ax = p.plot_drag(label="loth")
-        ax = p.plot_drag(ax=ax, label='stokes')
+        # need to specify particle density and the diameter is extracted from the file name
+        ax = p.plot_drag(label="Loth", model='loth')
+        ax = p.plot_drag(ax=ax, label='Stokes', model='stokes')
         ax.set_title("Drag")
         ax.legend()
         plt.show()
