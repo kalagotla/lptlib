@@ -84,9 +84,9 @@ class Search:
         _point_transform = self.ppoint - _node
 
         # Check if point is a node in the domain
-        if np.all(abs(_point_transform) <= 1e-6):
+        if np.all(abs(_point_transform) <= 1e-12):
             self.cell = self._cell_nodes(i, j, k)
-            self.info = 'Given point is a node in the domain with a tol of 1e-6.\n' \
+            self.info = 'Given point is a node in the domain with a tol of 1e-12.\n' \
                         'Interpolation will assign node properties for integration.\n' \
                         'Index of the node will be returned by cell attribute\n'
             # print(self.info)

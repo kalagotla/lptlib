@@ -166,10 +166,10 @@ class Interpolation:
                     self.q = self.q.reshape((1, 1, 1, -1, 1))
 
                 # if the point is node return node data
-                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
                                     'Interpolation will assign node properties for integration.\n'\
                                     'Index of the node will be returned by cell attribute\n':
-                    self.q = _cell_q
+                    self.q = _cell_q[0]  # the first node is the point based on search method
                     self.q = self.q.reshape((1, 1, 1, -1, 1))
 
             case 'c-space':
@@ -179,10 +179,10 @@ class Interpolation:
                 """
 
                 # if the point is node return node data
-                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
                                     'Interpolation will assign node properties for integration.\n' \
                                     'Index of the node will be returned by cell attribute\n':
-                    self.q = _cell_q
+                    self.q = _cell_q[0]
                     self.q = self.q.reshape((1, 1, 1, -1, 1))
                     return
 
@@ -216,10 +216,10 @@ class Interpolation:
                 Raidal basis function interpolation in physical space
                 """
                 # if the point is node return node data
-                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
                                     'Interpolation will assign node properties for integration.\n' \
                                     'Index of the node will be returned by cell attribute\n':
-                    self.q = _cell_q
+                    self.q = _cell_q[0]
                     self.q = self.q.reshape((1, 1, 1, -1, 1))
                     return
 
@@ -292,10 +292,10 @@ class Interpolation:
                 Raidal basis function interpolation in c-space
                 """
                 # if the point is node return node data
-                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
                                     'Interpolation will assign node properties for integration.\n' \
                                     'Index of the node will be returned by cell attribute\n':
-                    self.q = _cell_q
+                    self.q = _cell_q[0]
                     self.q = self.q.reshape((1, 1, 1, -1, 1))
                     return
 
@@ -507,10 +507,10 @@ class Interpolation:
             case 'rgi-c-space':
                 # implement rgi interpolation in c-space
                 # if the point is node return node data
-                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-6.\n' \
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
                                     'Interpolation will assign node properties for integration.\n' \
                                     'Index of the node will be returned by cell attribute\n':
-                    self.q = _cell_q
+                    self.q = _cell_q[0]
                     self.q = self.q.reshape((1, 1, 1, -1, 1))
                     return
 

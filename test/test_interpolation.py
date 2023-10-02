@@ -28,5 +28,40 @@ class TestInterpolation(unittest.TestCase):
             True)
 
 
+        # Test if the point is a node interpolation
+        from src.test_cases.oblique_shock_data import ObliqueShock, ObliqueShockData
+
+        # Create oblique shock
+        os = ObliqueShock()
+        os.mach = 2
+        os.deflection = 9
+        os.compute()
+
+        # Create grid and flow files
+        osd = ObliqueShockData()
+        osd.nx_max = 15e-3
+        osd.ny_max = 15e-3
+        osd.nz_max = 1e-4
+        osd.inlet_temperature = 152.778
+        # osd.inlet_pressure = 55535.59
+        osd.inlet_density = 1.2663
+        osd.xpoints = 100
+        osd.ypoints = 100
+        osd.zpoints = 5
+        osd.oblique_shock = os
+        osd.shock_strength = 'weak'
+        osd.create_grid()
+        osd.create_flow()
+
+        # search and interpolation
+        grid = osd.grid
+        flow = osd.flow
+        idx = Search(grid, [7.61402532e-03, 1.42415589e-02, 5.00000000e-05])
+        interp = Interpolation(flow, idx)
+        idx.compute(method='distance')
+        interp.compute(method='p-space')
+        self.assertEqual(interp.q.shape == (1, 1, 1, 5, 1), True)
+
+
 if __name__ == '__main__':
     unittest.main()
