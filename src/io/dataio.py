@@ -114,6 +114,8 @@ class DataIO:
             np.save(self.location + 'combined_file', _p_data)
             print('**SUCCESS** combined_file.npy saved to the given location.')
 
+        # p-data has the following columns
+        # x, y, z, vx, vy, vz, ux, uy, uz, time, integrated (ux, uy, uz)
         _x_min, _x_max = _p_data[:, 0].min(), _p_data[:, 0].max()
         _y_min, _y_max = _p_data[:, 1].min(), _p_data[:, 1].max()
 
@@ -130,16 +132,15 @@ class DataIO:
                 Interpolated data at each scattered point location given
 
             """
-            _idx = Search(self.grid, _point)
-            _idx.compute(method='p-space')
-            _interp = Interpolation(self.flow, _idx)
-            _interp.compute(method='p-space')
-
             try:
+                _idx = Search(self.grid, _point)
+                _idx.compute(method='distance')
+                _interp = Interpolation(self.flow, _idx)
+                _interp.compute(method='p-space')
                 print(f'Done with {_index}/{_size}')
                 return _interp.q.reshape(-1)
             except:
-                print('Returned None. Exception occurred')
+                print(f'**Exception occurred with {_index}**')
                 return np.array([1], dtype=int)
 
         try:
@@ -206,6 +207,7 @@ class DataIO:
             """
             _data = _data.reshape(-1)
             # Transposing to keep consistency with default xy indexing of meshgrid
+            # Where there's no data, fill with twice the max value
             _q = griddata(_points, _data, (_x_grid, _y_grid), method=method, fill_value=_data.max() * 2)
 
             return _q
