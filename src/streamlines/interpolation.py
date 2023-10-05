@@ -58,13 +58,41 @@ class Interpolation:
         self.J_inv = None
         self.level = [0, 0, 0]
         self.rbf_kernel = 'thin_plate_spline'
-        self.rgi_method = 'adaptive'
+        self.adaptive = None
         self.rbf_epsilon = 1  # Default for RBF interpolation
+        self.method = None
 
     def __str__(self):
         doc = "This instance uses " + self.flow.filename + " as the flow file " \
                                                            "to compute properties at " + self.idx.ppoint + "\n"
         return doc
+
+    @staticmethod
+    def _shock_cell_check(self):
+        # Inspect shock cell and assign nearest interpolation
+        i0, j0, k0 = self.idx.cell[0, 0], self.idx.cell[0, 1], self.idx.cell[0, 2]
+        i1, j1, k1 = self.idx.cell[1, 0], self.idx.cell[1, 1], self.idx.cell[1, 2]
+        # compute velocity, mach
+        from src.function.variables import Variables
+        _var = Variables(self.flow)
+        _var.compute_mach()
+        # _grad_v = _J_inv * (v1 - v0)
+        _grad_v = self.idx.grid.m2[i0, j0, k0, :, self.idx.block] * (
+                _var.velocity[i1, j1, k1, :, self.idx.block]
+                - _var.velocity[i0, j0, k0, :, self.idx.block]
+        )
+        # compute norm to get the unit vector
+        _grad_v = _grad_v / np.linalg.norm(_grad_v)
+        # mach vector -- mach * unit velocity vector
+        _mach0 = (_var.mach[i0, j0, k0] * _var.velocity[i0, j0, k0, :, self.idx.block]
+                  / _var.velocity_magnitude[i0, j0, k0, self.idx.block])
+        _mach1 = (_var.mach[i1, j1, k1] * _var.velocity[i1, j1, k1, :, self.idx.block]
+                  / _var.velocity_magnitude[i1, j1, k1, self.idx.block])
+        # normal mach vector
+        _mach_n0 = np.linalg.norm(np.dot(_mach0, _grad_v))
+        _mach_n1 = np.linalg.norm(np.dot(_mach1, _grad_v))
+
+        return _mach_n0, _mach_n1
 
     def compute(self, method='p-space'):
         """
@@ -79,6 +107,8 @@ class Interpolation:
             Has same ndim as q attribute from flow object
 
         """
+        # this object is used for integration without changing much of the code
+        self.method = method
 
         # Assign data from q file to keep the format for further computations
         self.nb = self.flow.nb
@@ -160,6 +190,22 @@ class Interpolation:
                     _cell_q_4567 = _f(self, 1, 1, _cell_grd_45, _cell_grd_76, None, 1, [None, _cell_q_45],
                                       [None, _cell_q_76])
 
+                    # Do the shock cell check
+                    if self.idx.cell.shape == (8, 3) and self.idx.info is None:
+                        if self.adaptive == 'shock':
+                            _mach_n0, _mach_n1 = self._shock_cell_check(self)
+                            # if shock is in the cell _mach_n0 > 1 > _mach_n1
+                            if _mach_n0 > 1 > _mach_n1:
+                                _distance = np.sqrt(np.sum((_cell_grd - self.idx.ppoint) ** 2, axis=1))
+                                # nearest neighbor index
+                                _nn = np.argmin(_distance)
+                                # assign the nearest neighbor to the given point
+                                self.q = _cell_q[_nn]
+                                self.q = self.q.reshape((1, 1, 1, -1, 1))
+                                return
+                            else:
+                                pass
+
                     # Doing data interpolation to the given point based on the face points
                     self.q = _f(self, 2, 2, _cell_grd_0123, _cell_grd_4567, None, 2,
                                 [None, None, _cell_q_0123], [None, None, _cell_q_4567])
@@ -192,6 +238,24 @@ class Interpolation:
                 # m2 -- indicated as J_inv (determinant of m2 is J_inv)
                 _cell_J_inv = self.idx.grid.m2[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :, self.idx.block]
                 _alpha, _beta, _gamma = self.idx.cpoint - self.idx.cell[0]
+
+                # Do the shock cell check
+                if self.idx.cell.shape == (8, 3) and self.idx.info is None:
+                    if self.adaptive == "shock":
+                        _mach_n0, _mach_n1 = self._shock_cell_check(self)
+                        # if shock is in the cell _mach_n0 > 1 > _mach_n1
+                        if _mach_n0 > 1 > _mach_n1:
+                            _distance = np.sqrt(np.sum((self.idx.cell - self.idx.cpoint) ** 2, axis=1))
+                            # nearest neighbor index
+                            _nn = np.argmin(_distance)
+                            # assign the nearest neighbor to the given point
+                            self.q = _cell_q[_nn]
+                            self.J = _cell_J[_nn]
+                            self.J_inv = _cell_J_inv[_nn]
+                            self.q = self.q.reshape((1, 1, 1, -1, 1))
+                            return
+                        else:
+                            pass
 
                 def _eqn(_alpha, _beta, _gamma, _var):
                     _fun = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _var[0] + \
@@ -480,16 +544,26 @@ class Interpolation:
                 # Set the shape for reshaping q
                 _shape = np.array([len(_x), len(_y), len(_z)])
 
+                if self.adaptive =='shock':
+                    _mach_n0, _mach_n1 = self._shock_cell_check(self)
+                    # if shock is in the cell _mach_n0 > 1 > _mach_n1
+                    if _mach_n0 > 1 > _mach_n1:
+                        _method = 'nearest'
+                    else:
+                        if np.all(_shape >= 6):
+                            _method = "quintic"
+                        elif np.all(_shape >= 4):
+                            _method = "cubic"
+                        else:
+                            _method = "linear"
                 # Depending on the shape set the best possible interpolation method
-                if self.rgi_method == 'adaptive':
+                else:
                     if np.all(_shape >= 6):
                         _method = 'quintic'
                     elif np.all(_shape >= 4):
                         _method = 'cubic'
                     else:
                         _method = 'linear'
-                else:
-                    _method = self.rgi_method
 
                 # Create the RGI for each variable
                 _rgi_rho = RegularGridInterpolator((_x, _y, _z), _cell_q[:, 0].reshape(_shape), method=_method)
@@ -603,16 +677,26 @@ class Interpolation:
                 # Set the shape for reshaping q
                 _shape = np.array([len(_x), len(_y), len(_z)])
 
+                if self.adaptive =='shock':
+                    _mach_no, _mach_n1 = self._shock_cell_check(self)
+                    # if shock is in the cell _mach_n0 > 1 > _mach_n1
+                    if _mach_n0 > 1 > _mach_n1:
+                        _method = 'nearest'
+                    else:
+                        if np.all(_shape >= 6):
+                            _method = "quintic"
+                        elif np.all(_shape >= 4):
+                            _method = "cubic"
+                        else:
+                            _method = "linear"
                 # Depending on the shape set the best possible interpolation method
-                if self.rgi_method == 'adaptive':
+                else:
                     if np.all(_shape >= 6):
                         _method = 'quintic'
                     elif np.all(_shape >= 4):
                         _method = 'cubic'
                     else:
                         _method = 'linear'
-                else:
-                    _method = self.rgi_method
 
                 # Create the RGI for each variable
                 _rgi_rho = RegularGridInterpolator((_x, _y, _z), _cell_q[:, 0].reshape(_shape), method=_method)

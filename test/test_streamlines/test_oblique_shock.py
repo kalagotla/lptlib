@@ -9,7 +9,7 @@ class TestObliqueShock(unittest.TestCase):
     @parameterized.expand([
         ('adaptive-ppath-p-space', 'adaptive-ppath', 1e-7),
         ('ppath-p-space', 'ppath', 1e-8),
-        ('ppath-c-space', 'ppath-c-space', 1e-7),
+        ('ppath-c-space', 'ppath-c-space', 1e-8),
         ('adaptive-ppath-c-space', 'adaptive-ppath-c-space', 1e-8),
         ('adaptive-p-space', 'adaptive-p-space', 1e-8),
         ('p-space', 'p-space', 1e-8),
@@ -26,9 +26,11 @@ class TestObliqueShock(unittest.TestCase):
         sl.density = 4200
         sl.time_step = time_step
         # sl.max_time_step = 1e-10
-        sl.adaptivity = 0.0001
-        sl.magnitude_adaptivity = 0.0001
+        sl.adaptivity = 0.01
+        sl.magnitude_adaptivity = 0.01
         sl.drag_model = 'henderson'
+        sl.interpolation = 'p-space'
+        sl.adaptive_interpolation = 'shock'
         sl.compute(method=method)
 
         xdata = np.array(sl.streamline)

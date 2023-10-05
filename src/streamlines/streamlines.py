@@ -67,6 +67,7 @@ class Streamlines:
         self.point = np.array(point)
         self.search = search
         self.interpolation = interpolation
+        self.adaptive_interpolation = None
         self.integration = integration
         self.diameter = diameter
         self.density = density
@@ -171,11 +172,15 @@ class Streamlines:
         self.streamline.append(self.point)
         idx = Search(grid, self.point)
         interp = Interpolation(flow, idx)
+        interp.adaptive = self.adaptive_interpolation
         idx.compute(method=self.search)
         interp.compute(method=self.interpolation)
         q_interp = Variables(interp)
         q_interp.compute_velocity()
         uf = q_interp.velocity.reshape(3)
+        vel = uf.copy()
+        pvel = uf.copy()
+        fvel = uf.copy()
         self.fvelocity.append(uf)
         self.svelocity.append(uf)
         self.time.append(self.time_step)
@@ -187,6 +192,7 @@ class Streamlines:
             while True:
                 idx = Search(grid, self.point)
                 interp = Interpolation(flow, idx)
+                interp.adaptive = self.adaptive_interpolation
                 intg = Integration(interp)
                 idx.compute(method=self.search)
                 interp.compute(method=self.interpolation)
@@ -207,10 +213,10 @@ class Streamlines:
         if method == 'adaptive-p-space':
             t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             t.start()
-            vel = None
             while True:
                 idx = Search(grid, self.point)
                 interp = Interpolation(flow, idx)
+                interp.adaptive = self.adaptive_interpolation
                 intg = Integration(interp)
                 idx.compute(method=self.search)
                 interp.compute(method=self.interpolation)
@@ -229,15 +235,7 @@ class Streamlines:
                 # Adaptive algorithm starts
                 # Save results and adjust time-step
                 # Details for the algorithm are provided in adaptive-ppath
-                if vel is None:
-                    # For the first step in the loop
-                    self.streamline.append(new_point)
-                    self.fvelocity.append(new_vel)
-                    self.svelocity.append(new_vel)
-                    self.time.append(self.time_step)
-                    self.point = new_point
-                    vel = new_vel.copy()
-                elif self.angle_btw(new_point - self.point, vel) is None:
+                if self.angle_btw(new_point - self.point, vel) is None:
                     print('Increasing time step. Successive points are same')
                     self.time_step = 10 * self.time_step
                     loop_check += 1
@@ -279,6 +277,7 @@ class Streamlines:
             idx.compute(method='c-space')
             while True:
                 interp = Interpolation(flow, idx)
+                interp.adaptive = self.adaptive_interpolation
                 interp.compute(method='c-space')
                 intg = Integration(interp)
                 new_point, new_pvel, new_cvel = intg.compute(method='cRK4', time_step=self.time_step)
@@ -288,6 +287,7 @@ class Streamlines:
                     print('Point exited the block! Searching for new position...')
                     idx = Search(grid, save_point)
                     interp = Interpolation(flow, idx)
+                    interp.adaptive = self.adaptive_interpolation
                     intg = Integration(interp)
                     idx.compute(method='block_distance')
                     interp.compute()
@@ -329,10 +329,10 @@ class Streamlines:
             save_point = self.point
             idx = Search(grid, self.point)
             idx.compute(method='c-space')
-            pvel = None
             while True:
                 interp = Interpolation(flow, idx)
                 interp.compute(method='c-space')
+                interp.adaptive = self.adaptive_interpolation
                 intg = Integration(interp)
                 new_point, new_pvel, new_cvel = intg.compute(method='cRK4', time_step=self.time_step)
 
@@ -352,9 +352,10 @@ class Streamlines:
                         print('Point exited the block! Searching for new position...')
                         idx = Search(grid, save_point)
                         interp = Interpolation(flow, idx)
+                        interp.adaptive = self.adaptive_interpolation
                         intg = Integration(interp)
                         idx.compute(method='block_distance')
-                        interp.compute()
+                        interp.compute(method='p-space')
                         new_point, new_pvel = intg.compute(method='pRK4', time_step=self.time_step)
                         # Even after pRK4 if the point is None; End integration
                         if new_point is None:
@@ -369,31 +370,28 @@ class Streamlines:
                             self.fvelocity.append(new_pvel)
                             self.svelocity.append(new_pvel)
                             self.time.append(self.time_step)
-                            self.point = save_point
                             save_point = new_point
                             pvel = new_pvel.copy()
                             # new_point = idx.p2c(new_point)  # Move point obtained to c-space
                 # If the point is not none; continue c-space
                 else:
-                    self.point = save_point
-                    save_point = idx.c2p(new_point)
+                    old_ppoint = save_point
+                    # This changes the cell attribute in idx, used for interp
+                    new_ppoint = idx.c2p(new_point)
 
                     # Adaptive algorithm starts
                     # Save results and adjust time-step
                     # Details for the algorithm are provided in adaptive-ppath
-                    # Decided to use new_pvel for adaptivity because of the in-shock cell RK4 integration
-                    # RK4 depends on future points for integration and this adjustment moves it forward
-                    if self.angle_btw(save_point - self.point, new_pvel) is None:
+                    if self.angle_btw(new_ppoint - old_ppoint, pvel) is None:
                         print('Increasing time step. Successive points are same')
                         self.time_step = 2 * self.time_step
                         loop_check += 1
                         if loop_check == 70:
                             print('Stuck in the same loop for too long. Integration ends!')
                             break
-                    elif self.angle_btw(save_point - self.point, new_pvel) <= 0.1 * self.adaptivity \
+                    elif self.angle_btw(new_ppoint - old_ppoint, pvel) <= 0.1 * self.adaptivity \
                             and self.time_step <= self.max_time_step:
-                        self.point = save_point
-                        save_point = idx.c2p(new_point)
+                        save_point = new_ppoint
                         self.streamline.append(save_point)
                         self.fvelocity.append(new_pvel)
                         self.svelocity.append(new_pvel)
@@ -402,12 +400,11 @@ class Streamlines:
                         pvel = new_pvel.copy()
                         self.time_step = 2 * self.time_step
                         loop_check = 0
-                    elif self.angle_btw(save_point - self.point, new_pvel) >= self.adaptivity and\
+                    elif self.angle_btw(new_ppoint - old_ppoint, pvel) >= self.adaptivity and\
                             self.time_step >= 1e-12:
                         self.time_step = 0.5 * self.time_step
                     else:
-                        self.point = save_point
-                        save_point = idx.c2p(new_point)
+                        save_point = new_ppoint
                         self.streamline.append(save_point)
                         self.fvelocity.append(new_pvel)
                         self.svelocity.append(new_pvel)
@@ -428,6 +425,7 @@ class Streamlines:
                 idx = Search(grid, self.point)
                 interp = Interpolation(flow, idx)
                 intg = Integration(interp)
+                interp.adaptive = self.adaptive_interpolation
                 idx.compute(method=self.search)
                 interp.compute(method=self.interpolation)
                 new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter,
@@ -455,13 +453,10 @@ class Streamlines:
         if method == 'adaptive-ppath':
             t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             t.start()
-            # particle velocity
-            vel = None
-            # fluid velocity
-            fvel = None
             while True:
                 idx = Search(grid, self.point)
                 interp = Interpolation(flow, idx)
+                interp.adaptive = self.adaptive_interpolation
                 intg = Integration(interp)
                 idx.compute(method=self.search)
                 interp.compute(method=self.interpolation)
@@ -496,15 +491,6 @@ class Streamlines:
 
                 # Adaptive algorithm starts
                 # Save results and continue the loop
-                elif vel is None:
-                    # For the first step in the loop
-                    self.streamline.append(new_point)
-                    self.svelocity.append(new_vel)
-                    self.fvelocity.append(new_fvel)
-                    self.time.append(self.time_step)
-                    self.point = new_point
-                    vel = new_vel.copy()
-                    fvel = new_fvel.copy()
                 # Check for if the points are identical because of tiny time step and deflection
                 elif self.angle_btw(new_vel, vel) is None:
                     # print('Increasing time step. Successive points are same')
@@ -552,13 +538,12 @@ class Streamlines:
         if method == 'ppath-c-space':
             t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             t.start()
-            pvel = None
-            fvel = None
             save_point = self.point
             idx = Search(grid, self.point)
             idx.compute(method='c-space')
             while True:
                 interp = Interpolation(flow, idx)
+                interp.adaptive = self.adaptive_interpolation
                 interp.compute(method='c-space')
                 intg = Integration(interp)
                 new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
@@ -572,9 +557,10 @@ class Streamlines:
                     print('Point exited the block! Searching for new position...')
                     idx = Search(grid, save_point)
                     interp = Interpolation(flow, idx)
+                    interp.adaptive = self.adaptive_interpolation
                     intg = Integration(interp)
                     idx.compute(method='p-space')
-                    interp.compute()
+                    interp.compute(method='p-space')
                     new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
                                                                        density=self.density,
                                                                        velocity=pvel, method='pRK4',
@@ -619,7 +605,7 @@ class Streamlines:
                         idx.point = new_point
                         if loop_check > 0:
                             print('Resetting time step')
-                            self.time_step = self.time_step / 0.5 ** loop_check
+                            self.time_step = self.time_step / (0.5 * loop_check)
                             loop_check = 0
 
             # Save files for each particle; can be used for multiprocessing large number of particles
@@ -629,13 +615,12 @@ class Streamlines:
         if method == 'adaptive-ppath-c-space':
             t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             t.start()
-            pvel = None
-            fvel = None
             save_point = self.point
             idx = Search(grid, self.point)
             idx.compute(method='c-space')
             while True:
                 interp = Interpolation(flow, idx)
+                interp.adaptive = self.adaptive_interpolation
                 interp.compute(method='c-space')
                 intg = Integration(interp)
                 new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
@@ -663,6 +648,7 @@ class Streamlines:
                         print('Point exited the block! Searching for new position...')
                         idx = Search(grid, save_point)
                         interp = Interpolation(flow, idx)
+                        interp.adaptive = self.adaptive_interpolation
                         intg = Integration(interp)
                         idx.compute(method='p-space')
                         interp.compute()
@@ -705,15 +691,6 @@ class Streamlines:
                     # Adaptive algorithm starts
                     # Save results and adjust time-step
                     # Details for the algorithm are provided in adaptive-ppath
-                    elif pvel is None:
-                        # For the first step in the loop
-                        self.streamline.append(save_point)
-                        self.svelocity.append(new_pvel)
-                        self.fvelocity.append(new_fvel)
-                        self.time.append(self.time_step)
-                        self.point = new_point
-                        pvel = new_pvel.copy()
-                        fvel = new_fvel.copy()
                     elif self.angle_btw(new_fvel, fvel) is None:
                         print('Increasing time step. Successive points are same')
                         self.time_step = 2 * self.time_step
