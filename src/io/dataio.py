@@ -116,7 +116,7 @@ class DataIO:
             print('**SUCCESS** combined_file.npy saved to the given location.')
 
         # p-data has the following columns
-        # x, y, z, vx, vy, vz, ux, uy, uz, time, integrated (ux, uy, uz)
+        # x, y, z, vx, vy, vz, ux, uy, uz, time, integrated (ux, uy, uz), diameter, density
         _x_min, _x_max = self.grid.grd_min.reshape(-1)[0], self.grid.grd_max.reshape(-1)[0]
         _y_min, _y_max = self.grid.grd_min.reshape(-1)[1], self.grid.grd_max.reshape(-1)[1]
 
