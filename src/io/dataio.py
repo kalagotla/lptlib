@@ -96,6 +96,7 @@ class DataIO:
             _p_data = np.load(self.read_file)
             print('Read from the combined file!!')
         except:
+            # TODO: Dask might save time here!
             print('Reading from a group of files... This will take a while!')
             # Sort in natural order to stack particles in order
             _files = np.array(self._natural_sort(os.listdir(self.location)))
@@ -116,8 +117,8 @@ class DataIO:
 
         # p-data has the following columns
         # x, y, z, vx, vy, vz, ux, uy, uz, time, integrated (ux, uy, uz)
-        _x_min, _x_max = _p_data[:, 0].min(), _p_data[:, 0].max()
-        _y_min, _y_max = _p_data[:, 1].min(), _p_data[:, 1].max()
+        _x_min, _x_max = self.grid.grd_min.reshape(-1)[0], self.grid.grd_max.reshape(-1)[0]
+        _y_min, _y_max = self.grid.grd_min.reshape(-1)[1], self.grid.grd_max.reshape(-1)[1]
 
         # Get density and energy for plot3d file at locations
         _locations = _p_data[:, :3]
