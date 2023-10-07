@@ -5,6 +5,7 @@ import numpy as np
 from multiprocessing.pool import ThreadPool as Pool
 import multiprocessing as mp
 from src.streamlines.streamlines import Streamlines
+from scipy.stats import skewnorm, norm
 
 rng = np.random.default_rng(7)
 
@@ -138,11 +139,21 @@ class Particle:
                   " the particle statistics are computed using mean and std diameters\n"
                   "Particle min and max are cutoffs for the distribution")
             self.particle_field = rng.normal(self.mean_dia, self.std_dia, int(self.n_concentration))
-            self.particle_field = np.clip(self.particle_field, self.min_dia, self.max_dia)
-            np.random.shuffle(self.particle_field)
             return
 
+        if self.distribution == 'skewnorm':
+            print("When Skewnorm distribution is used,"
+                  " the particle statistics are computed using mean and std diameters\n"
+                  "Particle min and max are cutoffs for the distribution")
+            a = (4 * (self.mean_dia - self.min_dia) * (self.max_dia - self.mean_dia)) / (self.std_dia ** 2)
+            self.particle_field = skewnorm.rvs(a, loc=self.mean_dia, scale=self.std_dia,
+                                               size=int(self.n_concentration))
+
         # TODO: Add Uniform distribution
+
+        # Continue to clip the distribution to min and max diameters
+        self.particle_field = np.clip(self.particle_field, self.min_dia, self.max_dia)
+        np.random.shuffle(self.particle_field)
 
     pass
 
