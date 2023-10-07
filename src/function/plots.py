@@ -43,10 +43,12 @@ class Plots:
         x_f = _data[:, 10]
         y_f = _data[:, 11]
         z_f = _data[:, 12]
+        d_p = _data[:, 13]
+        rho_p = _data[:, 14]
         # create a dataframe from _data variable
         self.data = pd.DataFrame({'x_p': x_p, 'y_p': y_p, 'z_p': z_p, 'v_x': v_x, 'v_y': v_y, 'v_z': v_z,
                                   'u_x': u_x, 'u_y': u_y, 'u_z': u_z, 'time_p': time_p, 'x_f': x_f,
-                                  'y_f': y_f, 'z_f': z_f})
+                                  'y_f': y_f, 'z_f': z_f, 'd_p': d_p, 'rho_p': rho_p})
 
         return
 
