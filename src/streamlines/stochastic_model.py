@@ -5,7 +5,7 @@ import numpy as np
 from multiprocessing.pool import ThreadPool as Pool
 import multiprocessing as mp
 from src.streamlines.streamlines import Streamlines
-from scipy.stats import skewnorm, norm
+from scipy.stats import skewnorm, lognorm
 
 rng = np.random.default_rng(7)
 
@@ -127,6 +127,7 @@ class Particle:
         self.density = None
         self.n_concentration = None
         self.particle_field = None
+        self.distribution_parameter = None  # skew - skewnorm, shape - lognorm, etc
 
     def compute_distribution(self):
         """
@@ -145,9 +146,25 @@ class Particle:
             print("When Skewnorm distribution is used,"
                   " the particle statistics are computed using mean and std diameters\n"
                   "Particle min and max are cutoffs for the distribution")
-            a = (4 * (self.mean_dia - self.min_dia) * (self.max_dia - self.mean_dia)) / (self.std_dia ** 2)
-            self.particle_field = skewnorm.rvs(a, loc=self.mean_dia, scale=self.std_dia,
-                                               size=int(self.n_concentration))
+            try:
+                a = self.distribution_parameter
+                self.particle_field = skewnorm.rvs(a, loc=self.mean_dia, scale=self.std_dia,
+                                                   size=int(self.n_concentration), random_state=7)
+            except ValueError:
+                print("Skewness parameter is not provided")
+                raise ValueError
+
+        if self.distribution == 'lognorm':
+            print("When Lognorm distribution is used,"
+                  " the particle statistics are computed using mean and std diameters\n"
+                  "Particle min and max are cutoffs for the distribution")
+            try:
+                s = self.distribution_parameter
+                self.particle_field = lognorm.rvs(s, loc=self.mean_dia, scale=self.std_dia,
+                                                  size=int(self.n_concentration), random_state=7)
+            except ValueError:
+                print("Shape parameter is not provided")
+                raise ValueError
 
         # TODO: Add Uniform distribution
 
