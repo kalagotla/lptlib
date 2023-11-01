@@ -8,6 +8,7 @@ import multiprocessing as mp
 from scipy.interpolate import griddata
 import os
 import re
+rng = np.random.default_rng()
 
 
 class DataIO:
@@ -59,10 +60,11 @@ class DataIO:
     date: 12-28/2022
     """
 
-    def __init__(self, grid, flow, read_file=None, location='.',
+    def __init__(self, grid, flow, percent_data=100, read_file=None, location='.',
                  x_refinement: int = 50, y_refinement: int = 40):
         self.grid = grid
         self.flow = flow
+        self.percent_data = percent_data
         self.read_file = read_file
         self.location = location
         self.x_refinement = x_refinement
@@ -121,6 +123,11 @@ class DataIO:
         _y_min, _y_max = self.grid.grd_min.reshape(-1)[1], self.grid.grd_max.reshape(-1)[1]
 
         # Get density and energy for plot3d file at locations
+        if self.percent_data == 100:
+            pass
+        else:
+            # Get a uniform distribution of the sample
+            _p_data = rng.choice(_p_data, size=int(_p_data.shape[0] * self.percent_data / 100))
         _locations = _p_data[:, :3]
 
         def _flow_data(_point, _index, _size):
@@ -138,42 +145,61 @@ class DataIO:
                 _idx.compute(method='distance')
                 _interp = Interpolation(self.flow, _idx)
                 _interp.compute(method='p-space')
-                print(f'Done with {_index}/{_size}')
+                print(f'Done with flow data interpolation {_index}/{_size}')
                 return _interp.q.reshape(-1)
             except:
                 print(f'**Exception occurred with {_index}**')
                 return np.array([1], dtype=int)
 
         try:
-            # Read back the saved file
+            # Read if saved files are available
             _q_list = np.load(self.location + 'dataio/interpolated_q_data.npy', allow_pickle=False)
             _p_data = np.load(self.location + 'dataio/new_p_data.npy', allow_pickle=False)
             print('Read the available interpolated data to continue with the griddata algorithm')
         except:
-            print('Interpolated data file is unavailable. Continuing with interpolation to scattered data!\n'
-                  'This is going to take sometime. Sit back and relax!\n'
-                  'Your PC will take off because of multi-process. Let it breathe...\n')
-            _processors = mp.cpu_count()
-            _pool = Pool(_processors)
-            _loc_len = len(_locations)
-            # Passing extra parameters to keep track of the progress. Chunk-size helps to keep it orderly
-            _q_list = _pool.starmap(_flow_data, zip(_locations, np.arange(0, _loc_len), np.repeat(_loc_len, _loc_len)),
-                                    chunksize=1)
-            _pool.close()
+            # Run through the process of creating interpolation files
+            try:
+                # Read old interpolation files before removing outliers if available
+                _q_list = np.load(self.location + 'dataio/_old_interpolated_q_data.npy', allow_pickle=True)
+                _p_data = np.load(self.location + 'dataio/_old_p_data.npy', allow_pickle=True)
+                print('Read the available old interpolated data to continue with the outliers algorithm')
+            except:
+                # Run the interpolation process on all the scattered points
+                print('Interpolated data file is unavailable. Continuing with interpolation to scattered data!\n'
+                      'This is going to take sometime. Sit back and relax!\n'
+                      'Your PC will take off because of multi-process. Let it breathe...\n')
+                _processors = mp.cpu_count()
+                _pool = Pool(_processors)
+                _loc_len = len(_locations)
+                # Passing extra parameters to keep track of the progress. Chunk-size helps to keep it orderly
+                _q_list = _pool.starmap(_flow_data, zip(_locations, np.arange(0, _loc_len), np.repeat(_loc_len, _loc_len)),
+                                        chunksize=1)
+                _pool.close()
+
+                # Intermediate save of the data -- if the process is interrupted we can restart it from here
+                try:
+                    # Try creating the directory; if exists errors out and except
+                    os.mkdir(self.location + 'dataio')
+                    np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
+                    np.save(self.location + 'dataio/_old_p_data', _p_data)
+                    print('Created dataio folder and saved old interpolated flow data to scattered points.\n')
+                except:
+                    np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
+                    np.save(self.location + 'dataio/_old_new_p_data', _p_data)
+                print('Done with interpolating flow data to scattered points.\n'
+                      'Removing outliers from the data...\n')
 
             # Fluid data at scattered points/particle locations
             # Some searches return None. This helps remove those locations!
             _remove_index = [j for j in range(len(_q_list)) if np.all(_q_list[j] == 1)]
             _q_list = np.vstack(np.delete(_q_list, _remove_index, axis=0))
             _p_data = np.delete(_p_data, _remove_index, axis=0)
-            # _q_list = np.array([i for i in _q_list if np.all(i != 1)])
             # Save both interpolated data and new particle data for easy future computations
             try:
-                # Try creating the directory; if exists errors out and except
-                os.mkdir(self.location + 'dataio')
-                np.save(self.location + 'dataio/interpolated_q_data', _q_list)
-                np.save(self.location + 'dataio/new_p_data', _p_data)
-                print('Created dataio and saved interpolated flow data to scattered points.\n')
+                # Save interpolated data to files
+                np.load(self.location + 'dataio/interpolated_q_data', allow_pickle=False)
+                np.load(self.location + 'dataio/new_p_data', allow_pickle=False)
+                print('Loaded particle and flow interpolated data from existing files.\n')
             except:
                 np.save(self.location + 'dataio/interpolated_q_data', _q_list)
                 np.save(self.location + 'dataio/new_p_data', _p_data)
