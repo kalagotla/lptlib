@@ -678,7 +678,7 @@ class Interpolation:
                 _shape = np.array([len(_x), len(_y), len(_z)])
 
                 if self.adaptive =='shock':
-                    _mach_no, _mach_n1 = self._shock_cell_check(self)
+                    _mach_n0, _mach_n1 = self._shock_cell_check(self)
                     # if shock is in the cell _mach_n0 > 1 > _mach_n1
                     if _mach_n0 > 1 > _mach_n1:
                         _method = 'nearest'

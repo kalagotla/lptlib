@@ -194,6 +194,13 @@ class DataIO:
             _remove_index = [j for j in range(len(_q_list)) if np.all(_q_list[j] == 1)]
             _q_list = np.vstack(np.delete(_q_list, _remove_index, axis=0))
             _p_data = np.delete(_p_data, _remove_index, axis=0)
+            # Remove outliers due to bad interpolation -- density cannot go beyond the flow limits
+            _remove_index = np.where(_q_list[:, 0] < self.flow.q[..., 0, :].min())
+            _q_list = np.vstack(np.delete(_q_list, _remove_index, axis=0))
+            _p_data = np.delete(_p_data, _remove_index, axis=0)
+            _remove_index = np.where(_q_list[:, 0] > self.flow.q[..., 0, :].max())
+            _q_list = np.vstack(np.delete(_q_list, _remove_index, axis=0))
+            _p_data = np.delete(_p_data, _remove_index, axis=0)
             # Save both interpolated data and new particle data for easy future computations
             try:
                 # Save interpolated data to files
