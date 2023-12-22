@@ -335,11 +335,12 @@ class Search:
             # TODO: Condition needs to be adapted based on Jacobian
             # TODO: Need to improve by normalizing the data
             _tol = 1e-12 * self.grid.J[self.cell[0, 0], self.cell[0, 1], self.cell[0, 2], self.block]
-            if _tol <= 1e-11:
+            if _tol <= 1e-12:
                 _tol = 1e-12
             if sum(abs(_delta_ppoint)) <= _tol:
                 _eps0, _eps1, _eps2 = _cpoint.astype(int)
-                self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
+                # same as self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
+                self._cell_index(self, _eps0, _eps1, _eps2)
                 self.cpoint = _cpoint
                 self.ppoint = _pred_ppoint
                 return _cpoint
