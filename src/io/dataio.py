@@ -3,7 +3,7 @@
 import numpy as np
 from src.streamlines.search import Search
 from src.streamlines.interpolation import Interpolation
-from multiprocessing.pool import ThreadPool as Pool
+from multiprocessing import Pool
 import multiprocessing as mp
 from scipy.interpolate import griddata
 import os
@@ -85,6 +85,49 @@ class DataIO:
         alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
         return sorted(_l, key=alphanum_key)
 
+    def _flow_data(self, _point, _index, _size):
+        """
+        Internal function that interpolates data to scattered points
+        Args:
+            _point: One of the scattered points
+
+        Returns:
+            Interpolated data at each scattered point location given
+
+        """
+        try:
+            _idx = Search(self.grid, _point)
+            _idx.compute(method='p-space')
+            _interp = Interpolation(self.flow, _idx)
+            _interp.compute(method='p-space')
+            print(f'Done with flow data interpolation {_index}/{_size}')
+            return _interp.q.reshape(-1)
+        except:
+            print(f'**Exception occurred with {_index}**')
+            return np.array([1], dtype=int)
+
+    # Function to loop through the scattered data
+    def _grid_interp(self, _data, _points, _x_grid, _y_grid, method='linear'):
+        """
+        Interpolate to grid data from scatter points
+        Args:
+            _points: scattered data - This is fixed, usually
+            _x_grid: grid data - fixed usually
+            _y_grid: grid data - fixed usually
+            _data: data set to be interpolated
+            method: set to linear but can be changed if needed
+
+        Returns:
+            Interpolated flow data
+
+        """
+        _data = _data.reshape(-1)
+        # Transposing to keep consistency with default xy indexing of meshgrid
+        # Where there's no data, fill with twice the max value
+        _q = griddata(_points, _data, (_x_grid, _y_grid), method=method, fill_value=_data.max() * 2)
+
+        return _q
+
     def compute(self):
         """
         This should interpolate the scattered particle data onto a 2D grid
@@ -130,27 +173,6 @@ class DataIO:
             _p_data = rng.choice(_p_data, size=int(_p_data.shape[0] * self.percent_data / 100))
         _locations = _p_data[:, :3]
 
-        def _flow_data(_point, _index, _size):
-            """
-            Internal function that interpolates data to scattered points
-            Args:
-                _point: One of the scattered points
-
-            Returns:
-                Interpolated data at each scattered point location given
-
-            """
-            try:
-                _idx = Search(self.grid, _point)
-                _idx.compute(method='distance')
-                _interp = Interpolation(self.flow, _idx)
-                _interp.compute(method='p-space')
-                print(f'Done with flow data interpolation {_index}/{_size}')
-                return _interp.q.reshape(-1)
-            except:
-                print(f'**Exception occurred with {_index}**')
-                return np.array([1], dtype=int)
-
         try:
             # Read if saved files are available
             _q_list = np.load(self.location + 'dataio/interpolated_q_data.npy', allow_pickle=False)
@@ -172,7 +194,8 @@ class DataIO:
                 _pool = Pool(_processors)
                 _loc_len = len(_locations)
                 # Passing extra parameters to keep track of the progress. Chunk-size helps to keep it orderly
-                _q_list = _pool.starmap(_flow_data, zip(_locations, np.arange(0, _loc_len), np.repeat(_loc_len, _loc_len)),
+                _q_list = _pool.starmap(self._flow_data,
+                                        zip(_locations, np.arange(0, _loc_len), np.repeat(_loc_len, _loc_len)),
                                         chunksize=1)
                 _pool.close()
 
@@ -224,28 +247,6 @@ class DataIO:
         _xi, _yi = np.linspace(_x_min, _x_max, self.x_refinement), np.linspace(_y_min, _y_max, self.y_refinement)
         _xi, _yi = np.meshgrid(_xi, _yi, indexing='ij')
 
-        # Function to loop through the scattered data
-        def _grid_interp(_data=None, _points=_p_data[:, :2], _x_grid=_xi, _y_grid=_yi, method='linear'):
-            """
-            Interpolate to grid data from scatter points
-            Args:
-                _points: scattered data - This is fixed, usually
-                _x_grid: grid data - fixed usually
-                _y_grid: grid data - fixed usually
-                _data: data set to be interpolated
-                method: set to linear but can be changed if needed
-
-            Returns:
-                Interpolated flow data
-
-            """
-            _data = _data.reshape(-1)
-            # Transposing to keep consistency with default xy indexing of meshgrid
-            # Where there's no data, fill with twice the max value
-            _q = griddata(_points, _data, (_x_grid, _y_grid), method=method, fill_value=_data.max() * 2)
-
-            return _q
-
         try:
             # Read to see if data is available
             _qf = np.load(self.location + 'dataio/flow_data.npy')
@@ -255,10 +256,11 @@ class DataIO:
             print('Interpolating data to the grid provided...\n')
             # Interpolate scattered data onto the grid -- for flow
             _pool = Pool(mp.cpu_count())
-            _qf = _pool.map(_grid_interp,
-                            [_q_f_list[:, 0], _q_f_list[:, 1], _q_f_list[:, 2], _q_f_list[:, 3], _q_f_list[:, 4]],
-                            chunksize=1)
+            _qf = _pool.starmap(self._grid_interp,
+                                zip([_q_f_list[:, 0], _q_f_list[:, 1], _q_f_list[:, 2], _q_f_list[:, 3], _q_f_list[:, 4]],
+                                    _p_data[:, :2], _xi, _yi, 'linear'), chunksize=1)
             _pool.close()
+            _pool.join()
             print(f'Done with flow data interpolation to grid.\n')
 
             # Save the array to a file
@@ -268,8 +270,11 @@ class DataIO:
 
             # Interpolate scattered data onto the grid -- for particles
             _pool = Pool(mp.cpu_count())
-            _qp_123 = _pool.map(_grid_interp, [_q_p_list[:, 1], _q_p_list[:, 2], _q_p_list[:, 3]], chunksize=1)
+            _qp_123 = _pool.starmap(self._grid_interp,
+                                    zip([_q_f_list[:, 1], _q_f_list[:, 2], _q_f_list[:, 3]],
+                                         _p_data[:, :2], _xi, _yi, 'linear'), chunksize=1)
             _pool.close()
+            _pool.join()
             print(f'Done with particle data interpolation to grid.\n')
 
             # Create _qp array from known values
