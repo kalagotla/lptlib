@@ -190,14 +190,22 @@ class DataIO:
                 print('Interpolated data file is unavailable. Continuing with interpolation to scattered data!\n'
                       'This is going to take sometime. Sit back and relax!\n'
                       'Your PC will take off because of multi-process. Let it breathe...\n')
+                # Test serial
+                # _q_list = []
+                # _loc_len = len(_locations)
+                # for _i, _point in enumerate(_locations):
+                #     _q_list.append(self._flow_data(_point, _i, _loc_len))
+
+                # parallel
                 _processors = mp.cpu_count()
                 _pool = Pool(_processors)
                 _loc_len = len(_locations)
                 # Passing extra parameters to keep track of the progress. Chunk-size helps to keep it orderly
                 _q_list = _pool.starmap(self._flow_data,
                                         zip(_locations, np.arange(0, _loc_len), np.repeat(_loc_len, _loc_len)),
-                                        chunksize=1)
+                                        chunksize=_loc_len//_processors)
                 _pool.close()
+                _pool.join()
 
                 # Intermediate save of the data -- if the process is interrupted we can restart it from here
                 try:
@@ -258,7 +266,7 @@ class DataIO:
             _pool = Pool(mp.cpu_count())
             _qf = _pool.starmap(self._grid_interp,
                                 zip([_q_f_list[:, 0], _q_f_list[:, 1], _q_f_list[:, 2], _q_f_list[:, 3], _q_f_list[:, 4]],
-                                    _p_data[:, :2], _xi, _yi, 'linear'), chunksize=1)
+                                    [_p_data[:, :2]]*5, [_xi]*5, [_yi]*5, ['linear']*5))
             _pool.close()
             _pool.join()
             print(f'Done with flow data interpolation to grid.\n')
@@ -272,7 +280,7 @@ class DataIO:
             _pool = Pool(mp.cpu_count())
             _qp_123 = _pool.starmap(self._grid_interp,
                                     zip([_q_f_list[:, 1], _q_f_list[:, 2], _q_f_list[:, 3]],
-                                         _p_data[:, :2], _xi, _yi, 'linear'), chunksize=1)
+                                        [_p_data[:, :2]]*3, [_xi]*3, [_yi]*3, ['linear']*3))
             _pool.close()
             _pool.join()
             print(f'Done with particle data interpolation to grid.\n')
