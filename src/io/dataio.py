@@ -97,7 +97,7 @@ class DataIO:
         """
         try:
             _idx = Search(self.grid, _point)
-            _idx.compute(method='p-space')
+            _idx.compute(method='distance')
             _interp = Interpolation(self.flow, _idx)
             _interp.compute(method='p-space')
             print(f'Done with flow data interpolation {_index}/{_size}')
