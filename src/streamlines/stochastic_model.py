@@ -140,7 +140,6 @@ class Particle:
                   " the particle statistics are computed using mean and std diameters\n"
                   "Particle min and max are cutoffs for the distribution")
             self.particle_field = rng.normal(self.mean_dia, self.std_dia, int(self.n_concentration))
-            return
 
         if self.distribution == 'skewnorm':
             print("When Skewnorm distribution is used,"
@@ -166,7 +165,11 @@ class Particle:
                 print("Shape parameter is not provided")
                 raise ValueError
 
-        # TODO: Add Uniform distribution
+        if self.distribution == 'uniform':
+            print("When Uniform distribution is used,"
+                  " the particle statistics are computed using min and max diameters\n"
+                  "Particle min and max are cutoffs for the distribution")
+            self.particle_field = rng.uniform(self.min_dia, self.max_dia, int(self.n_concentration))
 
         # Continue to clip the distribution to min and max diameters
         self.particle_field = np.clip(self.particle_field, self.min_dia, self.max_dia)
