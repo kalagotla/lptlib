@@ -260,6 +260,10 @@ class Plots:
             # convert all NaN values to zero
             self.data = self.data.fillna(0)
 
+        # Need to make sure that the model is not passed to plots
+        if kwargs.get("model") is not None:
+            kwargs.pop("model")
+
         # do the actual plotting
         ax = self.plots(self.data['x_p'], self.data['drag_coefficient'], ax=ax, **kwargs)
         ax.set_xlabel('x')
