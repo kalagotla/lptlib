@@ -51,6 +51,8 @@ class GridIO:
 
     author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
     date: 10-05/2021
+    co-author: Harpreet Singh @ chhabrhh@mail.uc.edu
+    date: 01-20/2024
     """
 
     def __init__(self, filename):
