@@ -771,22 +771,26 @@ class Streamlines:
             t.stop()
 
         if method == 'unsteady-p-space':
-            import glob
-            import os
             t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             t.start()
+            # _temp is used to keep track of the flow object
+            _temp = 0
             while True:
-                # break the loop if the loop exceeds length of flow files
-                if len(self.streamline) == len(flow.unsteady_flow):
-                    print('Integration complete!')
+                if (flow.unsteady_flow[_temp].time - np.sum(self.time)) < 0:
+                    self.flow_old = flow.unsteady_flow[_temp]
+                    _temp += 1
+                if _temp == len(flow.unsteady_flow):
+                    print('Integration complete! for particle ' + str(self.task))
                     break
                 idx = Search(grid, self.point)
                 # Skip the first object from _flowfiles and change the flow object with every iteration in interp
-                interp = Interpolation(flow.unsteady_flow[len(self.streamline)-1], idx)
+                interp = Interpolation(flow.unsteady_flow[_temp], idx)
+                interp.time = self.time
+                interp.flow_old = self.flow_old
                 intg = Integration(interp)
                 idx.compute(method=self.search)
                 interp.compute(method=self.interpolation)
-                new_point, new_vel = intg.compute(method=self.integration, time_step=self.time_step)
+                new_point, new_vel = intg.compute(method='unsteady-pRK4', time_step=self.time_step)
                 if new_point is None:
                     print('Integration complete!')
                     break
@@ -794,6 +798,7 @@ class Streamlines:
                 self.fvelocity.append(new_vel)
                 self.svelocity.append(new_vel)
                 self.time.append(self.time_step)
+                self.unsteady_time.append(self.unsteady_time_step)
                 self.point = new_point
 
             # Save files for each particle; can be used for multiprocessing large number of particles
@@ -805,11 +810,12 @@ class Streamlines:
             t.start()
             vel = None
             fvel = None
+            # _temp is used to keep track of the flow object
             _temp = 0
             while True:
                 if (flow.unsteady_flow[_temp].time - np.sum(self.time)) < 0:
+                    self.flow_old = flow.unsteady_flow[_temp]
                     _temp += 1
-                    self.flow_old = flow.unsteady_flow[_temp-1]
                 if _temp == len(flow.unsteady_flow):
                     print('Integration complete! for particle ' + str(self.task))
                     break
