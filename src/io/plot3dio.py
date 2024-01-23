@@ -546,8 +546,10 @@ class FlowIO:
         # Find all the files relevant to initial flow file
         # get file extension
         _ext = os.path.splitext(self.filename)[-1]
+        # get directory
+        _dir = os.path.dirname(self.filename)
         # extract all the files with the same extension in the working directory
-        _filenames = glob.glob('*' + _ext)
+        _filenames = glob.glob(os.path.join(_dir, '*' + _ext))
         # sort filenames
         _filenames.sort()
         # Read all the flow files into a list as objects

@@ -280,6 +280,8 @@ class Interpolation:
                 self.q = _rbf(np.array(self.idx.ppoint).reshape(1, -1))
                 self.q = self.q.reshape((1, 1, 1, -1, 1))
                 # Equation is linear interpolation between time steps in unsteady data
+                # use of try-except is to avoid error in the first time step
+                # instead of keeping track of it in every step
                 try:
                     _tau = (np.sum(self.time) - self.flow_old.time) / (self.flow.time - self.flow_old.time)
                     _cell_q_old = self.flow_old.q[
@@ -289,7 +291,7 @@ class Interpolation:
                     _q_old = _rbf_old(np.array(self.idx.ppoint).reshape(1, -1))
                     _q_old = _q_old.reshape((1, 1, 1, -1, 1))
                     self.q = _tau * self.q + (1 - _tau) * _q_old
-                except:
+                except AttributeError:
                     return
 
 
