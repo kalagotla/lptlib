@@ -194,6 +194,68 @@ class Integration:
 
                 return self.cpoint, pv4, cv4
 
+            case 'unsteady-pRK4':
+                """
+                This is a straight forward RK4 integration. Search for the point,
+                Interpolate the data to the point, Compute required variables,
+                Perform RK4 integration!
+                """
+
+                def _rk4_step(self, x):
+                    """
+
+                    Args:
+                        self:
+                        x: ndarray
+                            point in p-space
+
+                    Returns:
+                        k: ndarray
+                            interim RK4 variables
+
+                    """
+                    idx = Search(self.interp.idx.grid, x)
+                    idx.compute(method='p-space')
+                    # For p-space algos; the point-in-domain check was done in search
+                    if idx.ppoint is None: return None, None
+                    interp = Interpolation(self.interp.flow, idx)
+                    interp.time = self.interp.time
+                    interp.flow_old = self.interp.flow_old
+                    interp.compute(method='unsteady-rbf-p-space')
+                    q_interp = Variables(interp)
+                    q_interp.compute_velocity()
+                    u = q_interp.velocity.reshape(3)
+                    k = time_step * u
+                    return u, k
+
+                # Start RK4 for p-space
+                # For p-space algos; the point-in-domain check was done in search
+                x0 = self.interp.idx.ppoint
+                if x0 is None: return None, None
+                q_interp = Variables(self.interp)
+                q_interp.compute_velocity()
+                u0 = q_interp.velocity.reshape(3)
+                k0 = time_step * u0
+                x1 = x0 + k0
+
+                u1, k1 = _rk4_step(self, x1)
+                if k1 is None: return None, None
+                x2 = x0 + 0.5 * k1
+
+                u2, k2 = _rk4_step(self, x2)
+                if k2 is None: return None, None
+                x3 = x0 + 0.5 * k2
+
+                u3, k3 = _rk4_step(self, x3)
+                if k3 is None: return None, None
+                x4 = x0 + 1 / 6 * (k0 + 2 * k1 + 2 * k2 + k3)
+                u4, k4 = _rk4_step(self, x4)
+                if k4 is None: return None, None
+
+                self.ppoint = x4
+
+                return self.ppoint, u4
+
     def compute_ppath(self, diameter=1e-6, density=1000, viscosity=1.827e-5, velocity=None,
                       method='pRK4', time_step=1e-4, drag_model='stokes'):
 
