@@ -305,6 +305,44 @@ class GridIO:
         print(f'\n File is successfully written in the working directory as {out_file}')
 
         return
+    
+    def write_grid(self, file, g):
+        
+        self.nb = g.nb
+        self.ni = g.ni
+        self.nj = g.nj
+        self.nk = g.nk
+        
+        if self.nb == 1:
+            self.grid = g.grd
+            _a = np.array([self.nb, self.ni, self.nj, self.nk], dtype='i4')
+            _b = np.array([self.grid.T], dtype='f4')
+
+            with open(file+str('.sp.xyz'), 'wb') as f:
+                f.write(_a)
+                f.write(_b)
+
+            _filepath = os.getcwd()
+            print('\nYour file is saved here {}'.format(_filepath))
+            
+        else:
+            self.grid = g._temp
+            _a = []
+            for n in range(self.nb):
+                _a.append(self.ni[n])
+                _a.append(self.nj[n])
+                _a.append(self.nk[n])
+
+            _a = np.array(_a, dtype='i4')
+            self.nb = np.array([self.nb], dtype='i4')
+
+            with open(file+str('.sp.xyz'), 'wb') as f:
+                f.write(self.nb)
+                f.write(_a)
+                f.write(self.grid)
+
+            _filepath = os.getcwd()
+            print('\nYour file is saved here {}'.format(_filepath))
 
 
 class FlowIO:
@@ -528,4 +566,123 @@ class FlowIO:
             exit()
 
         return
+    def write_flow(self, file, f):
+        
+        self.nb = f.nb
+        self.ni = f.ni
+        self.nj = f.nj
+        self.nk = f.nk
+        
+        self.mach = f.mach
+        self.alpha = f.alpha
+        self.rey = f.rey
+        self.time = f.time
+        
+        if self.nb == 1:
+            self.q = f.q
+            _a = np.array([self.nb,self.ni,self.nj,self.nk], dtype='i4')
+            _c = np.array([self.mach,self.alpha,self.rey,self.time], dtype='f4')
+            _d = np.array([self.q.T], dtype='f4')
+
+            with open(file+str('.q'), 'wb') as f:
+                f.write(_a)
+                f.write(_c)
+                f.write(_d)
+
+            _filepath = os.getcwd()
+            print('\nYour file is saved here {}'.format(_filepath))
+            
+        else:
+            self.q = f._temporary
+        
+            _a = []
+            for n in range(self.nb):
+                _a.append(self.ni[n])
+                _a.append(self.nj[n])
+                _a.append(self.nk[n])
+
+            _a = np.array(_a, dtype='i4')
+            self.nb = np.array([self.nb], dtype='i4')
+            
+            with open(file+str('.q'), 'wb') as f:
+                f.write(self.nb)
+                f.write(_a)
+                f.write(self.q)
+
+            _filepath = os.getcwd()
+            print('\nYour file is saved here {}'.format(_filepath))
+            
+class ConvertPlot3DIO:
+     
+    def __init__(self, filename):
+        self.filename = filename
+        
+    def write_VTK(self, grid, flow):
+        self.grid = grid.grd
+        self.q = flow.q
+        
+        self.nb = grid.nb
+        self.ni = grid.ni
+        self.nj = grid.nj
+        self.nk = grid.nk
+        
+        if self.nb == 1:
+            self.xx = np.array(self.grid[:,:,:,0], dtype='>f4', order='C')
+            self.yy = np.array(self.grid[:,:,:,1], dtype='>f4', order='C')
+            self.zz = np.array(self.grid[:,:,:,2], dtype='>f4', order='C')
+
+            self.d = np.array(self.q[:,:,:,0], dtype='>f4', order='C')
+            self.mx = np.array(self.q[:,:,:,1], dtype='>f4', order='C')
+            self.my = np.array(self.q[:,:,:,2], dtype='>f4', order='C')
+            self.mz = np.array(self.q[:,:,:,3], dtype='>f4', order='C')
+            self.e = np.array(self.q[:,:,:,4], dtype='>f4', order='C')
+
+            gridToVTK('./'+self.filename, self.xx.T, self.yy.T, self.zz.T,  pointData = {'Density': self.d.T,
+                                                                                         'Momentum X': self.mx.T,
+                                                                                         'Momentum Y': self.my.T,
+                                                                                         'Momentum Z': self.mz.T,
+                                                                                         'Stagnation Energy': self.e.T})
+            self.filepath = os.getcwd()
+            print('\nYour file is saved here {}'.format(self.filepath))
+        
+        else:
+            self.filepath = os.getcwd()
+            self.filepath = os.path.join(self.filepath, self.filename)
+
+            if not os.path.exists(self.filepath):
+                os.makedirs(self.filepath)
+
+            self.x, self.y, self.z, self.d, self.mx, self.my, self.mz, self.e = [], [], [], [], [], [], [], []
+
+            with open(os.path.join(self.filepath, self.filename+'.vtm'), 'w') as f:
+                f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+                f.write('<VTKFile type="vtkMultiBlockDataSet" version="1.0" byte_order="LittleEndian">\n')
+                f.write('<vtkMultiBlockDataSet>\n')
+
+            for n in range(int(self.nb)):
+                self.x.append(np.array(self.grid[0:self.ni[n], 0:self.nj[n], 0:self.nk[n], 0, n], dtype='>f4', order='C'))
+                self.y.append(np.array(self.grid[0:self.ni[n], 0:self.nj[n], 0:self.nk[n], 1, n], dtype='>f4', order='C'))
+                self.z.append(np.array(self.grid[0:self.ni[n], 0:self.nj[n], 0:self.nk[n], 2, n], dtype='>f4', order='C'))
+
+                self.d.append(np.array(self.q[0:self.ni[n], 0:self.nj[n], 0:self.nk[n], 0, n], dtype='>f4', order='C'))
+                self.mx.append(np.array(self.q[0:self.ni[n], 0:self.nj[n], 0:self.nk[n], 1, n], dtype='>f4', order='C'))
+                self.my.append(np.array(self.q[0:self.ni[n], 0:self.nj[n], 0:self.nk[n], 2, n], dtype='>f4', order='C'))
+                self.mz.append(np.array(self.q[0:self.ni[n], 0:self.nj[n], 0:self.nk[n], 3, n], dtype='>f4', order='C'))
+                self.e.append(np.array(self.q[0:self.ni[n], 0:self.nj[n], 0:self.nk[n], 4, n], dtype='>f4', order='C'))
+
+                gridToVTK(self.filepath+'./'+self.filename+str(n), self.x[n].T, self.y[n].T, self.z[n].T, pointData = {'Density': self.d[n].T,
+                                                                                                                       'Momentum X': self.mx[n].T,
+                                                                                                                       'Momentum Y': self.my[n].T,
+                                                                                                                       'Momentum Z': self.mz[n].T,
+                                                                                                                       'Energy': self.e[n].T})
+
+                with open(os.path.join(self.filepath, self.filename+'.vtm'), 'a') as f:
+                    f.write('<DataSet index="'+str(n)+'" file="'+self.filename+str(n)+'.vts"/>\n')
+
+            with open(os.path.join(self.filepath, self.filename+'.vtm'), 'a') as f:
+                f.write('</vtkMultiBlockDataSet>\n')
+                f.write('</VTKFile>\n')
+
+            self.filepath_new = os.getcwd()
+            print('\nAll Your files are saved here {}'.format(self.filepath_new))
 

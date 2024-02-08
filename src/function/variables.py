@@ -84,6 +84,9 @@ class Variables:
         _q4 = self.flow.q[..., 4, :]
         self.temperature = (self.gamma - 1) * (_q4/self.density - self.velocity_magnitude**2/2) / self.gas_constant
 
+        #self.compute_mach()
+        #self.total_temperature = self.temperature * ( 1 + ( (self.gamma-1)/2 * (self.mach**2) ))
+
         return
 
     def compute_mach(self):
@@ -104,6 +107,9 @@ class Variables:
         """
         self.compute_mach()
         self.pressure = self.density * self.temperature * self.gas_constant
+
+        #_a = self.gamma/(self.gamma-1)
+        #self.total_pressure = self.pressure * (( 1 + ( (self.gamma-1)/2 * (self.M**2) ))**_a)
 
         return
 
@@ -307,6 +313,45 @@ class Variables:
                     return _cd
 
                 return
+            
+    def compute_vorticity(self, m2):
+        
+        self.compute_velocity()
+        
+        xx = m2[..., 0, :, :]
+        yy = m2[..., 1, :, :]
+        zz = m2[..., 2, :, :]
+
+        w0 = np.gradient(self.u)
+        w1 = np.gradient(self.v)
+        w2 = np.gradient(self.w)
+
+        self.omega_x = xx[...,1,:]*w2[0] + yy[...,1,:]*w2[1] + zz[...,1,:]*w2[2] - xx[...,2,:]*w1[0] - yy[...,2,:]*w1[1] - zz[...,2,:]*w1[2]
+        self.omega_y = xx[...,2,:]*w0[0] + yy[...,2,:]*w0[1] + zz[...,2,:]*w0[2] - xx[...,0,:]*w2[0] - yy[...,0,:]*w2[1] - zz[...,0,:]*w2[2]
+        self.omega_z = xx[...,0,:]*w1[0] + yy[...,0,:]*w1[1] + zz[...,0,:]*w1[2] - xx[...,1,:]*w0[0] - yy[...,1,:]*w0[1] - zz[...,1,:]*w0[2]
+        
+        self.vorticity_magnitude = (self.omega_x**2 + self.omega_y**2 + self.omega_z**2)**0.5
+
+    def compute_energy(self):
+        """
+        Function to compute energies.
+        This function computes temperature first.
+        :return: None
+        """
+        self.compute_temperature()
+        self.kinetic_energy = self.velocity_magnitude**2 / 2
+        self.internal_energy = self.total_energy - self.kinetic_energy
+        
+    def compute_enthalpy(self):
+        """
+        Function to compute energies.
+        This function computes temperature first.
+        :return: None
+        """
+        self.compute_energy()
+        self.enthalpy = self.gamma  * self.internal_energy
+        #self.static_enthalpy = self.static_temperature * ( self.gamma * self.R / (self.gamma - 1) )
+        self.total_enthalpy = self.enthalpy + self.kinetic_energy
 
     def compute(self):
         # implicitly runs compute_velocity() and compute_temperature()
