@@ -515,7 +515,7 @@ class Streamlines:
                     vel = new_vel.copy()
                     fvel = new_fvel.copy()
                     self.time_step = 2 * self.time_step
-                    loop_check = 0
+                    loop_check = 0  # This check might lead to slower integration for some edge cases
                 # Decrease time step when angle is above 1.4 degrees
                 # Make sure time step does not go to zero; 1 pico-second
                 elif self.angle_btw(new_vel, vel) >= self.adaptivity and self.time_step >= 1e-12 \
