@@ -69,7 +69,7 @@ class Plots:
         for i in range(len(self.data['x_p'])):
             idx = Search(self.grid, [self.data['x_p'][i], self.data['y_p'][i], self.data['z_p'][i]])
             interp = Interpolation(self.flow, idx)
-            interp.adaptive = 'shock'
+            # interp.adaptive = 'shock'
             idx.compute(method='p-space')
             interp.compute(method='p-space')
             var = Variables(interp)
@@ -96,9 +96,12 @@ class Plots:
                                       / self.data['velocity_magnitude'])
         # Extract diameter from the file name
         # Find the values that surround the exponential notation
-        matches = re.findall(r'([-+]?\d*\.\d*|\d+)e([-+]?\d+)', self.file)
-        # Create the diameter from the matches
-        diameter = float(matches[-1][0])*10**int(matches[-1][1])
+        try:
+            matches = re.findall(r'([-+]?\d*\.\d*|\d+)e([-+]?\d+)', self.file)
+            # Create the diameter from the matches
+            diameter = float(matches[-1][0])*10**int(matches[-1][1])
+        except:
+            diameter = self.data['d_p'][0]
         self.data['relative_reynolds'] = (self.data['relative_velocity'] * self.data['density'] * diameter
                                           / self.data['viscosity'])
         self.data['knudsen_number'] = ((self.data['relative_mach'] / self.data['relative_reynolds'])
