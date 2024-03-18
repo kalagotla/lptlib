@@ -7,6 +7,8 @@ from src.streamlines.search import Search
 from src.streamlines.interpolation import Interpolation
 from src.streamlines.integration import Integration
 from src.function.variables import Variables
+import matplotlib.pyplot as plt
+import functools
 
 
 class Streamlines:
@@ -82,6 +84,7 @@ class Streamlines:
         self.magnitude_adaptivity = magnitude_adaptivity
         self.filepath = filepath
         self.task = task
+        self.debug = False
 
     # TODO: Need to add doc for streamlines
 
@@ -146,6 +149,38 @@ class Streamlines:
         if _r < 1e-6 * self.magnitude_adaptivity:
             _r = 1e-6 * self.magnitude_adaptivity
         return _r
+
+    @staticmethod
+    def plot_live(func):
+        # Interactive mode for jupyter notebook
+        # plt.ion()
+        @functools.wraps(func)
+        def new_func(*args, **kwargs):
+            # Clear all axes in the current figure.
+            axes = plt.gcf().get_axes()
+            for axis in axes:
+                axis.cla()
+
+            # Call func to plot something
+            result = func(*args, **kwargs)
+
+            # Draw the plot
+            plt.draw()
+            plt.pause(0.001)
+
+            return result
+
+        return new_func
+
+    @plot_live
+    def plot_update(self, ax, x, y):
+        ax.plot(x, y, 'b.')
+        ax.plot(x[-5:], y[-5:], 'r-')
+        ax.plot(x[-1], y[-1], 'ro')
+        ax.set_title(f'Particle number - {self.task} and diameter - {self.diameter},\n'
+                     f' density - {self.density} and time-step - {self.time_step}')
+
+        return
 
     def compute(self, method='p-space', grid=None, flow=None):
         """
@@ -455,6 +490,8 @@ class Streamlines:
         if method == 'adaptive-ppath':
             t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             t.start()
+            if self.debug:
+                fig, ax = plt.subplots()
             while True:
                 idx = Search(grid, self.point)
                 interp = Interpolation(flow, idx)
@@ -468,7 +505,10 @@ class Streamlines:
                                                                   drag_model=self.drag_model)
                 if new_point is None:
                     # print('Checking if the end of the domain is reached...')
-                    self.time_step = 1e-9 * self.time_step
+                    if self.time_step <= 1e-12:
+                        self.time_step = self.time_step
+                    else:
+                        self.time_step = 1e-2 * self.time_step
                     new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
                                                                       velocity=vel,
                                                                       method='pRK4', time_step=self.time_step,
@@ -532,6 +572,12 @@ class Streamlines:
                     vel = new_vel.copy()
                     fvel = new_fvel.copy()
                     loop_check = 0
+
+                # Plot the streamline for debugging
+                # add levels to debug; multiple ways of showing plots etc...
+                # This will help when working with varying flow fields
+                if self.debug:
+                    self.plot_update(ax, [i[0] for i in self.streamline], [i[0] for i in self.svelocity])
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)

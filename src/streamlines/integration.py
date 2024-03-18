@@ -593,7 +593,7 @@ class Integration:
                 v2 = v0 + 0.5 * vk1
                 x2 = x0 + 0.5 * xk1
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if np.linalg.norm(x2 - x0) >= 10 * np.linalg.norm(x1-x0):
+                if np.linalg.norm(x2 - x0) >= 10 * np.linalg.norm(x1-x0) and np.linalg.norm(x2 - x0) >= 1e-12:
                     self.rk4_bool = True
                     return x0, v0, u0
 
@@ -606,7 +606,7 @@ class Integration:
                 v3 = v0 + vk2
                 x3 = x0 + xk2
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if np.linalg.norm(x3 - x0) >= 10 * np.linalg.norm(x1 - x0):
+                if np.linalg.norm(x3 - x0) >= 10 * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= 1e-12:
                     self.rk4_bool = True
                     return x0, v0, u0
 
@@ -619,7 +619,7 @@ class Integration:
                 v_new = v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
                 x_new = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if np.linalg.norm(x_new - x0) >= 10 * np.linalg.norm(x1 - x0):
+                if np.linalg.norm(x_new - x0) >= 10 * np.linalg.norm(x1 - x0) and np.linalg.norm(x_new - x0) >= 1e-12:
                     self.rk4_bool = True
                     return x0, v0, u0
 
