@@ -3,6 +3,7 @@ import numpy as np
 from src.streamlines.interpolation import Interpolation
 from src.streamlines.search import Search
 from src.function.variables import Variables
+from scipy.optimize import fsolve
 
 
 class Integration:
@@ -494,7 +495,31 @@ class Integration:
                         _cd = 24/_re * (1 + 0.15 * _re**0.687) * _hm + 0.42 * _cm / (1 + 42000 * _gm / _re**1.16)
                         return _cd
 
-                    return
+                case 'tedeschi':
+                    # Tedeschi's model; for all flow regimes
+                    if _re < 1e-9:
+                        return 0
+                    if _re <= 1:
+                        _kn = _mach / _re * np.sqrt(_q_interp.gamma * np.pi/2)
+                    else:
+                        _kn = _mach / np.sqrt(_re)
+
+                    s = _mach * np.sqrt(_gamma/2)
+
+                    def _solve_k(_k):
+                        s_prime = (1 - _k) * s
+                        epsilon_prime = 3/8 * (np.pi**2 / s_prime) * (1 + s_prime**2) * s_prime + np.exp(-s_prime**2) /4
+                        a1 = 9/4 * 0.15 * 2 * _kn / epsilon_prime * (s * np.pi**0.5 / _kn)**0.687
+                        a2 = 1 + 9/4 * 2 * _kn / epsilon_prime
+                        return a1 * _k**1.687 + a2 * _k - 1
+
+                    # solve the equation
+                    k = fsolve(_solve_k, np.array([0.5]))
+
+                    c = 1 + _re**2 / (_re**2 + 100) * np.e**(-0.225/_mach**2.5)
+                    _epsilon_kn = 1.177 + 0.177 * (0.851 * _kn**1.16 - 1) / (0.851 * _kn**1.16 + 1)
+
+                    return 24/_re * k * (1 + 0.15 * (k*_re)**0.687) * c * _epsilon_kn
 
         def _viscosity(_temperature, law='keyes'):
             """

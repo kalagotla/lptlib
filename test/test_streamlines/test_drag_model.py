@@ -10,8 +10,9 @@ class TestDragModel(unittest.TestCase):
         ('henderson', 'adaptive-ppath', 1e-8, 'henderson'),
         ('stokes', 'adaptive-ppath', 1e-8, 'stokes'),
         ('oseen', 'adaptive-ppath', 1e-8, 'oseen'),
-        ('schiller_nauman', 'adaptive-ppath', 1e-8, 'schiller_nauman'),
+        ('schiller-nauman', 'adaptive-ppath', 1e-8, 'schiller-nauman'),
         ('cunningham', 'adaptive-ppath', 1e-8, 'cunningham'),
+        ('tedeschi', 'adaptive-ppath', 1e-8, 'tedeschi'),
     ])
     def test_drag_model(self, name, method='pRK4', time_step=1e-4, drag_model='stokes'):
         from src.streamlines.streamlines import Streamlines
@@ -28,7 +29,7 @@ class TestDragModel(unittest.TestCase):
         vdata = np.array(sl.svelocity)
         udata = np.array(sl.fvelocity)
         data_save = np.hstack((xdata, vdata, udata))
-        np.save('../../data/shocks/' + name + str(sl.diameter), data_save)
+        # np.save('../../data/shocks/' + name + str(sl.diameter), data_save)
         print('Data written to file: ' + name + str(sl.diameter))
         xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
         vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
