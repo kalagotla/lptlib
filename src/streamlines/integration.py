@@ -559,7 +559,10 @@ class Integration:
                             q_interp.velocity_magnitude.reshape(-1)
                     _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
-                    _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
+                    try:
+                        _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
+                    except TypeError:
+                        return None, None, None
                     return _vk, uf, None
 
                 # Start RK4 for p-space
