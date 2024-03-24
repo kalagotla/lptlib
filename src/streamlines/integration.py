@@ -343,6 +343,7 @@ class Integration:
                 case 'zero-drag':
                     # zero drag model to simulate fluid
                     return 0
+
                 case 'sphere':
                     # ref: Fluid Mechanics, Frank M. White
                     # This was decided by trail-and-error from VISUAL3 code
@@ -373,7 +374,7 @@ class Integration:
                         return 24/_re
 
                 case 'melling':
-                # The popular melling correction
+                    # The popular melling correction
                     if _re <= 1e-9:
                         return 0
                     else:
@@ -484,7 +485,7 @@ class Integration:
                     if _re > 45:
                     # compression-dominated regime
                         if _mach <= 1.45:
-                            _cm = 5/3 + 2/3 * np.tanh(3 * np.log(_mach - 0.1))
+                            _cm = 5/3 + 2/3 * np.tanh(3 * np.log(_mach + 0.1))
                         if _mach > 1.45:
                             _cm = 2.044 + 0.2 * np.exp(-1.8 * (np.log(_mach/1.5))**2)
                         if _mach <= 0.89:
