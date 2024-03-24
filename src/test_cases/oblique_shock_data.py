@@ -63,58 +63,24 @@ class ObliqueShock:
         self.gamma = 1.4
         self.gas_constant = 287.058
 
-    def oblique_shock_relation(self, _mach, _deflection, _shock_angle):
-        """
-        Oblique shock relations for given mach, deflection and theta
-        Args:
-
-        Returns:
-            delta-theta-mach relation
-        """
-        return (_mach ** 2 * (self.gamma + np.cos(2 * _shock_angle)) + 2) * np.tan(_deflection) * \
-            np.tan(_shock_angle) - 2 * (_mach ** 2 * np.sin(_shock_angle) ** 2 - 1)
-
-    @staticmethod
-    def derivative(f, method='central', h=1e-7):
-        """Compute the difference formula for f with step size h.
-
-        Parameters
-        ----------
-        f : function
-            Vectorized function of one variable
-        method : string
-            Difference formula: 'forward', 'backward' or 'central'
-        h : number
-            Step size in difference formula
-
-        Returns
-        -------
-        function
-            Difference formula:
-                central: f(x+h) - f(x-h))/2h
-                forward: f(x+h) - f(x))/h
-                backward: f(x) - f(x-h))/h
-        """
-
-        if method == 'central':
-            return lambda x: (f(x + h) - f(x - h)) / (2 * h)
-        elif method == 'forward':
-            return lambda x: (f(x + h) - f(x)) / h
-        elif method == 'backward':
-            return lambda x: (f(x) - f(x - h)) / h
-        else:
-            raise ValueError("Method must be 'central', 'forward' or 'backward'.")
-
     def compute(self):
-        # Use Newton-Raphson method to calculate the shock angle
+        # Use the cubic equation solver to find the shock angle
         # Compute the shock angle if mach and deflection are given
         if self.mach is not None and self.deflection is not None:
             self.deflection = np.radians(self.deflection)
 
-            f_shock_angle = lambda shock_angle: self.oblique_shock_relation(self.mach, self.deflection, shock_angle)
-            df_shock_angle = self.derivative(f_shock_angle)
+            # calculate coefficients
+            A = self.mach ** 2 - 1
+            B = 0.5 * (self.gamma + 1) * self.mach ** 4 * np.tan(self.deflection)
+            C = (1 + 0.5 * (self.gamma + 1) * self.mach ** 2) * np.tan(self.deflection)
+            coeffs = [1, C, -A, (B - A * C)]
 
-            self.shock_angle = newton(f_shock_angle, (0.5, 1.57), fprime=df_shock_angle)
+            # roots of a cubic equation, two positive solutions
+            # (disregard the negative)
+            roots = np.array([r for r in np.roots(coeffs) if r > 0])
+
+            thetas = np.arctan(1 / roots)
+            self.shock_angle = np.array([np.min(thetas), np.max(thetas)])
 
         # Calculate the pressure ratio
         self.pressure_ratio = 1 + 2 * self.gamma / (self.gamma + 1) * (
