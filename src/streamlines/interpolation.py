@@ -130,6 +130,23 @@ class Interpolation:
         _cell_q = self.flow.q[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, self.idx.block]
 
         match method:
+            # simple oblique shock -- use nearest neighbor
+            case 'simple_oblique_shock':
+                if self.idx.cell.shape == (8, 3) and self.idx.info is None:
+                    _distance = np.sqrt(np.sum((_cell_grd - self.idx.ppoint) ** 2, axis=1))
+                    # nearest neighbor index
+                    _nn = np.argmin(_distance)
+                    # assign the nearest neighbor to the given point
+                    self.q = _cell_q[_nn]
+                    self.q = self.q.reshape((1, 1, 1, -1, 1))
+
+                # if the point is node return node data
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
+                                    'Interpolation will assign node properties for integration.\n' \
+                                    'Index of the node will be returned by cell attribute\n':
+                    self.q = _cell_q[0]  # the first node is the point based on search method
+                    self.q = self.q.reshape((1, 1, 1, -1, 1))
+
             # "Tri"Linear interpolation
             case 'p-space':
                 # If the node is found in a cell
