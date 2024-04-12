@@ -20,28 +20,14 @@ class StochasticModel(Streamlines):
 
     """
 
-    def __init__(self, particles, spawn_locations, method='adaptive-p-space',
-                 grid=None, flow=None, point=None,
-                 search='p-space', interpolation='p-space', integration='pRK4',
-                 diameter=1e-7, density=1000,
-                 time_step=1e-3, max_time_step=1, drag_model='henderson', adaptivity=0.001,
-                 magnitude_adaptivity=0.001, adaptive_interpolation=None,
-                 filepath: str = None
-                 ):
-        super().__init__(point=point,
-                         search=search, interpolation=interpolation, integration=integration,
-                         diameter=diameter, density=density,
-                         time_step=time_step, max_time_step=max_time_step, drag_model=drag_model)
+    def __init__(self, particles, spawn_locations, method='adaptive-p-space', grid=None, flow=None):
+        super().__init__()
         self.particles = particles
         self.spawn_locations = spawn_locations
         # Read-in grid and flow files
         self.grid = grid
         self.flow = flow
         self.method = method
-        self.filepath = filepath
-        self.adaptivity = adaptivity
-        self.magnitude_adaptivity = magnitude_adaptivity
-        self.adaptive_interpolation = adaptive_interpolation
 
     def setup(self, spawn_location, particle_dia, task):
         """
@@ -69,6 +55,7 @@ class StochasticModel(Streamlines):
         sl.adaptivity = self.adaptivity
         sl.magnitude_adaptivity = self.magnitude_adaptivity
         sl.adaptive_interpolation = self.adaptive_interpolation
+        sl.debug = self.debug
         sl.compute(method=self.method, grid=self.grid, flow=self.flow)
 
         return sl

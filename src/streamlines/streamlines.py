@@ -63,7 +63,7 @@ class Streamlines:
                  search='p-space', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000,
                  time_step=1e-3, max_time_step=1, drag_model='stokes', adaptivity=0.001,
-                 magnitude_adaptivity=None, filepath=None, task=None):
+                 magnitude_adaptivity=0.01, filepath=None, task=None, debug=False):
         self.grid_file = grid_file
         self.flow_file = flow_file
         self.point = np.array(point)
@@ -84,7 +84,7 @@ class Streamlines:
         self.magnitude_adaptivity = magnitude_adaptivity
         self.filepath = filepath
         self.task = task
-        self.debug = False
+        self.debug = debug
 
     # TODO: Need to add doc for streamlines
 
@@ -174,7 +174,7 @@ class Streamlines:
 
     @plot_live
     def plot_update(self, ax, x, y):
-        ax.plot(x, y, 'b.')
+        ax.plot(x, y, 'b')
         ax.plot(x[-5:], y[-5:], 'r-')
         ax.plot(x[-1], y[-1], 'ro')
         ax.set_title(f'Particle number - {self.task} and diameter - {self.diameter},\n'
@@ -522,8 +522,8 @@ class Streamlines:
 
                 # Check for mid-rk4 blowup
                 if intg.rk4_bool is True:
-                    print(f'**WARNING** Large residual. Mid-RK4 blow up! Reducing time-step for particle number'
-                          f' - {self.task}')
+                    # print(f'**WARNING** Large residual. Mid-RK4 blow up! Reducing time-step for particle number'
+                    #       f' - {self.task}')
                     intg.rk4_bool = False
                     self.time_step = 0.5 * self.time_step
                     loop_check += 1
@@ -545,7 +545,7 @@ class Streamlines:
                 # Check for strong acceleration and reduce time-step
                 # Increase time step when angle is below 0.05 degrees
                 elif self.angle_btw(new_vel, vel) <= 0.1 * self.adaptivity and self.time_step <= self.max_time_step \
-                        and self._magnitude(self, new_vel, vel) <= 0.01 * self.magnitude_adaptivity:
+                        and self._magnitude(self, new_vel, vel) <= 0.1 * self.magnitude_adaptivity:
                     # print('Increasing time step. Low deflection wrt velocity')
                     self.streamline.append(new_point)
                     self.svelocity.append(new_vel)
@@ -559,7 +559,7 @@ class Streamlines:
                 # Decrease time step when angle is above 1.4 degrees
                 # Make sure time step does not go to zero; 1 pico-second
                 elif self.angle_btw(new_vel, vel) >= self.adaptivity and self.time_step >= 1e-12 \
-                        and self._magnitude(self, new_vel, vel) >= 0.1 * self.magnitude_adaptivity:
+                        and self._magnitude(self, new_vel, vel) >= self.magnitude_adaptivity:
                     # print('Decreasing time step. High deflection wrt velocity')
                     self.time_step = 0.5 * self.time_step
                 # Save if none of the above conditions meet
