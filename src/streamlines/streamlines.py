@@ -63,7 +63,7 @@ class Streamlines:
                  search='p-space', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000,
                  time_step=1e-3, max_time_step=1, drag_model='stokes', adaptivity=0.001,
-                 magnitude_adaptivity=0.01, filepath=None, task=None, debug=False):
+                 magnitude_adaptivity=0.001, filepath=None, task=None, debug=False):
         self.grid_file = grid_file
         self.flow_file = flow_file
         self.point = np.array(point)
@@ -173,12 +173,14 @@ class Streamlines:
         return new_func
 
     @plot_live
-    def plot_update(self, ax, x, y):
-        ax.plot(x, y, 'b')
-        ax.plot(x[-5:], y[-5:], 'r-')
-        ax.plot(x[-1], y[-1], 'ro')
-        ax.set_title(f'Particle number - {self.task} and diameter - {self.diameter},\n'
-                     f' density - {self.density} and time-step - {self.time_step}')
+    def plot_update(self, ax, *args, **kwargs):
+        colors = ['b', 'g', 'c', 'm', 'y', 'k']
+        for i, (x, y) in enumerate(zip(args[::2], args[1::2])):
+            color = colors[i % len(colors)]
+            ax.plot(x, y, color)
+            ax.plot(x[-5:], y[-5:], 'r-')
+            ax.plot(x[-1], y[-1], 'ro')
+        ax.set_title(kwargs.get('title', ''))
 
         return
 
@@ -577,7 +579,11 @@ class Streamlines:
                 # add levels to debug; multiple ways of showing plots etc...
                 # This will help when working with varying flow fields
                 if self.debug:
-                    self.plot_update(ax, [i[0] for i in self.streamline], [i[0] for i in self.svelocity])
+                    self.plot_update(ax,
+                                    [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
+                                    [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
+                                    title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
+                                          f' density - {self.density} and time-step - {self.time_step}')
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)

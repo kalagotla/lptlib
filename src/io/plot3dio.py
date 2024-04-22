@@ -291,8 +291,9 @@ class GridIO:
             step_size = abs(min(np.diff(self.grd[:, 0, 0, 0, 0])))
 
         # Number of blocks is always 1 for this function
-        _ng, _ni, _nj, _nk = np.array([1, xi.shape[0], yi.shape[1], steps], dtype='i4')
-        _xx, _yy, _zz = np.meshgrid(xi[:, 0], yi[0], np.linspace(0, steps*step_size, steps), indexing='ij')
+        # ni is shape[1] and nj is shape[0] because meshgrid and plot3d format are inverted
+        _ng, _ni, _nj, _nk = np.array([1, xi.shape[1], xi.shape[0], steps], dtype='i4')
+        _xx, _yy, _zz = np.meshgrid(xi[0], yi[:, 0], np.linspace(0, steps*step_size, steps), indexing='ij')
         _grd = np.array([_xx.T, _yy.T, _zz.T], dtype=data_type)
 
         with open(out_file, 'wb') as f:
@@ -502,11 +503,23 @@ class FlowIO:
             self.q = np.load(self.filename + '_temp/flow_data.npy')
             print('**IMPORTANT** Read data from existing temp flow_data.npy file.\n')
         except:
-            # Read the formatted data till the file ends and reshape it to (ni, nj, nk, 5, nb)
-            print('Starting flow read from the formatted text. Please wait...\n')
-            with open(self.filename, 'r') as flow:
-                self.q = np.fromfile(flow, sep=' ', dtype=data_type, count=-1)\
-                    .reshape((int(grid.nk), int(grid.nj), int(grid.ni), 5, 1)).transpose(2, 1, 0, 3, 4)
+            try:
+                # Read the formatted data till the file ends and reshape it to (ni, nj, nk, 5, nb)
+                print('Starting flow read from the formatted text. Please wait...\n')
+                with open(self.filename, 'r') as flow:
+                    self.q = np.fromfile(flow, sep=' ', dtype=data_type, count=-1)\
+                        .reshape((int(grid.nk), int(grid.nj), int(grid.ni), 5, 1)).transpose(2, 1, 0, 3, 4)
+                print('Flow data reading is successful for ' + self.filename + '\n')
+            except ValueError:
+                # check for 2D formatted data
+                # read the formatted data till the file ends and reshape it to (ni, nj, 1, 5, nb)
+                # and expand it to (ni, nj, nk, 5, nb)
+                with open(self.filename, 'r') as flow:
+                    self.q = np.fromfile(flow, sep=' ', dtype=data_type, count=-1)\
+                        .reshape((1, int(grid.nj), int(grid.ni), 5, 1)).transpose(2, 1, 0, 3, 4)
+                self.q = self.q.repeat(int(grid.nk), axis=2)
+                print('Flow data reading is successful for ' + self.filename + '\n')
+
 
             # Save as numpy file for future computations
             try:
