@@ -291,9 +291,9 @@ class GridIO:
             step_size = abs(min(np.diff(self.grd[:, 0, 0, 0, 0])))
 
         # Number of blocks is always 1 for this function
-        # ni is shape[1] and nj is shape[0] because meshgrid and plot3d format are inverted
-        _ng, _ni, _nj, _nk = np.array([1, xi.shape[1], xi.shape[0], steps], dtype='i4')
-        _xx, _yy, _zz = np.meshgrid(xi[0], yi[:, 0], np.linspace(0, steps*step_size, steps), indexing='ij')
+        # Number of blocks is always 1 for this function
+        _ng, _ni, _nj, _nk = np.array([1, xi.shape[0], yi.shape[1], steps], dtype='i4')
+        _xx, _yy, _zz = np.meshgrid(xi[:, 0], yi[0], np.linspace(0, steps * step_size, steps), indexing='ij')
         _grd = np.array([_xx.T, _yy.T, _zz.T], dtype=data_type)
 
         with open(out_file, 'wb') as f:
