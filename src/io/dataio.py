@@ -279,7 +279,7 @@ class DataIO:
             # Interpolate scattered data onto the grid -- for particles
             _pool = Pool(mp.cpu_count())
             _qp_123 = _pool.starmap(self._grid_interp,
-                                    zip([_q_f_list[:, 1], _q_f_list[:, 2], _q_f_list[:, 3]],
+                                    zip([_q_p_list[:, 1], _q_p_list[:, 2], _q_p_list[:, 3]],
                                         [_p_data[:, :2]]*3, [_xi]*3, [_yi]*3, ['linear']*3))
             _pool.close()
             _pool.join()
