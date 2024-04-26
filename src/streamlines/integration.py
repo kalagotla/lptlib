@@ -381,6 +381,14 @@ class Integration:
                         knd = _mach / _re * np.sqrt(np.pi*_gamma/2)
                         return 24/_re * (1 + knd)**-1
 
+                case 'melling-2':
+                    # The popular melling correction
+                    if _re <= 1e-9:
+                        return 0
+                    else:
+                        knd = _mach / _re * np.sqrt(np.pi*_gamma/2)
+                        return 24/_re * (1 + 2.7*knd)**-1
+
                 case 'oseen':
                     # Oseen's model; for creeping flow regime; Re < 1
                     if _re <= 1e-9:

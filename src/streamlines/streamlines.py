@@ -130,8 +130,8 @@ class Streamlines:
                 f_xdata[_i] = f_xdata[_i - 1] + udata[_i - 1] * tdata[_i - 1]
             # Data is added towards the end because of the development cycle. Mostly to work with dataio
             _data_save = np.hstack((p_xdata, vdata, udata, tdata, f_xdata,
-                                    np.ones(tdata.shape)*self.diameter,
-                                    np.ones(tdata.shape)*self.density))
+                                    np.ones(tdata.shape) * self.diameter,
+                                    np.ones(tdata.shape) * self.density))
 
             np.save(self.filepath + 'ppath_' + str(self.task), _data_save)
             print('** SUCCESS ** Done writing file for particle number - ' + str(self.task) + ' ** SUCCESS **')
@@ -439,7 +439,7 @@ class Streamlines:
                         pvel = new_pvel.copy()
                         self.time_step = 2 * self.time_step
                         loop_check = 0
-                    elif self.angle_btw(new_ppoint - old_ppoint, pvel) >= self.adaptivity and\
+                    elif self.angle_btw(new_ppoint - old_ppoint, pvel) >= self.adaptivity and \
                             self.time_step >= 1e-12:
                         self.time_step = 0.5 * self.time_step
                     else:
