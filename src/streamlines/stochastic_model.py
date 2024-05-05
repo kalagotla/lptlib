@@ -6,6 +6,7 @@ from multiprocessing.pool import ThreadPool as Pool
 import multiprocessing as mp
 from src.streamlines.streamlines import Streamlines
 from scipy.stats import skewnorm, lognorm
+from tqdm import tqdm
 
 rng = np.random.default_rng(7)
 
@@ -28,6 +29,7 @@ class StochasticModel(Streamlines):
         self.grid = grid
         self.flow = flow
         self.method = method
+        self.chunksize = 32
 
     def setup(self, spawn_location, particle_dia, task):
         """
@@ -42,7 +44,8 @@ class StochasticModel(Streamlines):
 
         """
         # TODO: Have to use inheritance properties. Currently, just calling in another object
-        print(f'Execution started for particle number - {task}')
+        if self.debug is True:
+            print(f'Execution started for particle number - {task}')
         sl = Streamlines(None, None, point=spawn_location, diameter=particle_dia, time_step=self.time_step,
                          task=task)
         sl.density = self.particles.density
@@ -66,9 +69,10 @@ class StochasticModel(Streamlines):
         Returns:
 
         """
+        # track progress using tqdm
+        inputs = zip(self.spawn_locations.locations, self.particles.particle_field, np.arange(self.particles.n_concentration))
         with mp.Pool(mp.cpu_count() - 1) as pool:
-            lpt_data = pool.starmap(self.setup, zip(self.spawn_locations.locations, self.particles.particle_field,
-                                                    np.arange(self.particles.n_concentration)), chunksize=1)
+            lpt_data = pool.starmap(self.setup, tqdm(inputs, total=self.particles.n_concentration), chunksize=self.chunksize)
 
         return lpt_data
 
@@ -90,10 +94,11 @@ class StochasticModel(Streamlines):
         Returns:
 
         """
-        # Run setup function in serial
+        # Run setup function in serial using tqdm
         lpt_data = []
-        for i in range(self.particles.n_concentration):
-            lpt_data.append(self.setup(self.spawn_locations.locations[i], self.particles.particle_field[i], i))
+        for i, (loc, dia) in tqdm(enumerate(zip(self.spawn_locations.locations, self.particles.particle_field)),
+                                  total=self.particles.n_concentration):
+            lpt_data.append(self.setup(loc, dia, i))
 
         return lpt_data
 
