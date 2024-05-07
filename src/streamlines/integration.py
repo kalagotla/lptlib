@@ -663,11 +663,11 @@ class Integration:
                 vk_new, uf_new, temp = _rk4_step(self, v_new, x_new)
                 # make sure the velocity is going down in a compression case
                 # This is done to remove the oscillations in the post-shock region
+                if vk_new is None:
+                    return None, None, None
                 if self.interp.method == 'simple_oblique_shock' and np.dot(v_new - v0, uf_new - v_new) < 0:
                     self.rk4_bool = True
                     return x0, v0, u0
-                if vk_new is None:
-                    return None, None, None
 
                 self.ppoint = x_new
 
