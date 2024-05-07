@@ -8,6 +8,7 @@ import multiprocessing as mp
 from scipy.interpolate import griddata
 import os
 import re
+from tqdm import tqdm
 rng = np.random.default_rng()
 
 
@@ -100,7 +101,7 @@ class DataIO:
             _idx.compute(method='distance')
             _interp = Interpolation(self.flow, _idx)
             _interp.compute(method='p-space')
-            print(f'Done with flow data interpolation {_index}/{_size}')
+            # print(f'Done with flow data interpolation {_index}/{_size}')
             return _interp.q.reshape(-1)
         except:
             print(f'**Exception occurred with {_index}**')
@@ -201,8 +202,9 @@ class DataIO:
                 _pool = Pool(_processors)
                 _loc_len = len(_locations)
                 # Passing extra parameters to keep track of the progress. Chunk-size helps to keep it orderly
+                inputs = zip(_locations, np.arange(0, _loc_len), np.repeat(_loc_len, _loc_len))
                 _q_list = _pool.starmap(self._flow_data,
-                                        zip(_locations, np.arange(0, _loc_len), np.repeat(_loc_len, _loc_len)),
+                                        tqdm(inputs, total=_loc_len),
                                         chunksize=_loc_len//_processors)
                 _pool.close()
                 _pool.join()
@@ -264,9 +266,10 @@ class DataIO:
             print('Interpolating data to the grid provided...\n')
             # Interpolate scattered data onto the grid -- for flow
             _pool = Pool(mp.cpu_count())
+            inputs = zip([_q_f_list[:, 0], _q_f_list[:, 1], _q_f_list[:, 2], _q_f_list[:, 3], _q_f_list[:, 4]],
+                         [_p_data[:, :2]]*5, [_xi]*5, [_yi]*5, ['linear']*5)
             _qf = _pool.starmap(self._grid_interp,
-                                zip([_q_f_list[:, 0], _q_f_list[:, 1], _q_f_list[:, 2], _q_f_list[:, 3], _q_f_list[:, 4]],
-                                    [_p_data[:, :2]]*5, [_xi]*5, [_yi]*5, ['linear']*5))
+                                tqdm(inputs, total=5), chunksize=5)
             _pool.close()
             _pool.join()
             print(f'Done with flow data interpolation to grid.\n')
@@ -278,9 +281,10 @@ class DataIO:
 
             # Interpolate scattered data onto the grid -- for particles
             _pool = Pool(mp.cpu_count())
+            inputs = zip([_q_p_list[:, 1], _q_p_list[:, 2], _q_p_list[:, 3]],
+                         [_p_data[:, :2]]*3, [_xi]*3, [_yi]*3, ['linear']*3)
             _qp_123 = _pool.starmap(self._grid_interp,
-                                    zip([_q_p_list[:, 1], _q_p_list[:, 2], _q_p_list[:, 3]],
-                                        [_p_data[:, :2]]*3, [_xi]*3, [_yi]*3, ['linear']*3))
+                                   tqdm(inputs, total=3), chunksize=3)
             _pool.close()
             _pool.join()
             print(f'Done with particle data interpolation to grid.\n')
