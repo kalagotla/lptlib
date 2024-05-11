@@ -1,76 +1,76 @@
-# TODO: Data files to run this script are to be added to the repository
+# Script to create an oblique shock and run the stochastic model
 
-import numpy as np
+import os
+import seaborn as sns
 import matplotlib.pyplot as plt
-from src import StochasticModel, Particle, SpawnLocations, GridIO, FlowIO
+from src.test_cases.oblique_shock_data import ObliqueShock, ObliqueShockData
+from src.streamlines.stochastic_model import StochasticModel, Particle, SpawnLocations
 
 
-def shock_interaction():
+def oblique_shock_response(filepath='./tio2_particle/', dp=5.272e-6, rhop=182.225):
+
+    # Create oblique shock
+    os1 = ObliqueShock()
+    os1.mach = 7.6
+    os1.deflection = 20
+    os1.compute()
+
+    # Create grid and flow files
+    osd = ObliqueShockData()
+    osd.oblique_shock = os1
+    osd.nx_max = 100e-3
+    osd.ny_max = 500e-3
+    osd.nz_max = 1e-4
+    osd.inlet_temperature = 48.20
+    osd.inlet_density = 0.07747
+    osd.xpoints = 200
+    osd.ypoints = 500
+    osd.zpoints = 5
+    osd.shock_strength = 'weak'
+    osd.create_grid()
+    osd.create_flow()
+
     # Test particle class
     p = Particle()
-    p.min_dia = 250e-9
-    p.max_dia = 550e-9
-    p.mean_dia = 340e-9
-    p.std_dia = 10e-9
-    p.density = 4200
-    p.n_concentration = 1
+    # Constant particle size
+    p.min_dia = dp
+    p.max_dia = dp
+    p.mean_dia = dp
+    p.std_dia = 0
+    p.density = rhop
+    p.n_concentration = 800
+    p.distribution = 'gaussian'
     p.compute_distribution()
+    try:
+        os.mkdir(filepath + '_temp')
+        sns.displot(p.particle_field, bins=50)  # doesn't show the plot until plt.show() is called
+        plt.savefig(filepath + '_temp/particle_distribution.svg', format='svg', dpi=1200)
+    except:
+        sns.displot(p.particle_field, bins=50)  # doesn't show the plot until plt.show() is called
+        plt.savefig(filepath + '_temp/particle_distribution.svg', format='svg', dpi=1200)
 
     # Test SpawnLocations class
     l = SpawnLocations(p)
-    l.x_min = 0.0001
-    l.z_min = 0.0005
-    l.y_min, l.y_max = 0.001, 0.0016
+    l.x_min = -50e-3
+    l.z_min = 5e-5
+    l.y_min, l.y_max = 0, osd.ny_max  # same values spawn particles at that point ideal for response analysis
     l.compute()
 
     # Run the model in parallel
-    path = './data/shock_interaction/final_grid_coarse/'
-    grid_file, flow_file = path + 'coarse_python.x', path + '37500_overflow_eqn_corrected.txt'
-    grid = GridIO(grid_file)
-    grid.read_grid(data_type='f8')
-    grid.compute_metrics()
-    flow = FlowIO(flow_file)
-    flow.mach = 5.0
-    flow.rey = 1.188e8
-    flow.alpha = 0.0
-    flow.time = 1.0
-    flow.read_formatted_txt(grid=grid, data_type='f8')
+    grid = osd.grid
+    flow = osd.flow
     sm = StochasticModel(p, l, grid=grid, flow=flow)
     sm.method = 'adaptive-ppath'
-    # sm.method = 'ppath-c-space'
-    sm.drag_model = 'henderson'
     sm.search = 'p-space'
     sm.time_step = 1e-10
     sm.max_time_step = 1
-    sm.adaptivity = 0.001
-    sm.magnitude_adaptivity = 0.001
-    # this saves data after every process is done. This will open up memory as well
-    # To test multiple drag models
-    sm.filepath = path + 'drag_models/'
-
-    # Run multiprocess
+    sm.interpolation = 'p-space'
+    # sm.adaptive_interpolation = 'shock'
+    sm.drag_model = 'loth'
+    sm.filepath = './constant_particle_specs/'
     lpt_data = sm.multi_process()
-
-    print('**** DONE ******'*5)
-
-    ax = plt.axes()
-    fig1 = plt.figure()
-    ax1 = plt.axes()
-    for i in range(p.n_concentration):
-        xdata = np.array(lpt_data[i].streamline)
-        vdata = np.array(lpt_data[i].svelocity)
-        udata = np.array(lpt_data[i].fvelocity)
-        xp, yp, zp = xdata[:, 0], xdata[:, 1], xdata[:, 2]
-        vx, vy, vz = vdata[:, 0], vdata[:, 1], vdata[:, 2]
-        ux, uy, uz = udata[:, 0], udata[:, 1], udata[:, 2]
-        #
-        ax.plot(xp, vx, '.-r', label='Particle')
-        ax.plot(xp, ux, '.-b', label='Fluid')
-        ax1.plot(xp, yp, '.-', label='Path')
-    ax.legend()
-    ax.set_title(sm.method)
-    plt.show()
 
 
 if __name__ == '__main__':
-    shock_interaction()
+    oblique_shock_response(filepath='./exp_estimated_particle/', dp=1.94e-6, rhop=950)
+

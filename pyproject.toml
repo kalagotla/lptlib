@@ -1,10 +1,10 @@
 [build-system]
-rquires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "project-arrakis"
-version = "0.1.1"
+version = "0.1.2"
 authors = [
     {name="Dilip Kalagotla", email="dilipkalagotla@gmail.com"},
     ]
