@@ -1,6 +1,7 @@
 # Use tri-linear interpolation to get data at the given point
 
 import numpy as np
+from ..function.variables import Variables
 
 
 class Interpolation:
@@ -12,9 +13,9 @@ class Interpolation:
     Attributes
     ----------
     Input:
-        flow : src.io.plot3dio.FlowIO
+        flow : .io.plot3dio.FlowIO
             Flow object created from FlowIO
-        idx: src.streamlines.Search
+        idx: .streamlines.Search
             Index object created from Search
     Output:
         q : ndarray
@@ -73,7 +74,6 @@ class Interpolation:
         i0, j0, k0 = self.idx.cell[0, 0], self.idx.cell[0, 1], self.idx.cell[0, 2]
         i1, j1, k1 = self.idx.cell[1, 0], self.idx.cell[1, 1], self.idx.cell[1, 2]
         # compute velocity, mach
-        from src.function.variables import Variables
         _var = Variables(self.flow)
         _var.compute_mach()
         # _grad_v = _J_inv * (v1 - v0)

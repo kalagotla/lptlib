@@ -15,7 +15,7 @@ class Variables:
     Attributes
     ----------
     Input:
-        flow : src.io.plot3dio.FlowIO or src.streamlines.interpolation.Interpolation or similar
+        flow : ..streamlines.io.plot3dio.FlowIO or src.streamlines.interpolation.Interpolation or similar
             object with q --> flow data
         gamma : float
             default is 1.4; can specify
