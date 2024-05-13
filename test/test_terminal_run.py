@@ -7,8 +7,8 @@ path = '/Users/kal/Library/CloudStorage/OneDrive-UniversityofCincinnati' \
        '/Desktop/University of Cincinnati/DoctoralWork/Codes/project-arrakis'
 sys.path.append(path)
 import matplotlib.pyplot as plt
-from src.streamlines.stochastic_model import StochasticModel, Particle, SpawnLocations
-from src.io.plot3dio import GridIO, FlowIO
+from src.lptlib.streamlines import StochasticModel, Particle, SpawnLocations
+from src.lptlib.io import GridIO, FlowIO
 
 
 def test_stochastic_model():

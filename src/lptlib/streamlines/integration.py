@@ -1,8 +1,8 @@
 # Integrate from given point to produce streamlines
 import numpy as np
-from src.streamlines.interpolation import Interpolation
-from src.streamlines.search import Search
-from src.function.variables import Variables
+from ..streamlines.interpolation import Interpolation
+from ..streamlines.search import Search
+from ..function.variables import Variables
 from scipy.optimize import fsolve
 
 

@@ -3,13 +3,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
-import matplotlib.patches as patches
-import matplotlib.gridspec as gridspec
-import seaborn as sns
 import re
 import pandas as pd
-from src.streamlines import Search, Interpolation
-from src.function import Variables
+from ..streamlines import Search, Interpolation
+from .variables import Variables
 
 
 class Plots:

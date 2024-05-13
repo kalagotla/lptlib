@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from parameterized import parameterized
-from src.function.timer import Timer
+from src.lptlib.function import Timer
 import matplotlib.pyplot as plt
 
 
@@ -25,7 +25,7 @@ class TestVortex(unittest.TestCase):
 
         Returns:
         """
-        from src.streamlines.streamlines import Streamlines
+        from src.lptlib.streamlines import Streamlines
         sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5],
                          time_step=time_step)
         sl.compute(method=method)

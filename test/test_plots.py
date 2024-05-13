@@ -1,12 +1,12 @@
 import unittest
-from src import Plots
+from src.lptlib.function import Plots
 import matplotlib.pyplot as plt
 path = ('/Users/kal/Library/CloudStorage/OneDrive-UniversityofCincinnati/Desktop/University of Cincinnati/'
         'DoctoralWork/Codes/project-arrakis/data/shocks/new_start/ragni_data/315e-09/')
 
 
 def get_grid_and_flow():
-    from src.test_cases.oblique_shock_data import ObliqueShock, ObliqueShockData
+    from src.lptlib.test_cases import ObliqueShock, ObliqueShockData
 
     # Create oblique shock
     os = ObliqueShock()

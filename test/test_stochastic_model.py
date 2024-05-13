@@ -1,8 +1,8 @@
 import unittest
 import numpy as np
 import matplotlib.pyplot as plt
-from src.streamlines.stochastic_model import StochasticModel, Particle, SpawnLocations
-from src.io.plot3dio import GridIO, FlowIO
+from src.lptlib.streamlines import StochasticModel, Particle, SpawnLocations
+from src.lptlib.io import GridIO, FlowIO
 
 
 class TestStochasticModel(unittest.TestCase):

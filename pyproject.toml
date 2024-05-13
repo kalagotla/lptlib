@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lptlib"
-version = "0.0.1a0"
+version = "0.0.1a7"
 authors = [
-    {name="Dilip Kalagotla", email="dilipkalagotla@gmail.com"},
+    {name="Dilip Kalagotla"},
+    {email="dilipkalagotla@gmail.com"},
     ]
-description = "One-way coupled Lagrangian Particle Tracking for CFD simulations."
+description = "One-way coupled Lagrangian Particle Tracking algorithms."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -21,8 +22,23 @@ dependencies = [
     ]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "Topic :: Scientific/Engineering",
+]
+
+[tool.ruff]
+exclude = [
+    ".git",
+    "data",
+    "build",
+    ".tox",
+    ".eggs",
 ]
 
 [project.urls]

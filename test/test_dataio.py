@@ -3,8 +3,8 @@ import unittest
 
 class TestDataIO(unittest.TestCase):
     def test_dataio(self):
-        from src.io.dataio import DataIO
-        from src.io.plot3dio import GridIO, FlowIO
+        from src.lptlib.io import DataIO
+        from src.lptlib.io import GridIO, FlowIO
         # grid object
         grid = GridIO('../data/shocks/shock_test.sb.sp.x')
         grid.read_grid()

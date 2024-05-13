@@ -2,9 +2,9 @@ import unittest
 
 
 class TestVariables(unittest.TestCase):
-    from src.io.plot3dio import GridIO, FlowIO
-    from src.streamlines.search import Search
-    from src.streamlines.interpolation import Interpolation
+    from src.lptlib.io import GridIO, FlowIO
+    from src.lptlib.streamlines import Search
+    from src.lptlib.streamlines import Interpolation
 
     # Get the data at a given point
     grid = GridIO('../data/plate_data/plate.sp.x')
@@ -24,7 +24,7 @@ class TestVariables(unittest.TestCase):
         :param flow: FlowIO object
         :return: None
         """
-        from src.function.variables import Variables
+        from src import Variables
 
         variables = Variables(flow)
         variables.compute_velocity()
@@ -39,7 +39,7 @@ class TestVariables(unittest.TestCase):
         :param flow: FlowIO object
         :return: None
         """
-        from src.function.variables import Variables
+        from src import Variables
 
         variables = Variables(flow)
         variables.compute()
@@ -66,7 +66,7 @@ class TestVariables(unittest.TestCase):
         :param point_data: Interpolation object
         :return: None
         """
-        from src.function.variables import Variables
+        from src import Variables
 
         point_variables = Variables(point_data)
         point_variables.compute_velocity()
@@ -80,7 +80,7 @@ class TestVariables(unittest.TestCase):
         :param point_data: Interpolation object
         :return: None
         """
-        from src.function.variables import Variables
+        from src import Variables
 
         point_variables = Variables(point_data)
         point_variables.compute()

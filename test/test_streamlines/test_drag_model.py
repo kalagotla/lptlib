@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from parameterized import parameterized
-from src.function.timer import Timer
+from src.lptlib.function import Timer
 import matplotlib.pyplot as plt
 
 
@@ -15,7 +15,7 @@ class TestDragModel(unittest.TestCase):
         ('tedeschi', 'adaptive-ppath', 1e-8, 'tedeschi'),
     ])
     def test_drag_model(self, name, method='pRK4', time_step=1e-4, drag_model='stokes'):
-        from src.streamlines.streamlines import Streamlines
+        from src.lptlib.streamlines import Streamlines
         sl = Streamlines('../../data/shocks/shock_test.sb.sp.x', '../../data/shocks/shock_test.sb.sp.q',
                          [15e-4, 2e-4, 2e-4])
         sl.diameter = 5e-7

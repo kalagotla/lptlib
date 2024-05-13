@@ -4,7 +4,7 @@
 import numpy as np
 from multiprocessing.pool import ThreadPool as Pool
 import multiprocessing as mp
-from src.streamlines.streamlines import Streamlines
+from ..streamlines.streamlines import Streamlines
 from scipy.stats import skewnorm, lognorm
 from tqdm import tqdm
 

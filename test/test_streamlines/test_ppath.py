@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from parameterized import parameterized
-from src.function.timer import Timer
+from src.lptlib.function import Timer
 
 
 class TestPPath(unittest.TestCase):
@@ -24,7 +24,7 @@ class TestPPath(unittest.TestCase):
 
         Returns:
         """
-        from src.streamlines.streamlines import Streamlines
+        from src.lptlib.streamlines import Streamlines
         sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', [-0.05, 0.05, 5])
         sl.diameter = 0.5e-6
         sl.density = 1000

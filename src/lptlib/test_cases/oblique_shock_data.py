@@ -1,11 +1,6 @@
 # Class to calculate particle response across an oblique shock
 
 import numpy as np
-from scipy.optimize import newton
-from src.streamlines.stochastic_model import StochasticModel, Particle, SpawnLocations
-import matplotlib.pyplot as plt
-import os
-import glob
 
 
 # Create a class to calculate oblique shock properties from given mach and deflection angle

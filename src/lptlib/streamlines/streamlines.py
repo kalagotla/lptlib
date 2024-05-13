@@ -1,12 +1,12 @@
 # Uses the program API to extract streamlines
 import numpy as np
-from src.function.timer import Timer
-from src.io.plot3dio import GridIO
-from src.io.plot3dio import FlowIO
-from src.streamlines.search import Search
-from src.streamlines.interpolation import Interpolation
-from src.streamlines.integration import Integration
-from src.function.variables import Variables
+from ..function.timer import Timer
+from ..io.plot3dio import GridIO
+from ..io.plot3dio import FlowIO
+from ..streamlines.search import Search
+from ..streamlines.interpolation import Interpolation
+from ..streamlines.integration import Integration
+from ..function.variables import Variables
 import matplotlib.pyplot as plt
 import functools
 

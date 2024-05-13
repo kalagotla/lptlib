@@ -4,7 +4,7 @@
 import unittest
 import doctest
 import numpy as np
-from src.io import GridIO, FlowIO
+from src.lptlib.io import GridIO, FlowIO
 
 
 class TestIO(unittest.TestCase):

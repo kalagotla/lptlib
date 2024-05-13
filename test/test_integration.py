@@ -1,6 +1,6 @@
 import unittest
 from parameterized import parameterized
-from src.function.timer import Timer
+from src.lptlib.function import Timer
 
 
 class TestIntegration(unittest.TestCase):
@@ -24,10 +24,10 @@ class TestIntegration(unittest.TestCase):
                          flowfile='../data/plate_data/sol-0000010.q', data_type='f4', point=None,
                          search_method='block_distance', interpolation_method='p-space', integration_method='RK4'):
 
-        from src.io.plot3dio import GridIO, FlowIO
-        from src.streamlines.search import Search
-        from src.streamlines.interpolation import Interpolation
-        from src.streamlines.integration import Integration
+        from src import GridIO, FlowIO
+        from src import Search
+        from src import Interpolation
+        from src import Integration
 
         if point is None:
             point = [8.5, 0.5, 0.01]

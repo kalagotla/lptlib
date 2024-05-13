@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from parameterized import parameterized
-from src.function.timer import Timer
+from src.lptlib.function import Timer
 import matplotlib.pyplot as plt
 
 
@@ -18,7 +18,7 @@ class TestObliqueShock(unittest.TestCase):
     ])
     @Timer()
     def test_oblique_shock(self, name, method='adaptive-ppath', time_step=1e-4):
-        from src.streamlines.streamlines import Streamlines
+        from src.lptlib.streamlines import Streamlines
         sl = Streamlines('../../data/shocks/m5_d20_strong.sb.sp.x', '../../data/shocks/m5_d20_strong.sb.sp.q',
                          [15e-4, 2e-4, 2e-4])
         # Best TiO2 specs

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from multiprocessing.pool import ThreadPool as Pool
 import multiprocessing as mp
 import random
-from src.io.plot3dio import GridIO, FlowIO
+from src.lptlib.io import GridIO, FlowIO
 
 
 class TestParallelFast(unittest.TestCase):
@@ -29,7 +29,7 @@ class TestParallelFast(unittest.TestCase):
             """
             Local function to run in parallel
             """
-            from src.streamlines.streamlines import Streamlines
+            from src.lptlib.streamlines import Streamlines
             sl = Streamlines(None, None, start_point, time_step=1e-3)
             sl.compute(method='adaptive-p-space', grid=grid, flow=flow)
 

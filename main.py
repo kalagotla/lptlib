@@ -3,8 +3,8 @@
 import os
 import seaborn as sns
 import matplotlib.pyplot as plt
-from src.test_cases.oblique_shock_data import ObliqueShock, ObliqueShockData
-from src.streamlines.stochastic_model import StochasticModel, Particle, SpawnLocations
+from src import ObliqueShock, ObliqueShockData
+from src import StochasticModel, Particle, SpawnLocations
 
 
 def oblique_shock_response(filepath='./tio2_particle/', dp=5.272e-6, rhop=182.225):

@@ -2,7 +2,7 @@
 
 import unittest
 from parameterized import parameterized
-from src.function.timer import Timer
+from src.lptlib.function import Timer
 
 
 # This setup only works with the plate data
@@ -23,8 +23,8 @@ class TestSearch(unittest.TestCase):
     ])
     @Timer()
     def test_search(self, name, filename='../data/plate_data/plate.sp.x', data_type='f4', method='binary'):
-        from src.io.plot3dio import GridIO
-        from src.streamlines.search import Search
+        from src import GridIO
+        from src import Search
 
         # Read the grid data
         grid = GridIO(filename)

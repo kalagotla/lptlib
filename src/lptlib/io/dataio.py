@@ -1,8 +1,8 @@
 # This file contains DataIO class to read and write particle data
 
 import numpy as np
-from src.streamlines.search import Search
-from src.streamlines.interpolation import Interpolation
+from ..streamlines.search import Search
+from ..streamlines.interpolation import Interpolation
 from multiprocessing import Pool
 import multiprocessing as mp
 from scipy.interpolate import griddata

@@ -5,9 +5,8 @@ import unittest
 
 class TestInterpolation(unittest.TestCase):
     def test_interpolation(self):
-        from src.io.plot3dio import GridIO, FlowIO
-        from src.streamlines.search import Search
-        from src.streamlines.interpolation import Interpolation
+        from src.lptlib.io import GridIO, FlowIO
+        from src.lptlib.streamlines import Search, Interpolation
 
         # Read the grid data
         grid = GridIO('../data/plate_data/plate.sp.x')
@@ -29,7 +28,7 @@ class TestInterpolation(unittest.TestCase):
 
 
         # Test if the point is a node interpolation
-        from src.test_cases.oblique_shock_data import ObliqueShock, ObliqueShockData
+        from src.lptlib.test_cases import ObliqueShock, ObliqueShockData
 
         # Create oblique shock
         os = ObliqueShock()
