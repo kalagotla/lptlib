@@ -4,13 +4,21 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "project-arrakis"
-version = "0.1.2"
+version = "0.1.3a"
 authors = [
     {name="Dilip Kalagotla", email="dilipkalagotla@gmail.com"},
     ]
 description = "One-way coupled Lagrangian Particle Tracking for CFD simulations. Includes many auxiliary tools."
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "pandas",
+    "seaborn",
+    "tqdm",
+    ]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
