@@ -14,7 +14,7 @@ pythonenv3.8/*
 build/*
 *.pyc
 .Python
-project_arrakis.egg-info/
+*.egg-info/
 develop-eggs/
 downloads/
 eggs/

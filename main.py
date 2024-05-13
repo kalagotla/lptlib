@@ -12,20 +12,20 @@ def oblique_shock_response(filepath='./tio2_particle/', dp=5.272e-6, rhop=182.22
     # Create oblique shock
     os1 = ObliqueShock()
     os1.mach = 7.6
-    os1.deflection = 20
+    os1.deflection = 20  # degrees
     os1.compute()
 
     # Create grid and flow files
     osd = ObliqueShockData()
     osd.oblique_shock = os1
-    osd.nx_max = 100e-3
-    osd.ny_max = 500e-3
-    osd.nz_max = 1e-4
-    osd.inlet_temperature = 48.20
-    osd.inlet_density = 0.07747
-    osd.xpoints = 200
-    osd.ypoints = 500
-    osd.zpoints = 5
+    osd.nx_max = 100e-3  # 100 mm
+    osd.ny_max = 500e-3  # 500 mm
+    osd.nz_max = 1e-4  # 0.1 mm
+    osd.inlet_temperature = 48.20  # K
+    osd.inlet_density = 0.07747  # kg/m^3
+    osd.xpoints = 200  # 200 points
+    osd.ypoints = 500  # 500 points
+    osd.zpoints = 5  # 5 points
     osd.shock_strength = 'weak'
     osd.create_grid()
     osd.create_flow()
@@ -38,7 +38,7 @@ def oblique_shock_response(filepath='./tio2_particle/', dp=5.272e-6, rhop=182.22
     p.mean_dia = dp
     p.std_dia = 0
     p.density = rhop
-    p.n_concentration = 800
+    p.n_concentration = 1000  # number of particles 2 per cell (y-direction)
     p.distribution = 'gaussian'
     p.compute_distribution()
     try:
@@ -64,10 +64,11 @@ def oblique_shock_response(filepath='./tio2_particle/', dp=5.272e-6, rhop=182.22
     sm.search = 'p-space'
     sm.time_step = 1e-10
     sm.max_time_step = 1
-    sm.interpolation = 'p-space'
+    sm.interpolation = 'simple_oblique_shock'
     # sm.adaptive_interpolation = 'shock'
     sm.drag_model = 'loth'
-    sm.filepath = './constant_particle_specs/'
+    # save to the filepath
+    sm.filepath = filepath
     lpt_data = sm.multi_process()
 
 
