@@ -1,6 +1,7 @@
 # Class to calculate particle response across an oblique shock
 
 import numpy as np
+from ..io.plot3dio import GridIO, FlowIO
 
 
 # Create a class to calculate oblique shock properties from given mach and deflection angle
@@ -107,8 +108,6 @@ class ObliqueShockData:
     Class to create a grid and flow based on oblique shock properties
     """
     def __init__(self, oblique_shock=ObliqueShock()):
-        from src.io.plot3dio import GridIO
-        from src.io.plot3dio import FlowIO
         self.oblique_shock = oblique_shock
         self.nx_max = None
         self.ny_max = None
@@ -143,7 +142,6 @@ class ObliqueShockData:
         self.grid.grd_max = np.array([[self.nx_max, self.ny_max, self.nz_max]])
 
         # compute metrics
-        from src.io.plot3dio import GridIO
         GridIO.compute_metrics(self.grid)
         return
 
