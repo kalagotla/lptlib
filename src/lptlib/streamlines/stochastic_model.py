@@ -30,6 +30,7 @@ class StochasticModel(Streamlines):
         self.flow = flow
         self.method = method
         self.chunksize = 32
+        self.cpu_count = mp.cpu_count()
 
     def setup(self, spawn_location, particle_dia, task):
         """
@@ -71,7 +72,7 @@ class StochasticModel(Streamlines):
         """
         # track progress using tqdm
         inputs = zip(self.spawn_locations.locations, self.particles.particle_field, np.arange(self.particles.n_concentration))
-        with mp.Pool(mp.cpu_count() - 1) as pool:
+        with mp.Pool(self.cpu_count) as pool:
             lpt_data = pool.starmap(self.setup, tqdm(inputs, total=self.particles.n_concentration), chunksize=self.chunksize)
 
         return lpt_data
@@ -82,9 +83,9 @@ class StochasticModel(Streamlines):
         Returns:
 
         """
-        with Pool(mp.cpu_count() - 1) as pool:
+        with Pool(self.cpu_count) as pool:
             lpt_data = pool.starmap(self.setup, zip(self.spawn_locations.locations, self.particles.particle_field,
-                                                    np.arange(self.particles.n_concentration)), chunksize=1)
+                                                    np.arange(self.particles.n_concentration)), chunksize=self.chunksize)
 
         return lpt_data
 

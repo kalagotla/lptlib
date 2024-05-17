@@ -133,7 +133,9 @@ class Streamlines:
                                     np.ones(tdata.shape) * self.diameter,
                                     np.ones(tdata.shape) * self.density))
 
-            np.save(self.filepath + 'ppath_' + str(self.task), _data_save)
+            # help closes the file after writing
+            with open(self.filepath + 'ppath_' + str(self.task) + '.npy', 'wb') as f:
+                np.save(f, _data_save)
             self.print_debug(self, '** SUCCESS ** Done writing file for particle number - ' + str(self.task) + ' ** SUCCESS **')
             # set self to None to clear up memory after saving required data
             self.streamline = []
