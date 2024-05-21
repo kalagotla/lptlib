@@ -116,23 +116,16 @@ class StochasticModel(Streamlines):
         rank = comm.Get_rank()
         size = comm.Get_size()
 
-        if rank == 0:
-            inputs = zip(self.spawn_locations.locations, self.particles.particle_field,
-                         np.arange(self.particles.n_concentration))
-        else:
-            inputs = None
+        # Split the data
+        data_indices = np.array_split(np.arange(self.particles.n_concentration), size)
+        data = data_indices[rank]
 
-        inputs = comm.bcast(inputs, root=0)
-
-        # track progress using tqdm
+        # Run the setup function in parallel
         lpt_data = []
-        for i, (loc, dia, task) in tqdm(enumerate(inputs), total=self.particles.n_concentration):
-            lpt_data.append(self.setup(loc, dia, task))
-
-        lpt_data = comm.gather(lpt_data, root=0)
-
-        if rank == 0:
-            lpt_data = [item for sublist in lpt_data for item in sublist]
+        for i, (loc, dia) in tqdm(enumerate(zip(self.spawn_locations.locations[data],
+                                                self.particles.particle_field[data])),
+                                  total=len(data), desc=f'Rank {rank}'):
+            lpt_data.append(self.setup(loc, dia, rank * len(data) + i))
 
         return lpt_data
 
