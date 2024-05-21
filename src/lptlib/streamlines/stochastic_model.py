@@ -7,6 +7,7 @@ import multiprocessing as mp
 from ..streamlines.streamlines import Streamlines
 from scipy.stats import skewnorm, lognorm
 from tqdm import tqdm
+from mpi4py import MPI
 
 rng = np.random.default_rng(7)
 
@@ -100,6 +101,38 @@ class StochasticModel(Streamlines):
         for i, (loc, dia) in tqdm(enumerate(zip(self.spawn_locations.locations, self.particles.particle_field)),
                                   total=self.particles.n_concentration):
             lpt_data.append(self.setup(loc, dia, i))
+
+        return lpt_data
+
+    def mpi_run(self):
+        """
+        To run setup in parallel using MPI.
+        Run using mpiexec -np 8 python main.py
+        To run in an IDE use another python file with subprocess.run
+        Returns:
+
+        """
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        size = comm.Get_size()
+
+        if rank == 0:
+            inputs = zip(self.spawn_locations.locations, self.particles.particle_field,
+                         np.arange(self.particles.n_concentration))
+        else:
+            inputs = None
+
+        inputs = comm.bcast(inputs, root=0)
+
+        # track progress using tqdm
+        lpt_data = []
+        for i, (loc, dia, task) in tqdm(enumerate(inputs), total=self.particles.n_concentration):
+            lpt_data.append(self.setup(loc, dia, task))
+
+        lpt_data = comm.gather(lpt_data, root=0)
+
+        if rank == 0:
+            lpt_data = [item for sublist in lpt_data for item in sublist]
 
         return lpt_data
 
