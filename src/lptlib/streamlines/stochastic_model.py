@@ -8,6 +8,7 @@ from ..streamlines.streamlines import Streamlines
 from scipy.stats import skewnorm, lognorm
 from tqdm import tqdm
 from mpi4py import MPI
+import socket
 
 rng = np.random.default_rng(7)
 
@@ -124,7 +125,7 @@ class StochasticModel(Streamlines):
         lpt_data = []
         for i, (loc, dia) in tqdm(enumerate(zip(self.spawn_locations.locations[data],
                                                 self.particles.particle_field[data])),
-                                  total=len(data), desc=f'Rank {rank}'):
+                                  total=len(data), desc=f'{socket.gethostname()} Rank: {rank}'):
             lpt_data.append(self.setup(loc, dia, rank * len(data) + i))
 
         return lpt_data
