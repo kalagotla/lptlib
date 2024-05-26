@@ -9,6 +9,7 @@ from scipy.interpolate import griddata
 import os
 import re
 from tqdm import tqdm
+from mpi4py import MPI
 rng = np.random.default_rng()
 
 
@@ -141,25 +142,38 @@ class DataIO:
             print('Trying to read from a combined file...')
             _p_data = np.load(self.read_file)
             print('Read from the combined file!!')
-        except:
-            # TODO: Dask might save time here!
+        except FileNotFoundError:
             print('Reading from a group of files... This will take a while!')
-            # Sort in natural order to stack particles in order
+            # Sort in natural order to stack particles in order and track progress
             _files = np.array(self._natural_sort(os.listdir(self.location)))
             _bool = []
-            for _i, _name in enumerate(_files):
-                if not _name.endswith(".npy"):
-                    _bool.append(_i)
+            for _file in tqdm(_files, desc='Checking files'):
+                _bool.append('npy' not in _file)
             _files = np.delete(_files, _bool)
 
-            _p_data = np.load(self.location + _files[0])
-            for infile in _files[1:]:
-                _temp = np.load(self.location + infile)
-                _p_data = np.vstack((_p_data, _temp))
-                print('Done with - ' + infile)
-            print('Done reading files into an array from a group of files!')
-            np.save(self.location + 'combined_file', _p_data)
-            print('**SUCCESS** combined_file.npy saved to the given location.')
+            # Read and stack files using MPI
+            _p_data = []
+            comm = MPI.COMM_WORLD
+            rank = comm.Get_rank()
+            size = comm.Get_size()
+            _files = np.array_split(_files, size)[rank]
+            for _file in tqdm(_files, desc='Reading files'):
+                _p_data.append(np.load(self.location + _file))
+            _p_data = np.vstack(_p_data)
+            _p_data = comm.gather(_p_data, root=0)
+            if rank == 0:
+                _p_data = np.vstack(_p_data)
+            else:
+                _p_data = None
+            _p_data = comm.bcast(_p_data, root=0)
+            print('Read from the group of files!!')
+
+            # Save the combined file for future use
+            try:
+                np.save(self.location + 'combined_file', _p_data)
+                print('Saved the combined file for future use!\n')
+            except:
+                print('Could not save the combined file for future use!\n')
 
         # p-data has the following columns
         # x, y, z, vx, vy, vz, ux, uy, uz, time, integrated (ux, uy, uz), diameter, density
@@ -179,14 +193,14 @@ class DataIO:
             _q_list = np.load(self.location + 'dataio/interpolated_q_data.npy', allow_pickle=False)
             _p_data = np.load(self.location + 'dataio/new_p_data.npy', allow_pickle=False)
             print('Read the available interpolated data to continue with the griddata algorithm')
-        except:
+        except FileNotFoundError:
             # Run through the process of creating interpolation files
             try:
                 # Read old interpolation files before removing outliers if available
                 _q_list = np.load(self.location + 'dataio/_old_interpolated_q_data.npy', allow_pickle=True)
                 _p_data = np.load(self.location + 'dataio/_old_p_data.npy', allow_pickle=True)
                 print('Read the available old interpolated data to continue with the outliers algorithm')
-            except:
+            except FileNotFoundError:
                 # Run the interpolation process on all the scattered points
                 print('Interpolated data file is unavailable. Continuing with interpolation to scattered data!\n'
                       'This is going to take sometime. Sit back and relax!\n'
