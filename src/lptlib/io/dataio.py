@@ -10,6 +10,10 @@ import os
 import re
 from tqdm import tqdm
 from mpi4py import MPI
+from dask import delayed
+from dask.distributed import Client, progress
+import dask.array as da
+import sys
 rng = np.random.default_rng()
 
 
@@ -87,7 +91,7 @@ class DataIO:
         alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
         return sorted(_l, key=alphanum_key)
 
-    def _flow_data(self, _point, _index, _size):
+    def _flow_data(self, _point):
         """
         Internal function that interpolates data to scattered points
         Args:
@@ -102,10 +106,8 @@ class DataIO:
             _idx.compute(method='distance')
             _interp = Interpolation(self.flow, _idx)
             _interp.compute(method='p-space')
-            # print(f'Done with flow data interpolation {_index}/{_size}')
             return _interp.q.reshape(-1)
         except:
-            print(f'**Exception occurred with {_index}**')
             return np.array([1], dtype=int)
 
     # Function to loop through the scattered data
@@ -143,7 +145,6 @@ class DataIO:
             _p_data = np.load(self.read_file)
             print('Read from the combined file!!')
         except FileNotFoundError:
-            print('Reading from a group of files... This will take a while!')
             # Sort in natural order to stack particles in order and track progress
             _files = np.array(self._natural_sort(os.listdir(self.location)))
             _bool = []
@@ -156,16 +157,22 @@ class DataIO:
             comm = MPI.COMM_WORLD
             rank = comm.Get_rank()
             size = comm.Get_size()
+            # scatter
             _files = np.array_split(_files, size)[rank]
-            for _file in tqdm(_files, desc='Reading files'):
+            for _file in tqdm(_files, desc=f'Reading files on Rank {rank}'):
+                if np.load(self.location + _file).shape[0] == 0:
+                    continue
                 _p_data.append(np.load(self.location + _file))
             _p_data = np.vstack(_p_data)
+            # gather
             _p_data = comm.gather(_p_data, root=0)
             if rank == 0:
                 _p_data = np.vstack(_p_data)
             else:
                 _p_data = None
             _p_data = comm.bcast(_p_data, root=0)
+            # pause until all processes are done
+            comm.Barrier()
             print('Read from the group of files!!')
 
             # Save the combined file for future use
@@ -205,23 +212,23 @@ class DataIO:
                 print('Interpolated data file is unavailable. Continuing with interpolation to scattered data!\n'
                       'This is going to take sometime. Sit back and relax!\n'
                       'Your PC will take off because of multi-process. Let it breathe...\n')
-                # Test serial
-                # _q_list = []
-                # _loc_len = len(_locations)
-                # for _i, _point in enumerate(_locations):
-                #     _q_list.append(self._flow_data(_point, _i, _loc_len))
 
-                # parallel
-                _processors = mp.cpu_count()
-                _pool = Pool(_processors)
-                _loc_len = len(_locations)
-                # Passing extra parameters to keep track of the progress. Chunk-size helps to keep it orderly
-                inputs = zip(_locations, np.arange(0, _loc_len), np.repeat(_loc_len, _loc_len))
-                _q_list = _pool.starmap(self._flow_data,
-                                        tqdm(inputs, total=_loc_len),
-                                        chunksize=_loc_len//_processors)
-                _pool.close()
-                _pool.join()
+                # MPI
+                _q_list = []
+                comm = MPI.COMM_WORLD
+                rank = comm.Get_rank()
+                size = comm.Get_size()
+                _locations = np.array_split(_locations, size)[rank]
+                for _point in tqdm(_locations, desc=f'Data interpolation on Rank {rank}'):
+                    _q_list.append(self._flow_data(_point))
+                _q_list = comm.gather(_q_list, root=0)
+                if rank == 0:
+                    _q_list = np.vstack(_q_list)
+                else:
+                    _q_list = None
+                _q_list = comm.bcast(_q_list, root=0)
+                # synchronize the processes
+                comm.Barrier()
 
                 # Intermediate save of the data -- if the process is interrupted we can restart it from here
                 try:
@@ -232,9 +239,8 @@ class DataIO:
                     print('Created dataio folder and saved old interpolated flow data to scattered points.\n')
                 except:
                     np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
-                    np.save(self.location + 'dataio/_old_new_p_data', _p_data)
-                print('Done with interpolating flow data to scattered points.\n'
-                      'Removing outliers from the data...\n')
+                    np.save(self.location + 'dataio/_old_p_data', _p_data)
+                print('Removing outliers from the data...\n')
 
             # Fluid data at scattered points/particle locations
             # Some searches return None. This helps remove those locations!
@@ -257,7 +263,6 @@ class DataIO:
             except:
                 np.save(self.location + 'dataio/interpolated_q_data', _q_list)
                 np.save(self.location + 'dataio/new_p_data', _p_data)
-            print('Done with interpolating flow data to scattered points.\n')
 
         # Particle data at the scattered points/particle locations
         # rho, x,y,z - momentum, energy per unit volume (q-file data)
@@ -277,31 +282,46 @@ class DataIO:
             _qp = np.load(self.location + 'dataio/particle_data.npy')
             print('Loaded available flow/particle data from numpy residual files\n')
         except:
-            print('Interpolating data to the grid provided...\n')
-            # Interpolate scattered data onto the grid -- for flow
-            _pool = Pool(mp.cpu_count())
-            inputs = zip([_q_f_list[:, 0], _q_f_list[:, 1], _q_f_list[:, 2], _q_f_list[:, 3], _q_f_list[:, 4]],
-                         [_p_data[:, :2]]*5, [_xi]*5, [_yi]*5, ['linear']*5)
-            _qf = _pool.starmap(self._grid_interp,
-                                tqdm(inputs, total=5), chunksize=5)
-            _pool.close()
-            _pool.join()
-            print(f'Done with flow data interpolation to grid.\n')
+
+            # Interpolate scattered data onto the grid -- for flow using MPI
+            _qf = []
+            comm = MPI.COMM_WORLD
+            rank = comm.Get_rank()
+            size = comm.Get_size()
+            _q_f_list = np.array_split(_q_f_list, size)[rank]
+            _p_data = np.array_split(_p_data, size)[rank]
+            for _i_q_f_list in tqdm(_q_f_list.T, desc=f'Flow data interpolation on Rank {rank}'):
+                _qf.append(self._grid_interp(_i_q_f_list, _p_data[:, :2], _xi, _yi, method='linear'))
+            _qf = comm.gather(_qf, root=0)
+            if rank == 0:
+                _qf = np.vstack(_qf)
+            else:
+                _qf = None
+            _qf = comm.bcast(_qf, root=0)
+            # synchronize the processes
+            comm.Barrier()
 
             # Save the array to a file
             # This will only happen when there are files in dataio directory
             _qf = np.array(_qf)
             np.save(self.location + 'dataio/flow_data', _qf)
 
-            # Interpolate scattered data onto the grid -- for particles
-            _pool = Pool(mp.cpu_count())
-            inputs = zip([_q_p_list[:, 1], _q_p_list[:, 2], _q_p_list[:, 3]],
-                         [_p_data[:, :2]]*3, [_xi]*3, [_yi]*3, ['linear']*3)
-            _qp_123 = _pool.starmap(self._grid_interp,
-                                   tqdm(inputs, total=3), chunksize=3)
-            _pool.close()
-            _pool.join()
-            print(f'Done with particle data interpolation to grid.\n')
+            # Interpolate scattered data onto the grid -- for particles using MPI
+            _qp_123 = []
+            comm = MPI.COMM_WORLD
+            rank = comm.Get_rank()
+            size = comm.Get_size()
+            _q_p_list = np.array_split(_q_p_list, size)[rank]
+            for _i_q_p_list in tqdm(_q_p_list[:, 1:4].T, desc=f'Particle data interpolation on Rank {rank}'):
+                _qp_123.append(self._grid_interp(_i_q_p_list, _p_data[:, :2], _xi, _yi, method='linear'))
+            _qp_123 = comm.gather(_qp_123, root=0)
+            if rank == 0:
+                _qp_123 = np.vstack(_qp_123)
+            else:
+                _qp_123 = None
+            _qp_123 = comm.bcast(_qp_123, root=0)
+            # synchronize the processes
+            comm.Barrier()
 
             # Create _qp array from known values
             _qp = np.dstack((_qf[0], _qp_123[0], _qp_123[1], _qp_123[2], _qf[-1])).transpose((2, 0, 1))
@@ -316,6 +336,5 @@ class DataIO:
         self.grid.mgrd_to_p3d(_xi, _yi, out_file=self.location + 'dataio/mgrd_to_p3d.x')
         self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d')
         self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d')
-        print('Files written to the working directory')
 
         return
