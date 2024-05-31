@@ -3,17 +3,11 @@
 import numpy as np
 from ..streamlines.search import Search
 from ..streamlines.interpolation import Interpolation
-from multiprocessing import Pool
-import multiprocessing as mp
 from scipy.interpolate import griddata
 import os
 import re
 from tqdm import tqdm
 from mpi4py import MPI
-from dask import delayed
-from dask.distributed import Client, progress
-import dask.array as da
-import sys
 rng = np.random.default_rng()
 
 
