@@ -126,7 +126,7 @@ class StochasticModel(Streamlines):
         for i, (loc, dia) in tqdm(enumerate(zip(self.spawn_locations.locations[data],
                                                 self.particles.particle_field[data])),
                                   total=len(data), desc=f'{socket.gethostname()} Rank: {rank}'):
-            lpt_data.append(self.setup(loc, dia, rank * len(data) + i))
+            lpt_data.append(self.setup(loc, dia, data[i]))
 
         return lpt_data
 
