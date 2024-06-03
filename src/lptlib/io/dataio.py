@@ -126,12 +126,42 @@ class DataIO:
 
         return _q
 
+    def _mpi_read(self, _files, comm):
+        """
+        Read files using MPI
+        Args:
+            _files: list of files to be read
+            comm: communicator object from MPI
+
+        Returns:
+
+        """
+        rank = comm.Get_rank()
+        size = comm.Get_size()
+        _data = []
+        # scatter
+        _files = np.array_split(_files, size)[rank]
+        for _file in tqdm(_files, desc=f'Reading files on Rank {rank}'):
+            if np.load(self.location + _file).shape[0] == 0:
+                continue
+            _data.append(np.load(self.location + _file))
+        _data = np.vstack(_data)
+        # gather -- fails if there are a lot of files
+        _data = comm.gather(_data, root=0)
+        if rank == 0:
+            _data = np.vstack(_data)
+        else:
+            _data = None
+        return _data
+
     def compute(self):
         """
         This should interpolate the scattered particle data onto a 2D grid
         Return a file to be used for syPIV
         Returns:
         """
+        # MPI
+        comm = MPI.COMM_WORLD
         # read particle files from a folder
         # read particle data
         try:
@@ -147,33 +177,27 @@ class DataIO:
             _files = np.delete(_files, _bool)
 
             # Read and stack files using MPI
-            _p_data = []
-            comm = MPI.COMM_WORLD
-            rank = comm.Get_rank()
-            size = comm.Get_size()
-            # scatter
-            _files = np.array_split(_files, size)[rank]
-            for _file in tqdm(_files, desc=f'Reading files on Rank {rank}'):
-                if np.load(self.location + _file).shape[0] == 0:
-                    continue
-                _p_data.append(np.load(self.location + _file))
-            _p_data = np.vstack(_p_data)
-            # gather
-            _p_data = comm.gather(_p_data, root=0)
-            if rank == 0:
-                _p_data = np.vstack(_p_data)
-            else:
-                _p_data = None
-            _p_data = comm.bcast(_p_data, root=0)
+            # cut the files into smaller chunks to avoid memory issues
+            n = len(_files) // 1500  # ~2 sets for 3000-4000 files as tested
+            _files = np.array_split(_files, n)
+            _p_data = self._mpi_read(_files[0], comm)
+            for _file in _files[1:]:
+                _data = self._mpi_read(_file, comm)
+                if comm.Get_rank() == 0:
+                    _p_data = np.vstack((_p_data, _data))
+                else:
+                    _p_data = np.vstack((_p_data, _data))
+
             # pause until all processes are done
             comm.Barrier()
             print('Read from the group of files!!')
 
             # Save the combined file for future use
             try:
-                np.save(self.location + 'combined_file', _p_data)
-                print('Saved the combined file for future use!\n')
-            except:
+                if comm.Get_rank() == 0:
+                    np.save(self.location + 'combined_file', _p_data)
+                    print('Saved the combined file for future use!\n')
+            except FileNotFoundError:
                 print('Could not save the combined file for future use!\n')
 
         # p-data has the following columns
@@ -186,7 +210,11 @@ class DataIO:
             pass
         else:
             # Get a uniform distribution of the sample
-            _p_data = rng.choice(_p_data, size=int(_p_data.shape[0] * self.percent_data / 100))
+            if comm.Get_rank() == 0:
+                _p_data = rng.choice(_p_data, size=int(_p_data.shape[0] * self.percent_data / 100))
+            else:
+                _p_data = None
+            _p_data = comm.bcast(_p_data, root=0)
         _locations = _p_data[:, :3]
 
         try:
