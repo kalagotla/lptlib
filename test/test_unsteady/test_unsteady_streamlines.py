@@ -4,6 +4,7 @@ from src.lptlib import Streamlines
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 class TestUnsteadyStreamlines(unittest.TestCase):
     def test_unsteady_streamlines(self):
         path = './test_unsteady/cylinder_data/'
@@ -15,8 +16,11 @@ class TestUnsteadyStreamlines(unittest.TestCase):
         flow.read_unsteady_flow(data_type="f4")
         start_point = [1, 2.5, 0.5]
         sl = Streamlines(point=start_point)
+        sl.diameter = 281e-9
+        sl.density = 813
         sl.time_step = 0.1
-        sl.unsteady_time_step = 0.1
+        sl.drag_model = 'loth'
+        # sl.debug = True
         sl.compute(grid=grid, flow=flow, method='unsteady-ppath')
 
         xdata = np.array(sl.streamline)
@@ -32,11 +36,12 @@ class TestUnsteadyStreamlines(unittest.TestCase):
         ax.plot(xp, vx, '.-r', label='Particle')
         ax.plot(xp, ux, '.-b', label='Fluid')
         ax.set_xlabel('x')
-        ax.set_ylabel('y')
+        ax.set_ylabel('velocity')
         ax.legend()
 
         plt.figure()
         plt.plot(xp, yp, '.-', label='Path')
+        plt.title('Path')
         plt.show()
 
 

@@ -345,6 +345,8 @@ class Integration:
                     # For p-space algos; the point-in-domain check was done in search
                     if idx.ppoint is None: return None, None
                     interp = Interpolation(self.interp.flow, idx)
+                    interp.adaptive = self.interp.adaptive
+                    interp.rbf_kernel = self.interp.rbf_kernel
                     interp.time = self.interp.time
                     interp.flow_old = self.interp.flow_old
                     interp.compute(method='unsteady-rbf-p-space')
@@ -362,7 +364,7 @@ class Integration:
                 q_interp.compute_velocity()
                 u0 = q_interp.velocity.reshape(3)
                 k0 = time_step * u0
-                x1 = x0 + k0
+                x1 = x0 + 0.5 * k0
 
                 u1, k1 = _rk4_step(self, x1)
                 if k1 is None: return None, None
@@ -370,17 +372,16 @@ class Integration:
 
                 u2, k2 = _rk4_step(self, x2)
                 if k2 is None: return None, None
-                x3 = x0 + 0.5 * k2
+                x3 = x0 + k2
 
                 u3, k3 = _rk4_step(self, x3)
                 if k3 is None: return None, None
-                x4 = x0 + 1 / 6 * (k0 + 2 * k1 + 2 * k2 + k3)
-                u4, k4 = _rk4_step(self, x4)
-                if k4 is None: return None, None
+                x_new = x0 + 1 / 6 * (k0 + 2 * k1 + 2 * k2 + k3)
+                u_new, _ = _rk4_step(self, x_new)
 
-                self.ppoint = x4
+                self.ppoint = x_new
 
-                return self.ppoint, u4
+                return self.ppoint, u_new
 
     def compute_ppath(self, diameter=1e-6, density=1000, velocity=None,
                       method='pRK4', time_step=1e-4, drag_model='stokes'):
@@ -881,24 +882,28 @@ class Integration:
                     interp = Interpolation(self.interp.flow, idx)
                     interp.time = self.interp.time
                     interp.flow_old = self.interp.flow_old
+                    interp.adaptive = self.interp.adaptive
+                    interp.rbf_kernel = self.interp.rbf_kernel
                     interp.compute(method='unsteady-rbf-p-space')
                     q_interp = Variables(interp)
                     # Compute all variables
                     q_interp.compute_mach()
-                    uf = q_interp.velocity.reshape(3)
+                    uf = q_interp.velocity.reshape(-1)
                     # particle dynamics
                     _rhof = q_interp.density.reshape(-1)
                     dp = diameter
                     rhop = density
-                    mu = _viscosity(q_interp.temperature.reshape(-1))
+                    mu = _viscosity(q_interp.temperature.reshape(-1), law='sutherland')
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(vp - uf) * dp / mu
                     _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) / \
                             q_interp.velocity_magnitude.reshape(-1)
-                    _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach,
-                                         _gamma=q_interp.gamma, _mu=mu, _model=drag_model)
+                    _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
-                    _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
+                    try:
+                        _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
+                    except TypeError:
+                        return None, None, None
                     return _vk, uf, None
 
                 # Start RK4 for p-space
@@ -915,57 +920,63 @@ class Integration:
                 else:
                     v0 = velocity.copy()
                 vk0, uf0, temp = _rk4_step(self, v0, x0)
+                xk0 = v0 * time_step
                 # Assign fluid velocity when vk is zero
                 # Theory: When zero drag particle is massless, hence fluid velocity
                 if np.linalg.norm(vk0) == 0:
                     v0 = uf0.copy()
-                v1 = v0 + vk0
-                xk0 = v1 * time_step
-                x1 = x0 + xk0
+                v1 = v0 + 0.5 * vk0
+                x1 = x0 + 0.5 * xk0
 
                 vk1, uf1, temp = _rk4_step(self, v1, x1)
+                xk1 = v1 * time_step
                 if vk1 is None:
                     return None, None, None
                 if np.linalg.norm(vk1) == 0:
                     v0 = uf1.copy()
                 v2 = v0 + 0.5 * vk1
-                xk1 = v2 * time_step
                 x2 = x0 + 0.5 * xk1
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if np.linalg.norm(x2 - x0) >= 10 * np.linalg.norm(x1 - x0):
+                if np.linalg.norm(x2 - x0) >= 10 * np.linalg.norm(x1 - x0) and np.linalg.norm(x2 - x0) >= 1e-12:
                     self.rk4_bool = True
                     return x0, v0, u0
 
                 vk2, uf2, temp = _rk4_step(self, v2, x2)
+                xk2 = v2 * time_step
                 if vk2 is None:
                     return None, None, None
                 if np.linalg.norm(vk2) == 0:
                     v0 = uf2.copy()
-                v3 = v0 + 0.5 * vk2
-                xk2 = v3 * time_step
-                x3 = x0 + 0.5 * xk2
+                v3 = v0 + vk2
+                x3 = x0 + xk2
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if np.linalg.norm(x3 - x0) >= 10 * np.linalg.norm(x1 - x0):
+                if np.linalg.norm(x3 - x0) >= 10 * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= 1e-12:
                     self.rk4_bool = True
                     return x0, v0, u0
 
                 vk3, uf3, temp = _rk4_step(self, v3, x3)
+                xk3 = v3 * time_step
                 if vk3 is None:
                     return None, None, None
                 if np.linalg.norm(vk3) == 0:
                     v0 = uf3.copy()
-                v4 = v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
-                xk3 = v4 * time_step
-                x4 = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
+                v_new = v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
+                x_new = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if np.linalg.norm(x4 - x0) >= 10 * np.linalg.norm(x1 - x0):
+                if np.linalg.norm(x_new - x0) >= 10 * np.linalg.norm(x1 - x0) and np.linalg.norm(
+                        x_new - x0) >= 1e-12:
                     self.rk4_bool = True
                     return x0, v0, u0
 
-                vk4, uf4, temp = _rk4_step(self, v4, x4)
-                if vk4 is None:
+                vk_new, uf_new, temp = _rk4_step(self, v_new, x_new)
+                # make sure the velocity is going down in a compression case
+                # This is done to remove the oscillations in the post-shock region
+                if vk_new is None:
                     return None, None, None
+                if self.interp.method == 'simple_oblique_shock' and np.dot(v_new - v0, uf_new - v_new) < 0:
+                    self.rk4_bool = True
+                    return x0, v0, u0
 
-                self.ppoint = x4
+                self.ppoint = x_new
 
-                return x4, v4, uf4
+                return x_new, v_new, uf_new

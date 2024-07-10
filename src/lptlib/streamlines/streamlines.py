@@ -63,7 +63,7 @@ class Streamlines:
                  search='p-space', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000,
                  time_step=1e-3, max_time_step=1, drag_model='stokes', adaptivity=0.001,
-                 magnitude_adaptivity=0.001, filepath=None, task=None, debug=False, unsteady_time_step=0.1):
+                 magnitude_adaptivity=0.001, filepath=None, task=None, debug=False):
         self.grid_file = grid_file
         self.flow_file = flow_file
         self.point = np.array(point)
@@ -86,8 +86,6 @@ class Streamlines:
         self.task = task
         self.debug = debug
         # unsteady parameters
-        self.unsteady_time_step = unsteady_time_step
-        self.unsteady_time = []
         # Shaped based on the interp class q attribute
         self.flow_old = None
 
@@ -798,10 +796,10 @@ class Streamlines:
             # t.stop()
 
         if method == 'unsteady-p-space':
-            t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
-            t.start()
             # _temp is used to keep track of the flow object
             _temp = 0
+            if self.debug:
+                fig, ax = plt.subplots()
             while True:
                 if (flow.unsteady_flow[_temp].time - np.sum(self.time)) < 0:
                     self.flow_old = flow.unsteady_flow[_temp]
@@ -825,20 +823,28 @@ class Streamlines:
                 self.fvelocity.append(new_vel)
                 self.svelocity.append(new_vel)
                 self.time.append(self.time_step)
-                self.unsteady_time.append(self.unsteady_time_step)
                 self.point = new_point
+
+                # Plot the streamline for debugging
+                # add levels to debug; multiple ways of showing plots etc...
+                # This will help when working with varying flow fields
+                if self.debug:
+                    self.plot_update(ax,
+                                     [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
+                                     [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
+                                     title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
+                                           f' density - {self.density} and time-step - {self.time_step}')
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
-            t.stop()
 
         if method == 'unsteady-ppath':
-            t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
-            t.start()
             vel = None
             fvel = None
             # _temp is used to keep track of the flow object
             _temp = 0
+            if self.debug:
+                fig, ax = plt.subplots()
             while True:
                 if (flow.unsteady_flow[_temp].time - np.sum(self.time)) < 0:
                     self.flow_old = flow.unsteady_flow[_temp]
@@ -867,13 +873,21 @@ class Streamlines:
                 self.svelocity.append(new_vel)
                 self.fvelocity.append(new_fvel)
                 self.time.append(self.time_step)
-                self.unsteady_time.append(self.unsteady_time_step)
                 self.point = new_point
                 vel = new_vel.copy()
                 fvel = new_fvel.copy()
 
+                # Plot the streamline for debugging
+                # add levels to debug; multiple ways of showing plots etc...
+                # This will help when working with varying flow fields
+                if self.debug:
+                    self.plot_update(ax,
+                                     [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
+                                     [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
+                                     title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
+                                           f' density - {self.density} and time-step - {self.time_step}')
+
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
-            t.stop()
 
         return
