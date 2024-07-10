@@ -63,7 +63,7 @@ class Streamlines:
                  search='p-space', interpolation='p-space', integration='pRK4',
                  diameter=1e-7, density=1000,
                  time_step=1e-3, max_time_step=1, drag_model='stokes', adaptivity=0.001,
-                 magnitude_adaptivity=0.001, filepath=None, task=None, debug=False):
+                 magnitude_adaptivity=0.001, filepath=None, task=None, debug=False, unsteady_time_step=0.1):
         self.grid_file = grid_file
         self.flow_file = flow_file
         self.point = np.array(point)
@@ -85,6 +85,11 @@ class Streamlines:
         self.filepath = filepath
         self.task = task
         self.debug = debug
+        # unsteady parameters
+        self.unsteady_time_step = unsteady_time_step
+        self.unsteady_time = []
+        # Shaped based on the interp class q attribute
+        self.flow_old = None
 
     # TODO: Need to add doc for streamlines
 
@@ -791,5 +796,84 @@ class Streamlines:
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
             # t.stop()
+
+        if method == 'unsteady-p-space':
+            t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
+            t.start()
+            # _temp is used to keep track of the flow object
+            _temp = 0
+            while True:
+                if (flow.unsteady_flow[_temp].time - np.sum(self.time)) < 0:
+                    self.flow_old = flow.unsteady_flow[_temp]
+                    _temp += 1
+                if _temp == len(flow.unsteady_flow):
+                    print('Integration complete! for particle ' + str(self.task))
+                    break
+                idx = Search(grid, self.point)
+                # Skip the first object from _flowfiles and change the flow object with every iteration in interp
+                interp = Interpolation(flow.unsteady_flow[_temp], idx)
+                interp.time = self.time
+                interp.flow_old = self.flow_old
+                intg = Integration(interp)
+                idx.compute(method=self.search)
+                interp.compute(method=self.interpolation)
+                new_point, new_vel = intg.compute(method='unsteady-pRK4', time_step=self.time_step)
+                if new_point is None:
+                    print('Integration complete!')
+                    break
+                self.streamline.append(new_point)
+                self.fvelocity.append(new_vel)
+                self.svelocity.append(new_vel)
+                self.time.append(self.time_step)
+                self.unsteady_time.append(self.unsteady_time_step)
+                self.point = new_point
+
+            # Save files for each particle; can be used for multiprocessing large number of particles
+            self._save_data(self)
+            t.stop()
+
+        if method == 'unsteady-ppath':
+            t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
+            t.start()
+            vel = None
+            fvel = None
+            # _temp is used to keep track of the flow object
+            _temp = 0
+            while True:
+                if (flow.unsteady_flow[_temp].time - np.sum(self.time)) < 0:
+                    self.flow_old = flow.unsteady_flow[_temp]
+                    _temp += 1
+                if _temp == len(flow.unsteady_flow):
+                    print('Integration complete! for particle ' + str(self.task))
+                    break
+                idx = Search(grid, self.point)
+                interp = Interpolation(flow.unsteady_flow[_temp], idx)
+                interp.time = self.time
+                interp.flow_old = self.flow_old
+                intg = Integration(interp)
+                idx.compute(method=self.search)
+                interp.compute(method=self.interpolation)
+                new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter,
+                                                                  density=self.density,
+                                                                  velocity=vel, method='unsteady-pRK4',
+                                                                  time_step=self.time_step,
+                                                                  drag_model=self.drag_model)
+                if new_point is None:
+                    print('Integration complete! Out of domain for particle ' + str(self.task))
+                    break
+
+                # Save results and continue the loop
+                self.streamline.append(new_point)
+                self.svelocity.append(new_vel)
+                self.fvelocity.append(new_fvel)
+                self.time.append(self.time_step)
+                self.unsteady_time.append(self.unsteady_time_step)
+                self.point = new_point
+                vel = new_vel.copy()
+                fvel = new_fvel.copy()
+
+            # Save files for each particle; can be used for multiprocessing large number of particles
+            self._save_data(self)
+            t.stop()
 
         return

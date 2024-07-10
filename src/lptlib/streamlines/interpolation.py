@@ -62,6 +62,9 @@ class Interpolation:
         self.adaptive = None
         self.rbf_epsilon = 1  # Default for RBF interpolation
         self.method = None
+        # for unsteady case
+        self.flow_old = None
+        self.time = []
 
     def __str__(self):
         doc = "This instance uses " + self.flow.filename + " as the flow file " \
@@ -758,3 +761,34 @@ class Interpolation:
                                       [_J10_inv, _J11_inv, _J12_inv],
                                       [_J20_inv, _J21_inv, _J22_inv]]).reshape(3, 3)
 
+            # TODO: Thorough testing needed
+            case 'unsteady-rbf-p-space':
+                """
+                Raidal basis function interpolation in physical space for unsteady problems
+                """
+                # if the point is node return node data
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
+                                    'Interpolation will assign node properties for integration.\n' \
+                                    'Index of the node will be returned by cell attribute\n':
+                    self.q = _cell_q[0]
+                    self.q = self.q.reshape((1, 1, 1, -1, 1))
+                    return
+
+                from scipy.interpolate import RBFInterpolator as rbf
+                _rbf = rbf(_cell_grd, _cell_q)
+                self.q = _rbf(np.array(self.idx.ppoint).reshape(1, -1))
+                self.q = self.q.reshape((1, 1, 1, -1, 1))
+                # Equation is linear interpolation between time steps in unsteady data
+                # use of try-except is to avoid error in the first time step
+                # instead of keeping track of it in every step
+                try:
+                    _tau = (np.sum(self.time) - self.flow_old.time) / (self.flow.time - self.flow_old.time)
+                    _cell_q_old = self.flow_old.q[
+                                  self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, self.idx.block
+                                  ]
+                    _rbf_old = rbf(_cell_grd, _cell_q_old)
+                    _q_old = _rbf_old(np.array(self.idx.ppoint).reshape(1, -1))
+                    _q_old = _q_old.reshape((1, 1, 1, -1, 1))
+                    self.q = _tau * self.q + (1 - _tau) * _q_old
+                except AttributeError:
+                    return
