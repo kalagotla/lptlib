@@ -105,7 +105,8 @@ class DataIO:
             return np.array([1], dtype=int)
 
     # Function to loop through the scattered data
-    def _grid_interp(self, _data, _points, _x_grid, _y_grid, method='linear'):
+    @staticmethod
+    def _grid_interp(_points, _data, _x_grid, _y_grid, fill_value, method='linear'):
         """
         Interpolate to grid data from scatter points
         Args:
@@ -121,8 +122,7 @@ class DataIO:
         """
         _data = _data.reshape(-1)
         # Transposing to keep consistency with default xy indexing of meshgrid
-        # Where there's no data, fill with twice the max value
-        _q = griddata(_points, _data, (_x_grid, _y_grid), method=method, fill_value=_data.max() * 2)
+        _q = griddata(_points, _data, (_x_grid, _y_grid), method=method, fill_value=fill_value)
 
         return _q
 
@@ -279,8 +279,8 @@ class DataIO:
             # Save both interpolated data and new particle data for easy future computations
             try:
                 # Save interpolated data to files
-                np.load(self.location + 'dataio/interpolated_q_data', allow_pickle=False)
-                np.load(self.location + 'dataio/new_p_data', allow_pickle=False)
+                _q_list = np.load(self.location + 'dataio/interpolated_q_data', allow_pickle=False)
+                _p_data = np.load(self.location + 'dataio/new_p_data', allow_pickle=False)
                 print('Loaded particle and flow interpolated data from existing files.\n')
             except:
                 np.save(self.location + 'dataio/interpolated_q_data', _q_list)
@@ -307,13 +307,18 @@ class DataIO:
 
             # Interpolate scattered data onto the grid -- for flow using MPI
             _qf = []
+            # set fill value to twice the max value for scalars and 0 for vectors
+            _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0, 0, 0, 2 * np.nanmax(self.flow.q[..., -1, :])]
             comm = MPI.COMM_WORLD
             rank = comm.Get_rank()
             size = comm.Get_size()
             _q_f_list = np.array_split(_q_f_list, size)[rank]
             _p_data = np.array_split(_p_data, size)[rank]
-            for _i_q_f_list in tqdm(_q_f_list.T, desc=f'Flow data interpolation on Rank {rank}'):
-                _qf.append(self._grid_interp(_i_q_f_list, _p_data[:, :2], _xi, _yi, method='linear'))
+            _i = 0
+            for _q_f in tqdm(_q_f_list.T, desc=f'Fluid data interpolation on Rank {rank}'):
+                _qf.append(self._grid_interp(_p_data[:, :2], _q_f, _xi, _yi,
+                                             fill_value=_fill_value[_i], method='linear'))
+                _i += 1
             _qf = comm.gather(_qf, root=0)
             if rank == 0:
                 _qf = np.vstack(_qf)
@@ -334,8 +339,10 @@ class DataIO:
             rank = comm.Get_rank()
             size = comm.Get_size()
             _q_p_list = np.array_split(_q_p_list, size)[rank]
-            for _i_q_p_list in tqdm(_q_p_list[:, 1:4].T, desc=f'Particle data interpolation on Rank {rank}'):
-                _qp_123.append(self._grid_interp(_i_q_p_list, _p_data[:, :2], _xi, _yi, method='linear'))
+            for _q_p in tqdm(_q_p_list[:, 1:4].T, desc=f'Particle data interpolation on Rank {rank}'):
+                # 0 fill value because we are interpolating vectors
+                _qp_123.append(self._grid_interp(_p_data[:, :2], _q_p, _xi, _yi,
+                                                 fill_value=0, method='linear'))
             _qp_123 = comm.gather(_qp_123, root=0)
             if rank == 0:
                 _qp_123 = np.vstack(_qp_123)
