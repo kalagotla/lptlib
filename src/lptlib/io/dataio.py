@@ -3,12 +3,13 @@
 import numpy as np
 from ..streamlines.search import Search
 from ..streamlines.interpolation import Interpolation
-from scipy.interpolate import griddata
+from scipy.interpolate import griddata, LinearNDInterpolator, RBFInterpolator
 import os
 import re
 from tqdm import tqdm
 from mpi4py import MPI
-rng = np.random.default_rng()
+from sklearn.cluster import KMeans
+rng = np.random.default_rng(7)
 
 
 class DataIO:
@@ -126,6 +127,53 @@ class DataIO:
 
         return _q
 
+    @staticmethod
+    def _sample_data(_data, _percent):
+        """
+        Sample data using K-means clustering
+        Args:
+            _data: data is a numpy array of shape (n, 15)
+            _percent: percentage of data to be sampled
+
+        Returns:
+            Sampled data
+
+        """
+        # Extract x and y columns
+        x = _data[:, 0]
+        y = _data[:, 1]
+
+        # Stack x and y into a 2D array
+        points = np.vstack([x, y]).T
+
+        # Apply k-means clustering
+        kmeans = KMeans(n_clusters=100)
+        kmeans.fit(points)
+
+        # Get labels and cluster centers
+        labels = kmeans.labels_
+        cluster_centers = kmeans.cluster_centers_
+
+        # Calculate the number of samples to draw from each cluster
+        unique_labels, counts = np.unique(labels, return_counts=True)
+        sampling_prob = counts / counts.sum()
+        samples_per_cluster = np.round(sampling_prob * _percent * _data.shape[0]/100).astype(int)
+
+        sampled_data = []
+
+        # Sample points within each cluster
+        for label, n in zip(unique_labels, samples_per_cluster):
+            cluster_data = _data[labels == label]
+            if len(cluster_data) > 0:
+                sampled_indices = np.random.choice(len(cluster_data), size=n, replace=True)
+                sampled_cluster_data = cluster_data[sampled_indices]
+                sampled_data.append(sampled_cluster_data)
+
+        # Concatenate sampled data from all clusters
+        sampled_data = np.vstack(sampled_data)
+
+        return sampled_data
+
     def _mpi_read(self, _files, comm):
         """
         Read files using MPI
@@ -178,7 +226,7 @@ class DataIO:
 
             # Read and stack files using MPI
             # cut the files into smaller chunks to avoid memory issues
-            n = len(_files) // 1500  # ~2 sets for 3000-4000 files as tested
+            n = len(_files) // 1500 + 1  # ~2 sets for 3000-4000 files as tested
             _files = np.array_split(_files, n)
             _p_data = self._mpi_read(_files[0], comm)
             for _file in _files[1:]:
@@ -209,9 +257,9 @@ class DataIO:
         if self.percent_data == 100:
             pass
         else:
-            # Get a uniform distribution of the sample
+            # Get a uniform distribution of the sample using stratified sampling in x and y
             if comm.Get_rank() == 0:
-                _p_data = rng.choice(_p_data, size=int(_p_data.shape[0] * self.percent_data / 100))
+                _p_data = self._sample_data(_p_data, self.percent_data)
             else:
                 _p_data = None
             _p_data = comm.bcast(_p_data, root=0)
@@ -304,66 +352,72 @@ class DataIO:
             _qp = np.load(self.location + 'dataio/particle_data.npy')
             print('Loaded available flow/particle data from numpy residual files\n')
         except:
-
-            # Interpolate scattered data onto the grid -- for flow using MPI
-            _qf = []
-            # set fill value to twice the max value for scalars and 0 for vectors
-            _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0, 0, 0, 2 * np.nanmax(self.flow.q[..., -1, :])]
             comm = MPI.COMM_WORLD
             rank = comm.Get_rank()
-            size = comm.Get_size()
-            _q_f_list = np.array_split(_q_f_list, size)[rank]
-            _p_data = np.array_split(_p_data, size)[rank]
-            _i = 0
-            for _q_f in tqdm(_q_f_list.T, desc=f'Fluid data interpolation on Rank {rank}'):
-                _qf.append(self._grid_interp(_p_data[:, :2], _q_f, _xi, _yi,
-                                             fill_value=_fill_value[_i], method='linear'))
-                _i += 1
+            # set fill value to twice the max value for scalars and 0 for vectors
+            _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0, 0, 0, 2 * np.nanmax(self.flow.q[..., -1, :])]
+            if rank < 5:
+                # Interpolate scattered data onto the grid -- for flow using MPI
+                _qf = []
+                # run each variable of the flow data separately on each process
+                _q_f_list = np.array_split(_q_f_list, 5, axis=1)[rank]
+                for _q_f in tqdm(_q_f_list.T, desc=f'Flow data interpolation on Rank {rank}'):
+                    _qf.append(self._grid_interp(_p_data[:, :2], _q_f, _xi, _yi, _fill_value[rank]))
+            else:
+                # For ranks >= 5, participate in gather with a dummy value to ensure no deadlock
+                _qf = [np.empty(_xi.shape)]  # Ensure the dummy value is consistent with the expected data structure
+            # Ensure all processes reach this point before proceeding
+            comm.Barrier()
             _qf = comm.gather(_qf, root=0)
             if rank == 0:
-                _qf = np.vstack(_qf)
+                # stack _qf from first 5 ranks
+                _qf = [data[0] for i, data in enumerate(_qf) if i < 5]  # list of arrays
+                print(f'Flow data shape list: {len(_qf)} and {_qf[0].shape}')
+                # Save the array to a file
+                # This will only happen when there are files in dataio directory
+                _qf = np.stack(_qf)  # shape (5, _xi.shape[0], _xi.shape[1])
+                # fill the missing values with the fill value
+                np.save(self.location + 'dataio/flow_data', _qf)
+                print(f'Flow data shape stack: {_qf.shape}')
             else:
                 _qf = None
             _qf = comm.bcast(_qf, root=0)
             # synchronize the processes
             comm.Barrier()
 
-            # Save the array to a file
-            # This will only happen when there are files in dataio directory
-            _qf = np.array(_qf)
-            np.save(self.location + 'dataio/flow_data', _qf)
-
-            # Interpolate scattered data onto the grid -- for particles using MPI
-            _qp_123 = []
-            comm = MPI.COMM_WORLD
-            rank = comm.Get_rank()
-            size = comm.Get_size()
-            _q_p_list = np.array_split(_q_p_list, size)[rank]
-            for _q_p in tqdm(_q_p_list[:, 1:4].T, desc=f'Particle data interpolation on Rank {rank}'):
-                # 0 fill value because we are interpolating vectors
-                _qp_123.append(self._grid_interp(_p_data[:, :2], _q_p, _xi, _yi,
-                                                 fill_value=0, method='linear'))
+            # Particle data interpolation
+            if rank < 3:
+                # Interpolate scattered data onto the grid -- for particles using MPI
+                _qp_123 = []
+                _q_p_list = np.array_split(_q_p_list[:, 1:4], 3, axis=1)[rank]
+                for _q_p in tqdm(_q_p_list.T, desc=f'Particle data interpolation on Rank {rank}'):
+                    # 0 fill value because we are interpolating vectors
+                    _qp_123.append(self._grid_interp(_p_data[:, :2], _q_p, _xi, _yi, 0))
+            else:
+                # For ranks >= 3, participate in gather with a dummy value to ensure no deadlock
+                _qp_123 = [np.empty(_xi.shape)]  # Ensure the dummy value is consistent with the expected data structure
+            # Ensure all processes reach this point before proceeding
+            comm.Barrier()
             _qp_123 = comm.gather(_qp_123, root=0)
             if rank == 0:
-                _qp_123 = np.vstack(_qp_123)
+                # stack _qf from first 5 ranks
+                _qp_123 = [data[0] for i, data in enumerate(_qp_123) if i < 3]  # list of lists
+                # Create _qp array from known values
+                _qp = np.stack((_qf[0], _qp_123[0], _qp_123[1], _qp_123[2], _qf[-1]))
+                # Save data to a temporary file
+                _qp = np.array(_qp)
+                # This will only happen when there are files in dataio directory
+                np.save(self.location + 'dataio/particle_data', _qp)
             else:
                 _qp_123 = None
             _qp_123 = comm.bcast(_qp_123, root=0)
             # synchronize the processes
             comm.Barrier()
 
-            # Create _qp array from known values
-            _qp = np.dstack((_qf[0], _qp_123[0], _qp_123[1], _qp_123[2], _qf[-1])).transpose((2, 0, 1))
-
-            # Save data to a temporary file
-            _qp = np.array(_qp)
-
-            # This will only happen when there are files in dataio directory
-            np.save(self.location + 'dataio/particle_data', _qp)
-
-        # Write out to plot3d format for further processing
-        self.grid.mgrd_to_p3d(_xi, _yi, out_file=self.location + 'dataio/mgrd_to_p3d.x')
-        self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d')
-        self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d')
+            if rank == 0:
+                # Write out to plot3d format for further processing
+                self.grid.mgrd_to_p3d(_xi, _yi, out_file=self.location + 'dataio/mgrd_to_p3d.x')
+                self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d')
+                self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d')
 
         return
