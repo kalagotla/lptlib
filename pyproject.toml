@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lptlib"
-version = "0.0.1a14"
+version = "0.0.2a0"
 authors = [
     {name="Dilip Kalagotla"},
     {email="dilipkalagotla@gmail.com"},
@@ -20,6 +20,7 @@ dependencies = [
     "seaborn",
     "tqdm",
     "mpi4py",
+    "scikit-learn",
     ]
 classifiers = [
     "Programming Language :: Python :: 3",
