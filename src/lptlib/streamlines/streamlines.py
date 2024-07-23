@@ -139,7 +139,8 @@ class Streamlines:
             # help closes the file after writing
             with open(self.filepath + 'ppath_' + str(self.task) + '.npy', 'wb') as f:
                 np.save(f, _data_save)
-            self.print_debug(self, '** SUCCESS ** Done writing file for particle number - ' + str(self.task) + ' ** SUCCESS **')
+            self.print_debug(self, '** SUCCESS ** Done writing file for particle number - ' + str(
+                self.task) + ' ** SUCCESS **')
             # set self to None to clear up memory after saving required data
             self.streamline = []
             self.svelocity = []
@@ -235,6 +236,8 @@ class Streamlines:
         self.svelocity.append(uf)
         self.time.append(self.time_step)
         loop_check = 0
+        # Check for step back to accommodate better dataio interpolation
+        step_back = False
 
         if method == 'p-space':
             # t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
@@ -535,8 +538,10 @@ class Streamlines:
 
                 # Check for mid-rk4 blowup
                 if intg.rk4_bool is True:
-                    self.print_debug(self, f'**WARNING** Large residual. Mid-RK4 blow up! Reducing time-step for particle number'
-                          f' - {self.task}')
+                    self.print_debug(self,
+                                     f'**WARNING** Large residual. Mid-RK4 blow up! Reducing time-step for particle '
+                                     f'number'
+                                     f' - {self.task}')
                     intg.rk4_bool = False
                     self.time_step = 0.5 * self.time_step
                     loop_check += 1
@@ -552,8 +557,9 @@ class Streamlines:
                     self.time_step = 2 * self.time_step
                     loop_check += 1
                     if loop_check == 70:
-                        self.print_debug(self, f'Successive points did not change for too long. Integration ends! for particle '
-                              f'{self.task}')
+                        self.print_debug(self, f'Successive points did not change for too long. Integration ends! for '
+                                               f'particle'
+                                               f'{self.task}')
                         break
                 # Check for strong acceleration and reduce time-step
                 # Increase time step when angle is below 0.05 degrees
@@ -575,6 +581,32 @@ class Streamlines:
                         and self._magnitude(self, new_vel, vel) >= self.magnitude_adaptivity:
                     self.print_debug(self, 'Decreasing time step. High deflection wrt velocity')
                     self.time_step = 0.5 * self.time_step
+                    step_back = True
+                # check the vector length just before entering an acceleration zone
+                elif step_back:
+                    self.print_debug(self, 'Step back to accommodate better dataio Delaunay triangulation')
+                    step_back_count = 0
+                    while np.linalg.norm(new_vel - vel) >= 1e-12:
+                        self.time_step = 0.5 * self.time_step
+                        new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
+                                                                          velocity=vel,
+                                                                          method='pRK4', time_step=self.time_step,
+                                                                          drag_model=self.drag_model)
+                        step_back_count += 1
+                    # Save the results
+                    self.streamline.append(new_point)
+                    self.svelocity.append(new_vel)
+                    self.fvelocity.append(new_fvel)
+                    self.time.append(self.time_step)
+                    self.point = new_point
+                    vel = new_vel.copy()
+                    fvel = new_fvel.copy()
+                    loop_check = 0
+                    # reset the time-step
+                    self.time_step = self.time_step / (0.5 * step_back_count)
+                    # set step_back to False and continue the loop
+                    step_back = False
+
                 # Save if none of the above conditions meet
                 else:
                     self.streamline.append(new_point)
@@ -591,10 +623,10 @@ class Streamlines:
                 # This will help when working with varying flow fields
                 if self.debug:
                     self.plot_update(ax,
-                                    [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
-                                    [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
-                                    title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
-                                          f' density - {self.density} and time-step - {self.time_step}')
+                                     [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
+                                     [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
+                                     title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
+                                           f' density - {self.density} and time-step - {self.time_step}')
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
@@ -744,8 +776,9 @@ class Streamlines:
 
                     # Check for mid-rk4 blowup
                     if intg.rk4_bool is True:
-                        self.print_debug(self, f'**WARNING** Large residual. Mid-RK4 blow up! Reducing time-step for particle number'
-                              f' - {self.task}')
+                        self.print_debug(self,
+                                         f'**WARNING** Large residual. Mid-RK4 blow up! Reducing time-step for particle number'
+                                         f' - {self.task}')
                         intg.rk4_bool = False
                         self.time_step = 0.5 * self.time_step
                         loop_check += 1
@@ -761,8 +794,9 @@ class Streamlines:
                         self.time_step = 2 * self.time_step
                         loop_check += 1
                         if loop_check == 70:
-                            self.print_debug(self, f'Successive points did not change for too long. Integration ends! for particle '
-                                  f'{self.task}')
+                            self.print_debug(self,
+                                             f'Successive points did not change for too long. Integration ends! for particle '
+                                             f'{self.task}')
                             break
                     elif self.angle_btw(new_fvel,
                                         fvel) <= 0.1 * self.adaptivity and self.time_step <= self.max_time_step:
