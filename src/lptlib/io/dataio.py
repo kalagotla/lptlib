@@ -235,6 +235,7 @@ class DataIO:
                     _p_data = np.vstack((_p_data, _data))
                 else:
                     _p_data = np.vstack((_p_data, _data))
+            _p_data = comm.bcast(_p_data, root=0)
 
             # pause until all processes are done
             comm.Barrier()
@@ -262,8 +263,9 @@ class DataIO:
                 _p_data = self._sample_data(_p_data, self.percent_data)
             else:
                 _p_data = None
-            _p_data = comm.bcast(_p_data, root=0)
+        _p_data = comm.bcast(_p_data, root=0)
         _locations = _p_data[:, :3]
+        comm.Barrier()
 
         try:
             # Read if saved files are available

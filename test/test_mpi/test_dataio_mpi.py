@@ -38,7 +38,7 @@ class TestDataIOMPI(unittest.TestCase):
         # data = DataIO(grid, flow, location='../data/shocks/particle_data/multi_process_test/')
         data = DataIO(osd.grid, osd.flow, location='../../data/shocks/new_start/williams_data/constant_particle_specs/',
                       read_file='../../data/shocks/new_start/williams_data/constant_particle_specs/combined_file.npy')
-        data.percent_data = 10
+        # data.percent_data = 100
         # Increased refinement for better resolution
         data.x_refinement = 500
         data.y_refinement = 400
@@ -63,12 +63,15 @@ class TestDataIOMPI(unittest.TestCase):
 
     def test_debug_plots(self):
         # path
-        path = '../../data/shocks/new_start/williams_data/constant_particle_specs/dataio_old_published/'
+        # path = '../../data/shocks/new_start/williams_data/constant_particle_specs/dataio_old_published/'
+        # path = ('/Users/kal/Library/CloudStorage/OneDrive-UniversityofCincinnati/Desktop/University of Cincinnati/'
+        #         'DoctoralWork/Codes/hpc_data/williams_data/constant_particle_specs/dataio/')
+        path = '../../data/shocks/new_start/williams_data/constant_particle_specs/dataio/'
         # load the old data
         p_data = np.load(path + 'new_p_data.npy')
         # load the flow data
         grid = GridIO(path + 'mgrd_to_p3d.x')
-        flow = FlowIO(path + 'mgrd_to_p3d_fluid.q')
+        flow = FlowIO(path + 'mgrd_to_p3d_particle.q')
         grid.read_grid()
         grid.compute_metrics()
         flow.read_flow()
@@ -76,13 +79,13 @@ class TestDataIOMPI(unittest.TestCase):
         fig, ax = plt.subplots()
         contour = ax.contour(grid.grd[..., 1, 0, 0], grid.grd[..., 1, 1, 0],
                              flow.q[..., 1, 1, 0] / flow.q[..., 1, 0, 0], 100, cmap='jet')
-        # # colorbar
-        # cbar = fig.colorbar(contour, ax=ax)
-        # cbar.set_label('Velocity')
-        # # inline numbers
-        # ax.clabel(contour, inline=True, fontsize=12)
+        # colorbar
+        cbar = fig.colorbar(contour, ax=ax)
+        cbar.set_label('Velocity')
+        # inline numbers
+        ax.clabel(contour, inline=True, fontsize=12)
         # color by velocity
-        ax.scatter(p_data[:, 0], p_data[:, 1], c=p_data[:, 3], s=1, cmap='jet')
+        # ax.scatter(p_data[:, 0], p_data[:, 1], c=p_data[:, 3], s=1, cmap='jet')
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         plt.show()
