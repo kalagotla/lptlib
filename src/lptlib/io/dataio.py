@@ -9,6 +9,7 @@ import re
 from tqdm import tqdm
 from mpi4py import MPI
 from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
 rng = np.random.default_rng(7)
 
 
@@ -128,51 +129,46 @@ class DataIO:
         return _q
 
     @staticmethod
-    def _sample_data(_data, _percent):
+    def _sample_data(self, _data, _percent):
         """
-        Sample data using K-means clustering
-        Args:
-            _data: data is a numpy array of shape (n, 15)
-            _percent: percentage of data to be sampled
+            Uniformly samples the given percentage of data spread on an XY plane.
 
-        Returns:
-            Sampled data
+            Parameters:
+            data (numpy.ndarray): An array of shape (n, 15) where the first two columns are x and y coordinates.
+            percent (float): The percentage of data to sample (0 < percent <= 100).
 
-        """
-        # Extract x and y columns
-        x = _data[:, 0]
-        y = _data[:, 1]
+            Returns:
+            numpy.ndarray: The uniformly sampled subset of the data.
+            """
+        # Ensure percent is between 0 and 100
+        if _percent <= 0 or _percent > 100:
+            raise ValueError("Percent must be between 0 and 100")
 
-        # Stack x and y into a 2D array
-        points = np.vstack([x, y]).T
+        # Calculate the number of samples to take
+        n_samples = int(len(_data[:, 0]) * _percent / 100)
 
-        # Apply k-means clustering
-        kmeans = KMeans(n_clusters=100)
-        kmeans.fit(points)
+        # Uniformly sample indices
+        sampled_indices = np.random.choice(len(_data), n_samples, replace=False)
 
-        # Get labels and cluster centers
-        labels = kmeans.labels_
-        cluster_centers = kmeans.cluster_centers_
+        # create a xy plot and save it
+        fig, ax = plt.subplots()
+        ax.scatter(_data[:, 0], _data[:, 1], s=1, label=f'Original data: {len(_data[:, 0])} points')
+        ax.scatter(_data[sampled_indices, 0], _data[sampled_indices, 1], s=1, color='red',
+                   label=f'Sampled data: {n_samples} points')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_xlim(_data[:, 0].min(), _data[:, 0].max())
+        ax.set_ylim(_data[:, 1].min(), _data[:, 1].max())
+        ax.legend(loc='upper right')
+        try:
+            # Try creating the directory; if exists errors out and except
+            os.mkdir(self.location + 'dataio')
+            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
+        except FileExistsError:
+            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
 
-        # Calculate the number of samples to draw from each cluster
-        unique_labels, counts = np.unique(labels, return_counts=True)
-        sampling_prob = counts / counts.sum()
-        samples_per_cluster = np.round(sampling_prob * _percent * _data.shape[0]/100).astype(int)
-
-        sampled_data = []
-
-        # Sample points within each cluster
-        for label, n in zip(unique_labels, samples_per_cluster):
-            cluster_data = _data[labels == label]
-            if len(cluster_data) > 0:
-                sampled_indices = np.random.choice(len(cluster_data), size=n, replace=True)
-                sampled_cluster_data = cluster_data[sampled_indices]
-                sampled_data.append(sampled_cluster_data)
-
-        # Concatenate sampled data from all clusters
-        sampled_data = np.vstack(sampled_data)
-
-        return sampled_data
+        # Return the sampled data
+        return _data[sampled_indices]
 
     def _mpi_read(self, _files, comm):
         """
@@ -260,7 +256,7 @@ class DataIO:
         else:
             # Get a uniform distribution of the sample using stratified sampling in x and y
             if comm.Get_rank() == 0:
-                _p_data = self._sample_data(_p_data, self.percent_data)
+                _p_data = self._sample_data(self, _p_data, self.percent_data)
             else:
                 _p_data = None
         _p_data = comm.bcast(_p_data, root=0)
