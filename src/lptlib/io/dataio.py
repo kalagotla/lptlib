@@ -185,7 +185,7 @@ class DataIO:
         _data = []
         # scatter
         _files = np.array_split(_files, size)[rank]
-        for _file in tqdm(_files, desc=f'Reading files on Rank {rank}'):
+        for _file in tqdm(_files, desc=f'Reading files on Rank {rank}', position=1):
             if np.load(self.location + _file).shape[0] == 0:
                 continue
             _data.append(np.load(self.location + _file))
@@ -196,6 +196,8 @@ class DataIO:
             _data = np.vstack(_data)
         else:
             _data = None
+        # synchronize the processes
+        comm.Barrier()
         return _data
 
     def compute(self):
@@ -206,6 +208,8 @@ class DataIO:
         """
         # MPI
         comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        size = comm.Get_size()
         # read particle files from a folder
         # read particle data
         try:
@@ -225,13 +229,12 @@ class DataIO:
             n = len(_files) // 100 + 1  # ~2 sets (divide by 1500) for 3000-4000 files as tested
             _files = np.array_split(_files, n)
             _p_data = self._mpi_read(_files[0], comm)
-            for _file in _files[1:]:
+            for _file in tqdm(_files[1:], desc='Reading files', position=0):
                 _data = self._mpi_read(_file, comm)
                 if comm.Get_rank() == 0:
                     _p_data = np.vstack((_p_data, _data))
                 else:
                     _p_data = np.vstack((_p_data, _data))
-            _p_data = comm.bcast(_p_data, root=0)
 
             # pause until all processes are done
             comm.Barrier()
@@ -239,14 +242,17 @@ class DataIO:
 
             # Save the combined file for future use
             try:
-                if comm.Get_rank() == 0:
+                if rank == 0:
                     np.save(self.location + 'combined_file', _p_data)
                     print('Saved the combined file for future use!\n')
+                else:
+                    pass
             except FileNotFoundError:
                 print('Could not save the combined file for future use!\n')
 
         # p-data has the following columns
         # x, y, z, vx, vy, vz, ux, uy, uz, time, integrated (ux, uy, uz), diameter, density
+        # set the grid limits on all processes
         _x_min, _x_max = self.grid.grd_min.reshape(-1)[0], self.grid.grd_max.reshape(-1)[0]
         _y_min, _y_max = self.grid.grd_min.reshape(-1)[1], self.grid.grd_max.reshape(-1)[1]
 
@@ -255,12 +261,16 @@ class DataIO:
             pass
         else:
             # Get a uniform distribution of the sample using stratified sampling in x and y
-            if comm.Get_rank() == 0:
+            if rank == 0:
                 _p_data = self._sample_data(self, _p_data, self.percent_data)
             else:
                 _p_data = None
-        _p_data = comm.bcast(_p_data, root=0)
-        _locations = _p_data[:, :3]
+        # broadcast the data to all processes
+        if rank == 0:
+            _locations = _p_data[:, :3]
+        else:
+            _locations = None
+        _locations = comm.bcast(_locations, root=0)
         comm.Barrier()
 
         try:
@@ -277,15 +287,16 @@ class DataIO:
                 print('Read the available old interpolated data to continue with the outliers algorithm')
             except FileNotFoundError:
                 # Run the interpolation process on all the scattered points
-                print('Interpolated data file is unavailable. Continuing with interpolation to scattered data!\n'
-                      'This is going to take sometime. Sit back and relax!\n'
-                      'Your PC will take off because of multi-process. Let it breathe...\n')
+                if rank == 0:
+                    print('Interpolated data file is unavailable. Continuing with interpolation to scattered data!\n'
+                          'This is going to take sometime. Sit back and relax!\n'
+                          'Your PC will take off because of multi-process. Let it breathe...\n')
+                else:
+                    pass
 
                 # MPI
                 _q_list = []
-                comm = MPI.COMM_WORLD
-                rank = comm.Get_rank()
-                size = comm.Get_size()
+                # scatter the locations
                 _locations = np.array_split(_locations, size)[rank]
                 for _point in tqdm(_locations, desc=f'Data interpolation on Rank {rank}'):
                     _q_list.append(self._flow_data(_point))
@@ -294,7 +305,6 @@ class DataIO:
                     _q_list = np.vstack(_q_list)
                 else:
                     _q_list = None
-                _q_list = comm.bcast(_q_list, root=0)
                 # synchronize the processes
                 comm.Barrier()
 
@@ -305,11 +315,13 @@ class DataIO:
                     np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
                     np.save(self.location + 'dataio/_old_p_data', _p_data)
                     print('Created dataio folder and saved old interpolated flow data to scattered points.\n')
-                except:
+                except FileExistsError:
                     np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
                     np.save(self.location + 'dataio/_old_p_data', _p_data)
-                print('Removing outliers from the data...\n')
 
+        # Run the outlier removal process
+        if rank == 0:
+            print('Removing outliers from the data using one process...\n')
             # Fluid data at scattered points/particle locations
             # Some searches return None. This helps remove those locations!
             _remove_index = [j for j in range(len(_q_list)) if np.all(_q_list[j] == 1)]
@@ -328,28 +340,44 @@ class DataIO:
                 _q_list = np.load(self.location + 'dataio/interpolated_q_data', allow_pickle=False)
                 _p_data = np.load(self.location + 'dataio/new_p_data', allow_pickle=False)
                 print('Loaded particle and flow interpolated data from existing files.\n')
-            except:
+            except FileNotFoundError:
                 np.save(self.location + 'dataio/interpolated_q_data', _q_list)
                 np.save(self.location + 'dataio/new_p_data', _p_data)
+        else:
+            _q_list, _p_data = None, None
+        # synchronize the processes
+        comm.Barrier()
 
-        # Particle data at the scattered points/particle locations
-        # rho, x,y,z - momentum, energy per unit volume (q-file data)
-        _q_p_list = np.hstack((_q_list[:, 0].reshape(-1, 1), _p_data[:, 3:6] * _q_list[:, 0].reshape(-1, 1),
-                               _q_list[:, 4].reshape(-1, 1)))
-        # Fluid data at the scattered points/particle locations
-        _q_f_list = np.hstack((_q_list[:, 0].reshape(-1, 1), _p_data[:, 6:9] * _q_list[:, 0].reshape(-1, 1),
-                               _q_list[:, 4].reshape(-1, 1)))
+        # create plot3d format lists
+        if rank == 0:
+            # Particle data at the scattered points/particle locations
+            # rho, x,y,z - momentum, energy per unit volume (q-file data)
+            _q_p_list = np.hstack((_q_list[:, 0].reshape(-1, 1), _p_data[:, 3:6] * _q_list[:, 0].reshape(-1, 1),
+                                   _q_list[:, 4].reshape(-1, 1)))
+            # Fluid data at the scattered points/particle locations
+            _q_f_list = np.hstack((_q_list[:, 0].reshape(-1, 1), _p_data[:, 6:9] * _q_list[:, 0].reshape(-1, 1),
+                                   _q_list[:, 4].reshape(-1, 1)))
 
-        # Create the grid to interpolate to
-        _xi, _yi = np.linspace(_x_min, _x_max, self.x_refinement), np.linspace(_y_min, _y_max, self.y_refinement)
-        _xi, _yi = np.meshgrid(_xi, _yi, indexing='ij')
+            # Create the grid to interpolate to
+            _xi, _yi = np.linspace(_x_min, _x_max, self.x_refinement), np.linspace(_y_min, _y_max, self.y_refinement)
+            _xi, _yi = np.meshgrid(_xi, _yi, indexing='ij')
+        else:
+            _xi, _yi = None, None
+            _q_f_list, _q_p_list = None, None
+        # broadcast the data to all processes
+        _q_f_list = comm.bcast(_q_f_list, root=0)
+        _q_p_list = comm.bcast(_q_p_list, root=0)
+        _xi = comm.bcast(_xi, root=0)
+        _yi = comm.bcast(_yi, root=0)
+        # synchronize the processes
+        comm.Barrier()
 
         try:
             # Read to see if data is available
             _qf = np.load(self.location + 'dataio/flow_data.npy')
             _qp = np.load(self.location + 'dataio/particle_data.npy')
             print('Loaded available flow/particle data from numpy residual files\n')
-        except:
+        except FileNotFoundError:
             comm = MPI.COMM_WORLD
             rank = comm.Get_rank()
             # set fill value to twice the max value for scalars and 0 for vectors
@@ -360,7 +388,7 @@ class DataIO:
                 # run each variable of the flow data separately on each process
                 _q_f_list = np.array_split(_q_f_list, 5, axis=1)[rank]
                 for _q_f in tqdm(_q_f_list.T, desc=f'Flow data interpolation on Rank {rank}'):
-                    _qf.append(self._grid_interp(_p_data[:, :2], _q_f, _xi, _yi, _fill_value[rank]))
+                    _qf.append(self._grid_interp(_locations[:, :2], _q_f, _xi, _yi, _fill_value[rank]))
             else:
                 # For ranks >= 5, participate in gather with a dummy value to ensure no deadlock
                 _qf = [np.empty(_xi.shape)]  # Ensure the dummy value is consistent with the expected data structure
@@ -390,7 +418,7 @@ class DataIO:
                 _q_p_list = np.array_split(_q_p_list[:, 1:4], 3, axis=1)[rank]
                 for _q_p in tqdm(_q_p_list.T, desc=f'Particle data interpolation on Rank {rank}'):
                     # 0 fill value because we are interpolating vectors
-                    _qp_123.append(self._grid_interp(_p_data[:, :2], _q_p, _xi, _yi, 0))
+                    _qp_123.append(self._grid_interp(_locations[:, :2], _q_p, _xi, _yi, 0))
             else:
                 # For ranks >= 3, participate in gather with a dummy value to ensure no deadlock
                 _qp_123 = [np.empty(_xi.shape)]  # Ensure the dummy value is consistent with the expected data structure
