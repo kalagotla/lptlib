@@ -334,6 +334,7 @@ class DataIO:
             _remove_index = np.where(_q_list[:, 0] > self.flow.q[..., 0, :].max())
             _q_list = np.vstack(np.delete(_q_list, _remove_index, axis=0))
             _p_data = np.delete(_p_data, _remove_index, axis=0)
+            _locations = _p_data[:, :3]
             # Save both interpolated data and new particle data for easy future computations
             try:
                 # Save interpolated data to files
@@ -344,7 +345,9 @@ class DataIO:
                 np.save(self.location + 'dataio/interpolated_q_data', _q_list)
                 np.save(self.location + 'dataio/new_p_data', _p_data)
         else:
-            _q_list, _p_data = None, None
+            _q_list, _p_data, _locations = None, None, None
+        # broadcast locations to all processes
+        _locations = comm.bcast(_locations, root=0)
         # synchronize the processes
         comm.Barrier()
 
