@@ -222,7 +222,7 @@ class DataIO:
 
             # Read and stack files using MPI
             # cut the files into smaller chunks to avoid memory issues
-            n = len(_files) // 1500 + 1  # ~2 sets for 3000-4000 files as tested
+            n = len(_files) // 100 + 1  # ~2 sets (divide by 1500) for 3000-4000 files as tested
             _files = np.array_split(_files, n)
             _p_data = self._mpi_read(_files[0], comm)
             for _file in _files[1:]:
