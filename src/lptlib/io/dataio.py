@@ -71,6 +71,7 @@ class DataIO:
         self.location = location
         self.x_refinement = x_refinement
         self.y_refinement = y_refinement
+        self.file_number_split = 10
 
     @staticmethod
     def _natural_sort(_l: list):
@@ -226,7 +227,7 @@ class DataIO:
 
             # Read and stack files using MPI
             # cut the files into smaller chunks to avoid memory issues
-            n = len(_files) // 100 + 1  # ~2 sets (divide by 1500) for 3000-4000 files as tested
+            n = self.file_number_split
             _files = np.array_split(_files, n)
             _p_data = self._mpi_read(_files[0], comm)
             for _file in tqdm(_files[1:], desc='Reading files', position=0):
