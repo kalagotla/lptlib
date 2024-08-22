@@ -190,10 +190,13 @@ class DataIO:
             if np.load(self.location + _file).shape[0] == 0:
                 continue
             _data.append(np.load(self.location + _file))
-        _data = np.vstack(_data)
         # gather -- fails if there are a lot of files
         _data = comm.gather(_data, root=0)
         if rank == 0:
+            # remove empty arrays
+            _data = [data for data in _data if len(data) > 0]
+            # do the stacking twice to first stack the files and then stack the data
+            _data = np.hstack(_data)
             _data = np.vstack(_data)
         else:
             _data = None
@@ -229,6 +232,8 @@ class DataIO:
             # cut the files into smaller chunks to avoid memory issues
             n = self.file_number_split
             _files = np.array_split(_files, n)
+            # remove empty arrays
+            _files = [files for files in _files if len(files) > 0]
             _p_data = self._mpi_read(_files[0], comm)
             for _file in tqdm(_files[1:], desc='Reading files', position=0):
                 _data = self._mpi_read(_file, comm)
