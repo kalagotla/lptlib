@@ -193,7 +193,7 @@ class DataIO:
         # gather -- fails if there are a lot of files
         _data = comm.gather(_data, root=0)
         if rank == 0:
-            # remove empty arrays
+            # remove empty arrays -- happens when there are more files than processes
             _data = [data for data in _data if len(data) > 0]
             # do the stacking twice to first stack the files and then stack the data
             _data = np.hstack(_data)
@@ -216,45 +216,45 @@ class DataIO:
         size = comm.Get_size()
         # read particle files from a folder
         # read particle data
+        # try:
+        #     print('Trying to read from a combined file...')
+        #     _p_data = np.load(self.read_file)
+        #     print('Read from the combined file!!')
+        # except FileNotFoundError:
+        # Sort in natural order to stack particles in order and track progress
+        _files = np.array(self._natural_sort(os.listdir(self.location)))
+        _bool = []
+        for _file in tqdm(_files, desc='Checking files'):
+            _bool.append('npy' not in _file)
+        _files = np.delete(_files, _bool)
+
+        # Read and stack files using MPI
+        # cut the files into smaller chunks to avoid memory issues
+        n = self.file_number_split
+        _files = np.array_split(_files, n)
+        # remove empty arrays
+        _files = [files for files in _files if len(files) > 0]
+        _p_data = self._mpi_read(_files[0], comm)
+        for _file in tqdm(_files[1:], desc='Reading files', position=0):
+            _data = self._mpi_read(_file, comm)
+            if comm.Get_rank() == 0:
+                _p_data = np.vstack((_p_data, _data))
+            else:
+                _p_data = np.vstack((_p_data, _data))
+
+        # pause until all processes are done
+        comm.Barrier()
+        print('Read from the group of files!!')
+
+        # Save the combined file for future use
         try:
-            print('Trying to read from a combined file...')
-            _p_data = np.load(self.read_file)
-            print('Read from the combined file!!')
+            if rank == 0:
+                np.save(self.location + 'combined_file', _p_data)
+                print('Saved the combined file for future use!\n')
+            else:
+                pass
         except FileNotFoundError:
-            # Sort in natural order to stack particles in order and track progress
-            _files = np.array(self._natural_sort(os.listdir(self.location)))
-            _bool = []
-            for _file in tqdm(_files, desc='Checking files'):
-                _bool.append('npy' not in _file)
-            _files = np.delete(_files, _bool)
-
-            # Read and stack files using MPI
-            # cut the files into smaller chunks to avoid memory issues
-            n = self.file_number_split
-            _files = np.array_split(_files, n)
-            # remove empty arrays
-            _files = [files for files in _files if len(files) > 0]
-            _p_data = self._mpi_read(_files[0], comm)
-            for _file in tqdm(_files[1:], desc='Reading files', position=0):
-                _data = self._mpi_read(_file, comm)
-                if comm.Get_rank() == 0:
-                    _p_data = np.vstack((_p_data, _data))
-                else:
-                    _p_data = np.vstack((_p_data, _data))
-
-            # pause until all processes are done
-            comm.Barrier()
-            print('Read from the group of files!!')
-
-            # Save the combined file for future use
-            try:
-                if rank == 0:
-                    np.save(self.location + 'combined_file', _p_data)
-                    print('Saved the combined file for future use!\n')
-                else:
-                    pass
-            except FileNotFoundError:
-                print('Could not save the combined file for future use!\n')
+            print('Could not save the combined file for future use!\n')
 
         # p-data has the following columns
         # x, y, z, vx, vy, vz, ux, uy, uz, time, integrated (ux, uy, uz), diameter, density
@@ -407,13 +407,11 @@ class DataIO:
             if rank == 0:
                 # stack _qf from first 5 ranks
                 _qf = [data[0] for i, data in enumerate(_qf) if i < 5]  # list of arrays
-                print(f'Flow data shape list: {len(_qf)} and {_qf[0].shape}')
                 # Save the array to a file
                 # This will only happen when there are files in dataio directory
                 _qf = np.stack(_qf)  # shape (5, _xi.shape[0], _xi.shape[1])
                 # fill the missing values with the fill value
                 np.save(self.location + 'dataio/flow_data', _qf)
-                print(f'Flow data shape stack: {_qf.shape}')
             else:
                 _qf = None
             _qf = comm.bcast(_qf, root=0)
