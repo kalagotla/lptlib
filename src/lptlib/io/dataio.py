@@ -195,8 +195,9 @@ class DataIO:
         if rank == 0:
             # remove empty arrays -- happens when there are more files than processes
             _data = [data for data in _data if len(data) > 0]
-            # do the stacking twice to first stack the files and then stack the data
-            _data = np.hstack(_data)
+            # flatten the list
+            _data = [data for sublist in _data for data in sublist]
+            # stack the data
             _data = np.vstack(_data)
         else:
             _data = None
