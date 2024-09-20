@@ -161,13 +161,13 @@ class DataIO:
         ax.set_xlim(_data[:, 0].min(), _data[:, 0].max())
         ax.set_ylim(_data[:, 1].min(), _data[:, 1].max())
         ax.legend(loc='upper right')
-        try:
-            # Try creating the directory; if exists errors out and except
-            os.mkdir(self.location + 'dataio')
-            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
-        except FileExistsError:
-            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
-
+        # try:
+        #     # Try creating the directory; if exists errors out and except
+        #     os.mkdir(self.location + 'dataio')
+        #     plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
+        # except FileExistsError:
+        #     plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
+        #
         # Return the sampled data
         return _data[sampled_indices]
 
@@ -278,6 +278,7 @@ class DataIO:
         else:
             _locations = None
         _locations = comm.bcast(_locations, root=0)
+        print('locations shape: ', _locations.shape)
         comm.Barrier()
 
         try:
@@ -303,16 +304,72 @@ class DataIO:
 
                 # MPI
                 _q_list = []
-                # scatter the locations
-                _locations = np.array_split(_locations, size)[rank]
-                for _point in tqdm(_locations, desc=f'Data interpolation on Rank {rank}'):
-                    _q_list.append(self._flow_data(_point))
-                _q_list = comm.gather(_q_list, root=0)
+
+                # Prepare Scatterv
                 if rank == 0:
-                    _q_list = np.vstack(_q_list)
+                    # Split the locations array into subarrays along the first axis
+                    split_sizes = np.array_split(_locations, size)
+
+                    # Flatten the subarrays into a 1D array for Scatterv
+                    _locations_flat = np.concatenate(split_sizes).flatten()
+
+                    # Calculate the number of elements (not rows) for each process
+                    split_sizes = [len(split) * 3 for split in split_sizes]  # Each row has 3 elements
+
+                    # Calculate the displacements: the starting index of each process's subarray in the flattened array
+                    split_displacements = [0] + np.cumsum(split_sizes[:-1]).tolist()
                 else:
-                    _q_list = None
-                # synchronize the processes
+                    _locations_flat = None
+                    split_sizes = None
+                    split_displacements = None
+
+                # Broadcast sizes and displacements to all ranks
+                split_sizes = comm.bcast(split_sizes, root=0)
+                split_displacements = comm.bcast(split_displacements, root=0)
+
+                # Allocate space for the local subarray on each process
+                local_size = split_sizes[rank]
+                local_locations = np.empty(local_size, dtype=np.float64)
+
+                # Scatter the flattened data
+                comm.Scatterv([_locations_flat, split_sizes, split_displacements, MPI.DOUBLE], local_locations, root=0)
+
+                # Reshape the local data back into 2D (each process gets a subarray of shape (m, 3))
+                local_locations = local_locations.reshape(-1, 3)
+
+                # Synchronize the processes
+                comm.Barrier()
+
+                # Run the interpolation process on each process
+                _q_list = []
+                for _point in tqdm(local_locations, desc=f'Data interpolation on Rank {rank}'):
+                    _q_list.append(self._flow_data(_point))  # Assuming self._flow_data returns a (5,) array
+
+                # Convert _q_list to a 1D numpy array for MPI communication (flatten the list of (5,) arrays)
+                _q_list_flat = np.concatenate(_q_list).astype(np.float64)  # Shape will be (len(_q_list) * 5,)
+
+                # Gather the sizes of the flattened _q_list from all processes
+                local_q_list_size = len(_q_list_flat)
+                all_q_list_sizes = comm.gather(local_q_list_size, root=0)
+
+                # Prepare Gatherv variables for rank 0
+                if rank == 0:
+                    gatherv_displacements = [0] + np.cumsum(all_q_list_sizes[:-1]).tolist()
+                    gathered_q_list = np.empty(sum(all_q_list_sizes), dtype=np.float64)  # Flat array to gather data
+                else:
+                    gathered_q_list = None
+                    gatherv_displacements = None
+
+                # Use Gatherv to gather the interpolated data
+                comm.Gatherv(_q_list_flat, [gathered_q_list, all_q_list_sizes, gatherv_displacements, MPI.DOUBLE],
+                             root=0)
+
+                # Rank 0 should reshape the gathered data
+                if rank == 0:
+                    # Reshape gathered_q_list back into a 2D array where each row is of shape (5,)
+                    _q_list = gathered_q_list.reshape(-1, 5)
+
+                # Synchronize the processes
                 comm.Barrier()
 
                 # Intermediate save of the data -- if the process is interrupted we can restart it from here
