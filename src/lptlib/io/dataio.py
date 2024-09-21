@@ -17,9 +17,8 @@ class DataIO:
     """
     Use to read/write particle data
     The process happens in four steps. Each step is described below
-        1. Reads in the scattered particle data obtained from LPT code. Two ways are available:
-            If a combined file is given, data is obtained from that --> faster
-            Else, data is read from a folder of files where each file corresponds to a particle --> slow due to for loop
+        1. Reads in the scattered particle data obtained from LPT code.
+            Data is read from a folder of files where each file corresponds to a particle; uses MPI
         2. Interpolates fluid data to these scattered locations. Two temp files are generated
             interpolated_q_data.npy --> has the flow data at the scattered locations
             new_p_data.npy --> has the particle data at scattered locations (WITH few outlier points removed)
@@ -38,8 +37,6 @@ class DataIO:
             Grid object created from GridIO
         flow : src.io.plot3dio.FlowIO
             Flow object created from FlowIO
-        read_file : str
-            Combined file of all the particles generated from LPT code
         location : str
             Files location for individual particle data generated from the LPT code
         x_refinement: int
@@ -67,7 +64,6 @@ class DataIO:
         self.grid = grid
         self.flow = flow
         self.percent_data = percent_data
-        self.read_file = read_file
         self.location = location
         self.x_refinement = x_refinement
         self.y_refinement = y_refinement
@@ -216,12 +212,6 @@ class DataIO:
         rank = comm.Get_rank()
         size = comm.Get_size()
         # read particle files from a folder
-        # read particle data
-        # try:
-        #     print('Trying to read from a combined file...')
-        #     _p_data = np.load(self.read_file)
-        #     print('Read from the combined file!!')
-        # except FileNotFoundError:
         # Sort in natural order to stack particles in order and track progress
         _files = np.array(self._natural_sort(os.listdir(self.location)))
         _bool = []
@@ -246,16 +236,6 @@ class DataIO:
         # pause until all processes are done
         comm.Barrier()
         print('Read from the group of files!!')
-
-        # Save the combined file for future use
-        try:
-            if rank == 0:
-                np.save(self.location + 'combined_file', _p_data)
-                print('Saved the combined file for future use!\n')
-            else:
-                pass
-        except FileNotFoundError:
-            print('Could not save the combined file for future use!\n')
 
         # p-data has the following columns
         # x, y, z, vx, vy, vz, ux, uy, uz, time, integrated (ux, uy, uz), diameter, density
