@@ -157,13 +157,13 @@ class DataIO:
         ax.set_xlim(_data[:, 0].min(), _data[:, 0].max())
         ax.set_ylim(_data[:, 1].min(), _data[:, 1].max())
         ax.legend(loc='upper right')
-        # try:
-        #     # Try creating the directory; if exists errors out and except
-        #     os.mkdir(self.location + 'dataio')
-        #     plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
-        # except FileExistsError:
-        #     plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
-        #
+        try:
+            # Try creating the directory; if exists errors out and except
+            os.mkdir(self.location + 'dataio')
+            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
+        except FileExistsError:
+            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
+
         # Return the sampled data
         return _data[sampled_indices]
 
@@ -258,7 +258,6 @@ class DataIO:
         else:
             _locations = None
         _locations = comm.bcast(_locations, root=0)
-        print('locations shape: ', _locations.shape)
         comm.Barrier()
 
         try:
@@ -425,31 +424,91 @@ class DataIO:
             _qp = np.load(self.location + 'dataio/particle_data.npy')
             print('Loaded available flow/particle data from numpy residual files\n')
         except FileNotFoundError:
+            # Initialize MPI
             comm = MPI.COMM_WORLD
             rank = comm.Get_rank()
-            # set fill value to twice the max value for scalars and 0 for vectors
-            _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0, 0, 0, 2 * np.nanmax(self.flow.q[..., -1, :])]
-            if rank < 5:
-                # Interpolate scattered data onto the grid -- for flow using MPI
-                _qf = []
-                # run each variable of the flow data separately on each process
-                _q_f_list = np.array_split(_q_f_list, 5, axis=1)[rank]
-                for _q_f in tqdm(_q_f_list.T, desc=f'Flow data interpolation on Rank {rank}'):
-                    _qf.append(self._grid_interp(_locations[:, :2], _q_f, _xi, _yi, _fill_value[rank]))
-            else:
-                # For ranks >= 5, participate in gather with a dummy value to ensure no deadlock
-                _qf = [np.empty(_xi.shape)]  # Ensure the dummy value is consistent with the expected data structure
-            # Ensure all processes reach this point before proceeding
-            comm.Barrier()
-            _qf = comm.gather(_qf, root=0)
+            size = comm.Get_size()
+
+            # Flatten grid for RBF interpolation
+            grid = np.column_stack([_xi.ravel(), _yi.ravel()])
+
+            # Split the scattered data points across MPI processes
+            def distribute_data(data, rank, size):
+                chunk_size = len(data) // size
+                start = rank * chunk_size
+                end = (rank + 1) * chunk_size if rank != size - 1 else len(data)
+                return data[start:end]
+
+            def distribute_points(grid_chunk, locations, data):
+                x_min, y_min = grid_chunk.min(axis=0)
+                x_max, y_max = grid_chunk.max(axis=0)
+                # Filter points that lie within the grid chunk
+                indices = np.where((locations[:, 0] >= x_min) & (locations[:, 0] <= x_max) &
+                                   (locations[:, 1] >= y_min) & (locations[:, 1] <= y_max))[0]
+                locations = locations[indices]
+                data = data[indices]
+                return locations, data
+
+            # Distribute grid points to interpolate on
+            grid_chunk = distribute_data(grid, rank, size)
+
+            # Each rank gets a subset of points and values
+            _xy_chunk, _qf_chunk = distribute_points(grid_chunk, _locations[:, :2], _q_f_list)
+            # debug statements
+            print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
+            print(f'Rank {rank} has {grid_chunk.shape} grid points')
+
+            # # Debugging plot
+            # fig, ax = plt.subplots()
+            # ax.scatter(_xy_chunk[:, 0], _xy_chunk[:, 1], s=1, label='Scattered points')
+            # ax.scatter(grid_chunk[:, 0], grid_chunk[:, 1], s=1, label='Grid points')
+            # ax.set_xlabel('x')
+            # ax.set_ylabel('y')
+            # ax.legend(loc='upper right')
+            # plt.show()
+
+            # Perform RBF interpolation on each process
+            rho_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 0])
+            ux_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 1])
+            uy_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 2])
+            uz_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 3])
+            e_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 4])
+            # Interpolated values on this chunk of the grid
+            rho_result_chunk = rho_interpolator(grid_chunk)
+            ux_result_chunk = ux_interpolator(grid_chunk)
+            uy_result_chunk = uy_interpolator(grid_chunk)
+            uz_result_chunk = uz_interpolator(grid_chunk)
+            e_result_chunk = e_interpolator(grid_chunk)
+
+            # Gather the results from all processes
+            rho_result, ux_result, uy_result, uz_result, e_result = None, None, None, None, None
             if rank == 0:
+                rho_result = np.empty((self.x_refinement * self.y_refinement), dtype=rho_result_chunk.dtype)
+                ux_result = np.empty((self.x_refinement * self.y_refinement), dtype=ux_result_chunk.dtype)
+                uy_result = np.empty((self.x_refinement * self.y_refinement), dtype=uy_result_chunk.dtype)
+                uz_result = np.empty((self.x_refinement * self.y_refinement), dtype=uz_result_chunk.dtype)
+                e_result = np.empty((self.x_refinement * self.y_refinement), dtype=e_result_chunk.dtype)
+            comm.Gather(rho_result_chunk, rho_result, root=0)
+            comm.Gather(ux_result_chunk, ux_result, root=0)
+            comm.Gather(uy_result_chunk, uy_result, root=0)
+            comm.Gather(uz_result_chunk, uz_result, root=0)
+            comm.Gather(e_result_chunk, e_result, root=0)
+
+            # Only rank 0 has the full result now, we can reshape it into a 2D grid
+            if rank == 0:
+                rho_result = rho_result.reshape(self.x_refinement, self.y_refinement)
+                ux_result = ux_result.reshape(self.x_refinement, self.y_refinement)
+                uy_result = uy_result.reshape(self.x_refinement, self.y_refinement)
+                uz_result = uz_result.reshape(self.x_refinement, self.y_refinement)
+                e_result = e_result.reshape(self.x_refinement, self.y_refinement)
+
                 # stack _qf from first 5 ranks
-                _qf = [data[0] for i, data in enumerate(_qf) if i < 5]  # list of arrays
-                # Save the array to a file
-                # This will only happen when there are files in dataio directory
+                _qf = [rho_result, ux_result, uy_result, uz_result, e_result]
                 _qf = np.stack(_qf)  # shape (5, _xi.shape[0], _xi.shape[1])
+
                 # fill the missing values with the fill value
                 np.save(self.location + 'dataio/flow_data', _qf)
+                print('Saved interpolated flow data to grid\n')
             else:
                 _qf = None
             _qf = comm.bcast(_qf, root=0)
