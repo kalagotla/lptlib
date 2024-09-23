@@ -394,52 +394,19 @@ class DataIO:
         # synchronize the processes
         comm.Barrier()
 
-        # create plot3d format lists
-        if rank == 0:
-            # Particle data at the scattered points/particle locations
-            # rho, x,y,z - momentum, energy per unit volume (q-file data)
-            _q_p_list = np.hstack((_q_list[:, 0].reshape(-1, 1), _p_data[:, 3:6] * _q_list[:, 0].reshape(-1, 1),
-                                   _q_list[:, 4].reshape(-1, 1)))
-            # Fluid data at the scattered points/particle locations
-            _q_f_list = np.hstack((_q_list[:, 0].reshape(-1, 1), _p_data[:, 6:9] * _q_list[:, 0].reshape(-1, 1),
-                                   _q_list[:, 4].reshape(-1, 1)))
-
-            # Create the grid to interpolate to
-            _xi, _yi = np.linspace(_x_min, _x_max, self.x_refinement), np.linspace(_y_min, _y_max, self.y_refinement)
-            _xi, _yi = np.meshgrid(_xi, _yi, indexing='ij')
-        else:
-            _xi, _yi = None, None
-            _q_f_list, _q_p_list = None, None
-        # broadcast the data to all processes
-        _q_f_list = comm.bcast(_q_f_list, root=0)
-        _q_p_list = comm.bcast(_q_p_list, root=0)
-        _xi = comm.bcast(_xi, root=0)
-        _yi = comm.bcast(_yi, root=0)
-        # synchronize the processes
-        comm.Barrier()
-
         try:
             # Read to see if data is available
             _qf = np.load(self.location + 'dataio/flow_data.npy')
             _qp = np.load(self.location + 'dataio/particle_data.npy')
             print('Loaded available flow/particle data from numpy residual files\n')
         except FileNotFoundError:
-            # Initialize MPI
-            comm = MPI.COMM_WORLD
-            rank = comm.Get_rank()
-            size = comm.Get_size()
-
-            # Flatten grid for RBF interpolation
-            grid = np.column_stack([_xi.ravel(), _yi.ravel()])
-
-            # Split the scattered data points across MPI processes
             def distribute_data(data, rank, size):
                 chunk_size = len(data) // size
                 start = rank * chunk_size
                 end = (rank + 1) * chunk_size if rank != size - 1 else len(data)
                 return data[start:end]
 
-            def distribute_points(grid_chunk, locations, data):
+            def distribute_points(grid_chunk, locations, data, data_particle):
                 x_min, y_min = grid_chunk.min(axis=0)
                 x_max, y_max = grid_chunk.max(axis=0)
                 # Filter points that lie within the grid chunk
@@ -447,13 +414,54 @@ class DataIO:
                                    (locations[:, 1] >= y_min) & (locations[:, 1] <= y_max))[0]
                 locations = locations[indices]
                 data = data[indices]
-                return locations, data
+                data_particle = data_particle[indices]
+                return locations, data, data_particle
+            # Initialize MPI
+            comm = MPI.COMM_WORLD
+            rank = comm.Get_rank()
+            size = comm.Get_size()
 
-            # Distribute grid points to interpolate on
-            grid_chunk = distribute_data(grid, rank, size)
+            # create plot3d format lists
+            if rank == 0:
+                # Particle data at the scattered points/particle locations
+                # rho, x,y,z - momentum, energy per unit volume (q-file data)
+                _q_p_list = np.hstack((_q_list[:, 0].reshape(-1, 1), _p_data[:, 3:6] * _q_list[:, 0].reshape(-1, 1),
+                                       _q_list[:, 4].reshape(-1, 1)))
+                # Fluid data at the scattered points/particle locations
+                _q_f_list = np.hstack((_q_list[:, 0].reshape(-1, 1), _p_data[:, 6:9] * _q_list[:, 0].reshape(-1, 1),
+                                       _q_list[:, 4].reshape(-1, 1)))
 
-            # Each rank gets a subset of points and values
-            _xy_chunk, _qf_chunk = distribute_points(grid_chunk, _locations[:, :2], _q_f_list)
+                # Create the grid to interpolate to
+                _xi, _yi = np.linspace(_x_min, _x_max, self.x_refinement), np.linspace(_y_min, _y_max,
+                                                                                       self.y_refinement)
+                _xi, _yi = np.meshgrid(_xi, _yi, indexing='ij')
+                # Flatten grid for RBF interpolation
+                grid = np.column_stack([_xi.ravel(), _yi.ravel()])
+                # Split the scattered data points and grid across MPI processes on rank 0
+                _grid_chunks = []
+                _scatter_chunks = []
+                _scatter_particle_chunks = []
+                for i in range(size):
+                    grid_chunk = distribute_data(grid, i, size)  # Distribute the grid for each rank
+                    _xy_chunk, _qf_chunk, _qp_chunk = distribute_points(grid_chunk, _locations[:, :2],
+                                                                        _q_f_list, _q_p_list[:, 1:4])
+                    _scatter_chunks.append((_xy_chunk, _qf_chunk))
+                    _grid_chunks.append(grid_chunk)
+                    _scatter_particle_chunks.append(_qp_chunk)
+            else:
+                _xi, _yi = None, None
+                _q_f_list, _q_p_list = None, None
+                _grid_chunks = []
+                _scatter_chunks = []
+                _scatter_particle_chunks = []
+            # synchronize the processes
+            comm.Barrier()
+
+            # Split the data points across MPI processes
+            grid_chunk = comm.scatter([chunk for chunk in _grid_chunks], root=0)
+
+            _xy_chunk = comm.scatter([chunk[0] for chunk in _scatter_chunks], root=0)
+            _qf_chunk = comm.scatter([chunk[1] for chunk in _scatter_chunks], root=0)
             # debug statements
             # print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
             # print(f'Rank {rank} has {grid_chunk.shape} grid points')
@@ -518,7 +526,7 @@ class DataIO:
 
             # Particle data interpolation
             # Each rank gets a subset of points and values
-            _xy_chunk, _qp_chunk = distribute_points(grid_chunk, _locations[:, :2], _q_p_list[:, 1:4])
+            _qp_chunk = comm.scatter([chunk for chunk in _scatter_particle_chunks], root=0)
             # debug statements
             print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
             print(f'Rank {rank} has {grid_chunk.shape} grid points')
