@@ -8,7 +8,7 @@ import os
 import re
 from tqdm import tqdm
 from mpi4py import MPI
-from sklearn.cluster import KMeans
+import psutil
 import matplotlib.pyplot as plt
 rng = np.random.default_rng(7)
 
@@ -260,6 +260,7 @@ class DataIO:
         _locations = comm.bcast(_locations, root=0)
         comm.Barrier()
 
+        # Load interpolated data after outlier removal if available
         try:
             # Read if saved files are available
             _q_list = np.load(self.location + 'dataio/interpolated_q_data.npy', allow_pickle=False)
@@ -267,6 +268,7 @@ class DataIO:
             print('Read the available interpolated data to continue with the griddata algorithm')
         except FileNotFoundError:
             # Run through the process of creating interpolation files
+            # check first if the old interpolated data is available
             try:
                 # Read old interpolation files before removing outliers if available
                 _q_list = np.load(self.location + 'dataio/_old_interpolated_q_data.npy', allow_pickle=True)
@@ -362,38 +364,31 @@ class DataIO:
                     np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
                     np.save(self.location + 'dataio/_old_p_data', _p_data)
 
-        # Run the outlier removal process
-        if rank == 0:
-            print('Removing outliers from the data using one process...\n')
-            # Fluid data at scattered points/particle locations
-            # Some searches return None. This helps remove those locations!
-            _remove_index = [j for j in range(len(_q_list)) if np.all(_q_list[j] == 1)]
-            _q_list = np.vstack(np.delete(_q_list, _remove_index, axis=0))
-            _p_data = np.delete(_p_data, _remove_index, axis=0)
-            # Remove outliers due to bad interpolation -- density cannot go beyond the flow limits
-            _remove_index = np.where(_q_list[:, 0] < self.flow.q[..., 0, :].min())
-            _q_list = np.vstack(np.delete(_q_list, _remove_index, axis=0))
-            _p_data = np.delete(_p_data, _remove_index, axis=0)
-            _remove_index = np.where(_q_list[:, 0] > self.flow.q[..., 0, :].max())
-            _q_list = np.vstack(np.delete(_q_list, _remove_index, axis=0))
-            _p_data = np.delete(_p_data, _remove_index, axis=0)
-            _locations = _p_data[:, :3]
-            # Save both interpolated data and new particle data for easy future computations
-            try:
-                # Save interpolated data to files
-                _q_list = np.load(self.location + 'dataio/interpolated_q_data', allow_pickle=False)
-                _p_data = np.load(self.location + 'dataio/new_p_data', allow_pickle=False)
-                print('Loaded particle and flow interpolated data from existing files.\n')
-            except FileNotFoundError:
+            # Run the outlier removal process and save the data
+            if rank == 0:
+                print('Removing outliers from the data using one process...\n')
+                # Fluid data at scattered points/particle locations
+                # Some searches return None. This helps remove those locations!
+                _remove_index = [j for j in range(len(_q_list)) if np.all(_q_list[j] == 1)]
+                _q_list = np.vstack(np.delete(_q_list, _remove_index, axis=0))
+                _p_data = np.delete(_p_data, _remove_index, axis=0)
+                # Remove outliers due to bad interpolation -- density cannot go beyond the flow limits
+                _remove_index = np.where(_q_list[:, 0] < self.flow.q[..., 0, :].min())
+                _q_list = np.vstack(np.delete(_q_list, _remove_index, axis=0))
+                _p_data = np.delete(_p_data, _remove_index, axis=0)
+                _remove_index = np.where(_q_list[:, 0] > self.flow.q[..., 0, :].max())
+                _q_list = np.vstack(np.delete(_q_list, _remove_index, axis=0))
+                _p_data = np.delete(_p_data, _remove_index, axis=0)
+                _locations = _p_data[:, :3]
+                # Save both interpolated data and new particle data for easy future computations
                 np.save(self.location + 'dataio/interpolated_q_data', _q_list)
                 np.save(self.location + 'dataio/new_p_data', _p_data)
-        else:
-            _q_list, _p_data, _locations = None, None, None
-        # broadcast locations to all processes
-        _locations = comm.bcast(_locations, root=0)
-        # synchronize the processes
-        comm.Barrier()
+            else:
+                _q_list, _p_data, _locations = None, None, None
+            # synchronize the processes
+            comm.Barrier()
 
+        # Interpolate to grid
         try:
             # Read to see if data is available
             _qf = np.load(self.location + 'dataio/flow_data.npy')
@@ -440,14 +435,12 @@ class DataIO:
                 # Split the scattered data points and grid across MPI processes on rank 0
                 _grid_chunks = []
                 _scatter_chunks = []
-                _scatter_particle_chunks = []
                 for i in range(size):
                     grid_chunk = distribute_data(grid, i, size)  # Distribute the grid for each rank
                     _xy_chunk, _qf_chunk, _qp_chunk = distribute_points(grid_chunk, _locations[:, :2],
                                                                         _q_f_list, _q_p_list[:, 1:4])
-                    _scatter_chunks.append((_xy_chunk, _qf_chunk))
+                    _scatter_chunks.append((_xy_chunk, _qf_chunk, _qp_chunk))
                     _grid_chunks.append(grid_chunk)
-                    _scatter_particle_chunks.append(_qp_chunk)
             else:
                 _xi, _yi = None, None
                 _q_f_list, _q_p_list = None, None
@@ -462,9 +455,10 @@ class DataIO:
 
             _xy_chunk = comm.scatter([chunk[0] for chunk in _scatter_chunks], root=0)
             _qf_chunk = comm.scatter([chunk[1] for chunk in _scatter_chunks], root=0)
+            _qp_chunk = comm.scatter([chunk[2] for chunk in _scatter_chunks], root=0)
             # debug statements
-            # print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
-            # print(f'Rank {rank} has {grid_chunk.shape} grid points')
+            print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
+            print(f'Rank {rank} has {grid_chunk.shape} grid points')
 
             # # Debugging plot
             # fig, ax = plt.subplots()
@@ -525,10 +519,8 @@ class DataIO:
             comm.Barrier()
 
             # Particle data interpolation
-            # Each rank gets a subset of points and values
-            _qp_chunk = comm.scatter([chunk for chunk in _scatter_particle_chunks], root=0)
             # debug statements
-            print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
+            print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qp_chunk.shape} values')
             print(f'Rank {rank} has {grid_chunk.shape} grid points')
 
             # # Debugging plot
@@ -578,11 +570,5 @@ class DataIO:
                 _qp = None
             # synchronize the processes
             comm.Barrier()
-
-            if rank == 0:
-                # Write out to plot3d format for further processing
-                self.grid.mgrd_to_p3d(_xi, _yi, out_file=self.location + 'dataio/mgrd_to_p3d.x')
-                self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d')
-                self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d')
 
         return
