@@ -147,22 +147,22 @@ class DataIO:
         # Uniformly sample indices
         sampled_indices = np.random.choice(len(_data), n_samples, replace=False)
 
-        # create a xy plot and save it
-        fig, ax = plt.subplots()
-        ax.scatter(_data[:, 0], _data[:, 1], s=1, label=f'Original data: {len(_data[:, 0])} points')
-        ax.scatter(_data[sampled_indices, 0], _data[sampled_indices, 1], s=1, color='red',
-                   label=f'Sampled data: {n_samples} points')
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_xlim(_data[:, 0].min(), _data[:, 0].max())
-        ax.set_ylim(_data[:, 1].min(), _data[:, 1].max())
-        ax.legend(loc='upper right')
-        try:
-            # Try creating the directory; if exists errors out and except
-            os.mkdir(self.location + 'dataio')
-            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
-        except FileExistsError:
-            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
+        # # create a xy plot and save it
+        # fig, ax = plt.subplots()
+        # ax.scatter(_data[:, 0], _data[:, 1], s=1, label=f'Original data: {len(_data[:, 0])} points')
+        # ax.scatter(_data[sampled_indices, 0], _data[sampled_indices, 1], s=1, color='red',
+        #            label=f'Sampled data: {n_samples} points')
+        # ax.set_xlabel('x')
+        # ax.set_ylabel('y')
+        # ax.set_xlim(_data[:, 0].min(), _data[:, 0].max())
+        # ax.set_ylim(_data[:, 1].min(), _data[:, 1].max())
+        # ax.legend(loc='upper right')
+        # try:
+        #     # Try creating the directory; if exists errors out and except
+        #     os.mkdir(self.location + 'dataio')
+        #     plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
+        # except FileExistsError:
+        #     plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
 
         # Return the sampled data
         return _data[sampled_indices]
@@ -388,14 +388,24 @@ class DataIO:
             # synchronize the processes
             comm.Barrier()
 
+        # Create the grid to interpolate the Lagrangian data and save to plot3d format
+        _xi, _yi = np.linspace(_x_min, _x_max, self.x_refinement), np.linspace(_y_min, _y_max,
+                                                                               self.y_refinement)
+        _xi, _yi = np.meshgrid(_xi, _yi, indexing='ij')
+        # save the grid to plot3d format
+        self.grid.mgrd_to_p3d(_xi, _yi, out_file=self.location + 'dataio/mgrd_to_p3d.x')
+
         # Interpolate to grid
         try:
             # Read to see if data is available
             _qf = np.load(self.location + 'dataio/flow_data.npy')
             _qp = np.load(self.location + 'dataio/particle_data.npy')
             print('Loaded available flow/particle data from numpy residual files\n')
+            # save to plot3d format
+            self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d_fluid.q')
+            self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d_particle.q')
         except FileNotFoundError:
-            def distribute_data(data, rank, size):
+            def distribute_grid(data, rank, size):
                 chunk_size = len(data) // size
                 start = rank * chunk_size
                 end = (rank + 1) * chunk_size if rank != size - 1 else len(data)
@@ -426,19 +436,15 @@ class DataIO:
                 _q_f_list = np.hstack((_q_list[:, 0].reshape(-1, 1), _p_data[:, 6:9] * _q_list[:, 0].reshape(-1, 1),
                                        _q_list[:, 4].reshape(-1, 1)))
 
-                # Create the grid to interpolate to
-                _xi, _yi = np.linspace(_x_min, _x_max, self.x_refinement), np.linspace(_y_min, _y_max,
-                                                                                       self.y_refinement)
-                _xi, _yi = np.meshgrid(_xi, _yi, indexing='ij')
                 # Flatten grid for RBF interpolation
                 grid = np.column_stack([_xi.ravel(), _yi.ravel()])
                 # Split the scattered data points and grid across MPI processes on rank 0
                 _grid_chunks = []
                 _scatter_chunks = []
                 for i in range(size):
-                    grid_chunk = distribute_data(grid, i, size)  # Distribute the grid for each rank
+                    grid_chunk = distribute_grid(grid, i, size)  # Distribute the grid for each rank
                     _xy_chunk, _qf_chunk, _qp_chunk = distribute_points(grid_chunk, _locations[:, :2],
-                                                                        _q_f_list, _q_p_list[:, 1:4])
+                                                                        _q_f_list, _q_p_list)
                     _scatter_chunks.append((_xy_chunk, _qf_chunk, _qp_chunk))
                     _grid_chunks.append(grid_chunk)
             else:
@@ -450,9 +456,9 @@ class DataIO:
             # synchronize the processes
             comm.Barrier()
 
-            # Split the data points across MPI processes
+            # Split the data across MPI processes
             grid_chunk = comm.scatter([chunk for chunk in _grid_chunks], root=0)
-
+            # Lagrangian frame data
             _xy_chunk = comm.scatter([chunk[0] for chunk in _scatter_chunks], root=0)
             _qf_chunk = comm.scatter([chunk[1] for chunk in _scatter_chunks], root=0)
             _qp_chunk = comm.scatter([chunk[2] for chunk in _scatter_chunks], root=0)
