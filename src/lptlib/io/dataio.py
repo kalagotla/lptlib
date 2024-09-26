@@ -413,7 +413,8 @@ class DataIO:
                 num_y_chunks = size // num_x_chunks
 
                 # Ensure that the number of processes divides evenly
-                assert num_x_chunks * num_y_chunks == size, "Size must be a perfect square or a product of two integers."
+                assert num_x_chunks * num_y_chunks == size, \
+                    "Size must be a perfect square or a product of two integers."
 
                 # Get the shape of the grid
                 grid_x = np.unique(grid[:, 0])
@@ -496,9 +497,9 @@ class DataIO:
             _xy_chunk = comm.scatter([chunk[0] for chunk in _scatter_chunks], root=0)
             _qf_chunk = comm.scatter([chunk[1] for chunk in _scatter_chunks], root=0)
             _qp_chunk = comm.scatter([chunk[2] for chunk in _scatter_chunks], root=0)
-            # debug statements
-            # print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
-            # print(f'Rank {rank} has {grid_chunk.shape} grid points')
+            # progress statements
+            print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
+            print(f'Rank {rank} has {grid_chunk.shape} grid points')
 
             # # Debugging plot
             # fig, ax = plt.subplots()
@@ -531,7 +532,7 @@ class DataIO:
                 uy_result_chunk = uy_interpolator(grid_chunk)
                 uz_result_chunk = uz_interpolator(grid_chunk)
                 e_result_chunk = e_interpolator(grid_chunk)
-                # print(f'shape of rho_result_chunk in RBF: {rho_result_chunk.shape} on Rank {rank}')
+            print(f'Done interpolating on Rank {rank} with {rho_result_chunk.shape} shape\n')
 
             # Gather the results from all processes
             # Gather chunk sizes
@@ -622,6 +623,7 @@ class DataIO:
                 ux_result_chunk = ux_interpolator(grid_chunk)
                 uy_result_chunk = uy_interpolator(grid_chunk)
                 uz_result_chunk = uz_interpolator(grid_chunk)
+            print(f'Done interpolating on Rank {rank} with {ux_result_chunk.shape} shape for particle\n')
 
             # Gather the results from all processes
             # Gather chunk sizes
