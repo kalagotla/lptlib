@@ -392,8 +392,11 @@ class DataIO:
         _xi, _yi = np.linspace(_x_min, _x_max, self.x_refinement), np.linspace(_y_min, _y_max,
                                                                                self.y_refinement)
         _xi, _yi = np.meshgrid(_xi, _yi, indexing='ij')
-        # save the grid to plot3d format
-        self.grid.mgrd_to_p3d(_xi, _yi, out_file=self.location + 'dataio/mgrd_to_p3d.x')
+        if rank == 0:
+            # save the grid to plot3d format
+            self.grid.mgrd_to_p3d(_xi, _yi, out_file=self.location + 'dataio/mgrd_to_p3d.x')
+        else:
+            pass
 
         # Interpolate to grid
         try:
@@ -405,11 +408,39 @@ class DataIO:
             self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d_fluid.q')
             self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d_particle.q')
         except FileNotFoundError:
-            def distribute_grid(data, rank, size):
-                chunk_size = len(data) // size
-                start = rank * chunk_size
-                end = (rank + 1) * chunk_size if rank != size - 1 else len(data)
-                return data[start:end]
+            def distribute_grid(grid, rank, size):
+                # Determine the number of chunks in x and y directions
+                num_x_chunks = int(np.sqrt(size))
+                num_y_chunks = size // num_x_chunks
+
+                # Ensure that the number of processes divides evenly
+                assert num_x_chunks * num_y_chunks == size, "Size must be a perfect square or a product of two integers."
+
+                # Get the shape of the grid
+                grid_x = np.unique(grid[:, 0])
+                grid_y = np.unique(grid[:, 1])
+                x_chunk_size = len(grid_x) // num_x_chunks
+                y_chunk_size = len(grid_y) // num_y_chunks
+
+                # Determine the x and y index range for this rank
+                rank_x = rank % num_x_chunks
+                rank_y = rank // num_x_chunks
+
+                # Get the start and end indices for x and y based on the rank
+                x_start = rank_x * x_chunk_size
+                x_end = (rank_x + 1) * x_chunk_size if rank_x != num_x_chunks - 1 else len(grid_x)
+
+                y_start = rank_y * y_chunk_size
+                y_end = (rank_y + 1) * y_chunk_size if rank_y != num_y_chunks - 1 else len(grid_y)
+
+                # Extract the grid chunk corresponding to this rank
+                x_chunk = grid_x[x_start:x_end]
+                y_chunk = grid_y[y_start:y_end]
+
+                # Create a grid chunk by combining the x and y meshgrid
+                grid_chunk = np.array(np.meshgrid(x_chunk, y_chunk)).T.reshape(-1, 2)
+
+                return grid_chunk, (x_start, x_end), (y_start, y_end)
 
             def distribute_points(grid_chunk, locations, data, data_particle):
                 x_min, y_min = grid_chunk.min(axis=0)
@@ -441,18 +472,22 @@ class DataIO:
                 # Split the scattered data points and grid across MPI processes on rank 0
                 _grid_chunks = []
                 _scatter_chunks = []
+                _split_indices = []
                 for i in range(size):
-                    grid_chunk = distribute_grid(grid, i, size)  # Distribute the grid for each rank
+                    # Distribute the grid for each rank
+                    grid_chunk, (x_start, x_end), (y_start, y_end) = distribute_grid(grid, i, size)
                     _xy_chunk, _qf_chunk, _qp_chunk = distribute_points(grid_chunk, _locations[:, :2],
                                                                         _q_f_list, _q_p_list)
                     _scatter_chunks.append((_xy_chunk, _qf_chunk, _qp_chunk))
                     _grid_chunks.append(grid_chunk)
+                    _split_indices.append((x_start, x_end, y_start, y_end))
             else:
                 _xi, _yi = None, None
                 _q_f_list, _q_p_list = None, None
                 _grid_chunks = []
                 _scatter_chunks = []
                 _scatter_particle_chunks = []
+                _split_indices = []
             # synchronize the processes
             comm.Barrier()
 
@@ -463,8 +498,8 @@ class DataIO:
             _qf_chunk = comm.scatter([chunk[1] for chunk in _scatter_chunks], root=0)
             _qp_chunk = comm.scatter([chunk[2] for chunk in _scatter_chunks], root=0)
             # debug statements
-            print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
-            print(f'Rank {rank} has {grid_chunk.shape} grid points')
+            # print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
+            # print(f'Rank {rank} has {grid_chunk.shape} grid points')
 
             # # Debugging plot
             # fig, ax = plt.subplots()
@@ -476,58 +511,94 @@ class DataIO:
             # plt.show()
 
             # Perform RBF interpolation on each process
-            rho_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 0])
-            ux_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 1])
-            uy_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 2])
-            uz_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 3])
-            e_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 4])
-            # Interpolated values on this chunk of the grid
-            rho_result_chunk = rho_interpolator(grid_chunk)
-            ux_result_chunk = ux_interpolator(grid_chunk)
-            uy_result_chunk = uy_interpolator(grid_chunk)
-            uz_result_chunk = uz_interpolator(grid_chunk)
-            e_result_chunk = e_interpolator(grid_chunk)
+            _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0, 0, 0, 2 * np.nanmax(self.flow.q[..., -1, :])]
+            if _qf_chunk.shape[0] <= 3:
+                print(f'Found only {_qf_chunk.shape[0]} scattered points on Rank {rank}. Skipping RBF interpolation...')
+                rho_result_chunk = np.full(grid_chunk.shape[0], _fill_value[0])
+                ux_result_chunk = np.full(grid_chunk.shape[0], _fill_value[1])
+                uy_result_chunk = np.full(grid_chunk.shape[0], _fill_value[2])
+                uz_result_chunk = np.full(grid_chunk.shape[0], _fill_value[3])
+                e_result_chunk = np.full(grid_chunk.shape[0], _fill_value[4])
+                # print(f'shape of rho_result_chunk: {rho_result_chunk.shape} on Rank {rank}')
+            else:
+                rho_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 0])
+                ux_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 1])
+                uy_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 2])
+                uz_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 3])
+                e_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 4])
+                # Interpolated values on this chunk of the grid
+                rho_result_chunk = rho_interpolator(grid_chunk)
+                ux_result_chunk = ux_interpolator(grid_chunk)
+                uy_result_chunk = uy_interpolator(grid_chunk)
+                uz_result_chunk = uz_interpolator(grid_chunk)
+                e_result_chunk = e_interpolator(grid_chunk)
+                # print(f'shape of rho_result_chunk in RBF: {rho_result_chunk.shape} on Rank {rank}')
 
             # Gather the results from all processes
-            rho_result, ux_result, uy_result, uz_result, e_result = None, None, None, None, None
+            # Gather chunk sizes
+            chunk_size = np.array(rho_result_chunk.size)
+            chunk_sizes = np.zeros(size, dtype=int)
+            comm.Allgather(chunk_size, chunk_sizes)
+
+            # Define displacements for gathering
+            displacements = np.insert(np.cumsum(chunk_sizes[:-1]), 0, 0)
+
+            # Gather all interpolated data
             if rank == 0:
-                rho_result = np.empty((self.x_refinement * self.y_refinement), dtype=rho_result_chunk.dtype)
-                ux_result = np.empty((self.x_refinement * self.y_refinement), dtype=ux_result_chunk.dtype)
-                uy_result = np.empty((self.x_refinement * self.y_refinement), dtype=uy_result_chunk.dtype)
-                uz_result = np.empty((self.x_refinement * self.y_refinement), dtype=uz_result_chunk.dtype)
-                e_result = np.empty((self.x_refinement * self.y_refinement), dtype=e_result_chunk.dtype)
-            comm.Gather(rho_result_chunk, rho_result, root=0)
-            comm.Gather(ux_result_chunk, ux_result, root=0)
-            comm.Gather(uy_result_chunk, uy_result, root=0)
-            comm.Gather(uz_result_chunk, uz_result, root=0)
-            comm.Gather(e_result_chunk, e_result, root=0)
+                rho_result = np.empty(np.sum(chunk_sizes), dtype=rho_result_chunk.dtype)
+                ux_result = np.empty(np.sum(chunk_sizes), dtype=ux_result_chunk.dtype)
+                uy_result = np.empty(np.sum(chunk_sizes), dtype=uy_result_chunk.dtype)
+                uz_result = np.empty(np.sum(chunk_sizes), dtype=uz_result_chunk.dtype)
+                e_result = np.empty(np.sum(chunk_sizes), dtype=e_result_chunk.dtype)
+            else:
+                rho_result, ux_result, uy_result, uz_result, e_result = None, None, None, None, None
 
-            # Only rank 0 has the full result now, we can reshape it into a 2D grid
+            comm.Gatherv(rho_result_chunk, [rho_result, chunk_sizes, displacements, MPI.DOUBLE], root=0)
+            comm.Gatherv(ux_result_chunk, [ux_result, chunk_sizes, displacements, MPI.DOUBLE], root=0)
+            comm.Gatherv(uy_result_chunk, [uy_result, chunk_sizes, displacements, MPI.DOUBLE], root=0)
+            comm.Gatherv(uz_result_chunk, [uz_result, chunk_sizes, displacements, MPI.DOUBLE], root=0)
+            comm.Gatherv(e_result_chunk, [e_result, chunk_sizes, displacements, MPI.DOUBLE], root=0)
+
+            # Rank 0 processes final results
             if rank == 0:
-                rho_result = rho_result.reshape(self.x_refinement, self.y_refinement)
-                ux_result = ux_result.reshape(self.x_refinement, self.y_refinement)
-                uy_result = uy_result.reshape(self.x_refinement, self.y_refinement)
-                uz_result = uz_result.reshape(self.x_refinement, self.y_refinement)
-                e_result = e_result.reshape(self.x_refinement, self.y_refinement)
+                rho_result_save = np.zeros((self.x_refinement, self.y_refinement))
+                ux_result_save = np.zeros((self.x_refinement, self.y_refinement))
+                uy_result_save = np.zeros((self.x_refinement, self.y_refinement))
+                uz_result_save = np.zeros((self.x_refinement, self.y_refinement))
+                e_result_save = np.zeros((self.x_refinement, self.y_refinement))
 
-                # stack _qf from first 5 ranks
-                _qf = [rho_result, ux_result, uy_result, uz_result, e_result]
-                _qf = np.stack(_qf)  # shape (5, _xi.shape[0], _xi.shape[1])
+                def reshape_to_save(variable=rho_result, variable_save=rho_result_save, _split_indices=_split_indices):
+                    # Take in the interpolated grid variable and reshape it to save it
+                    length_old = 0  # Initialize the length of the data
+                    # print(f'{variable.shape} is the shape of the variable')
+                    for indices in _split_indices:
+                        # Assign split indices
+                        x_start, x_end, y_start, y_end = indices
+                        # Calculate the length of the data to be split
+                        length = length_old + (x_end - x_start) * (y_end - y_start)
+                        # print(f'length: {length}, length_old: {length_old}')
+                        variable_save[x_start:x_end, y_start:y_end] = (
+                            variable[length_old:length].reshape(x_end - x_start, y_end - y_start))
+                        length_old = length
+                    return variable_save
 
-                # fill the missing values with the fill value
+                rho_result_save = reshape_to_save(rho_result, rho_result_save)
+                ux_result_save = reshape_to_save(ux_result, ux_result_save)
+                uy_result_save = reshape_to_save(uy_result, uy_result_save)
+                uz_result_save = reshape_to_save(uz_result, uz_result_save)
+                e_result_save = reshape_to_save(e_result, e_result_save)
+
+                _qf = np.stack([rho_result_save, ux_result_save, uy_result_save, uz_result_save, e_result_save])
                 np.save(self.location + 'dataio/flow_data', _qf)
-                # save to plot3d format
                 self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d')
                 print('Saved interpolated flow data to grid\n')
-            else:
-                _qf = None
-            # synchronize the processes
+
             comm.Barrier()
 
             # Particle data interpolation
             # debug statements
-            print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qp_chunk.shape} values')
-            print(f'Rank {rank} has {grid_chunk.shape} grid points')
+            # print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qp_chunk.shape} values')
+            # print(f'Rank {rank} has {grid_chunk.shape} grid points')
 
             # # Debugging plot
             # fig, ax = plt.subplots()
@@ -538,43 +609,59 @@ class DataIO:
             # ax.legend(loc='upper right')
             # plt.show()
 
-            # Perform RBF interpolation on each process
-            ux_interpolator = RBFInterpolator(_xy_chunk, _qp_chunk[:, 0])
-            uy_interpolator = RBFInterpolator(_xy_chunk, _qp_chunk[:, 1])
-            uz_interpolator = RBFInterpolator(_xy_chunk, _qp_chunk[:, 2])
-            # Interpolated values on this chunk of the grid
-            ux_result_chunk = ux_interpolator(grid_chunk)
-            uy_result_chunk = uy_interpolator(grid_chunk)
-            uz_result_chunk = uz_interpolator(grid_chunk)
+            # Perform RBF interpolation on each process for particle data
+            if _qp_chunk.shape[0] <= 3:
+                print(f'Found only {_qp_chunk.shape[0]} scattered points on Rank {rank}. Skipping RBF interpolation...')
+                ux_result_chunk = np.full(grid_chunk.shape[0], _fill_value[1])
+                uy_result_chunk = np.full(grid_chunk.shape[0], _fill_value[2])
+                uz_result_chunk = np.full(grid_chunk.shape[0], _fill_value[3])
+            else:
+                ux_interpolator = RBFInterpolator(_xy_chunk, _qp_chunk[:, 1])
+                uy_interpolator = RBFInterpolator(_xy_chunk, _qp_chunk[:, 2])
+                uz_interpolator = RBFInterpolator(_xy_chunk, _qp_chunk[:, 3])
+                # Interpolated values on this chunk of the grid
+                ux_result_chunk = ux_interpolator(grid_chunk)
+                uy_result_chunk = uy_interpolator(grid_chunk)
+                uz_result_chunk = uz_interpolator(grid_chunk)
 
             # Gather the results from all processes
-            ux_result, uy_result, uz_result = None, None, None
+            # Gather chunk sizes
+            chunk_size = np.array(rho_result_chunk.size)
+            chunk_sizes = np.zeros(size, dtype=int)
+            comm.Allgather(chunk_size, chunk_sizes)
+
+            # Define displacements for gathering
+            displacements = np.insert(np.cumsum(chunk_sizes[:-1]), 0, 0)
+
+            # Gather all interpolated data
             if rank == 0:
-                ux_result = np.empty((self.x_refinement * self.y_refinement), dtype=ux_result_chunk.dtype)
-                uy_result = np.empty((self.x_refinement * self.y_refinement), dtype=uy_result_chunk.dtype)
-                uz_result = np.empty((self.x_refinement * self.y_refinement), dtype=uz_result_chunk.dtype)
-            comm.Gather(ux_result_chunk, ux_result, root=0)
-            comm.Gather(uy_result_chunk, uy_result, root=0)
-            comm.Gather(uz_result_chunk, uz_result, root=0)
+                ux_result = np.empty(np.sum(chunk_sizes), dtype=ux_result_chunk.dtype)
+                uy_result = np.empty(np.sum(chunk_sizes), dtype=uy_result_chunk.dtype)
+                uz_result = np.empty(np.sum(chunk_sizes), dtype=uz_result_chunk.dtype)
+            else:
+                ux_result, uy_result, uz_result = None, None, None
 
-            # Only rank 0 has the full result now, we can reshape it into a 2D grid
+            comm.Gatherv(ux_result_chunk, [ux_result, chunk_sizes, displacements, MPI.DOUBLE], root=0)
+            comm.Gatherv(uy_result_chunk, [uy_result, chunk_sizes, displacements, MPI.DOUBLE], root=0)
+            comm.Gatherv(uz_result_chunk, [uz_result, chunk_sizes, displacements, MPI.DOUBLE], root=0)
+
+            # Rank 0 processes final results
             if rank == 0:
-                ux_result = ux_result.reshape(self.x_refinement, self.y_refinement)
-                uy_result = uy_result.reshape(self.x_refinement, self.y_refinement)
-                uz_result = uz_result.reshape(self.x_refinement, self.y_refinement)
+                ux_result_save = np.zeros((self.x_refinement, self.y_refinement))
+                uy_result_save = np.zeros((self.x_refinement, self.y_refinement))
+                uz_result_save = np.zeros((self.x_refinement, self.y_refinement))
 
-                # stack _qf from first 5 ranks
-                _qp = [rho_result, ux_result, uy_result, uz_result, e_result]
-                _qp = np.stack(_qf)  # shape (5, _xi.shape[0], _xi.shape[1])
+                ux_result_save = reshape_to_save(variable=ux_result, variable_save=ux_result_save)
+                uy_result_save = reshape_to_save(variable=uy_result, variable_save=uy_result_save)
+                uz_result_save = reshape_to_save(variable=uz_result, variable_save=uz_result_save)
 
-                # fill the missing values with the fill value
+                _qp = np.stack([rho_result_save, ux_result_save, uy_result_save, uz_result_save, e_result_save])
                 np.save(self.location + 'dataio/particle_data', _qp)
-                # save to plot3d format
                 self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d')
                 print('Saved interpolated particle data to grid\n')
             else:
-                _qp = None
-            # synchronize the processes
+                pass
+
             comm.Barrier()
 
         return
