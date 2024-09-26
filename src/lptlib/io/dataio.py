@@ -8,7 +8,6 @@ import os
 import re
 from tqdm import tqdm
 from mpi4py import MPI
-import psutil
 import matplotlib.pyplot as plt
 rng = np.random.default_rng(7)
 
