@@ -146,22 +146,22 @@ class DataIO:
         # Uniformly sample indices
         sampled_indices = np.random.choice(len(_data), n_samples, replace=False)
 
-        # # create a xy plot and save it
-        # fig, ax = plt.subplots()
-        # ax.scatter(_data[:, 0], _data[:, 1], s=1, label=f'Original data: {len(_data[:, 0])} points')
-        # ax.scatter(_data[sampled_indices, 0], _data[sampled_indices, 1], s=1, color='red',
-        #            label=f'Sampled data: {n_samples} points')
-        # ax.set_xlabel('x')
-        # ax.set_ylabel('y')
-        # ax.set_xlim(_data[:, 0].min(), _data[:, 0].max())
-        # ax.set_ylim(_data[:, 1].min(), _data[:, 1].max())
-        # ax.legend(loc='upper right')
-        # try:
-        #     # Try creating the directory; if exists errors out and except
-        #     os.mkdir(self.location + 'dataio')
-        #     plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
-        # except FileExistsError:
-        #     plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
+        # create a xy plot and save it
+        fig, ax = plt.subplots()
+        ax.scatter(_data[:, 0], _data[:, 1], s=1, label=f'Original data: {len(_data[:, 0])} points')
+        ax.scatter(_data[sampled_indices, 0], _data[sampled_indices, 1], s=1, color='red',
+                   label=f'Sampled data: {n_samples} points')
+        ax.set_xlabel('x')
+        ax.set_ylabel('y')
+        ax.set_xlim(_data[:, 0].min(), _data[:, 0].max())
+        ax.set_ylim(_data[:, 1].min(), _data[:, 1].max())
+        ax.legend(loc='upper right')
+        try:
+            # Try creating the directory; if exists errors out and except
+            os.mkdir(self.location + 'dataio')
+            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
+        except FileExistsError:
+            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
 
         # Return the sampled data
         return _data[sampled_indices]
