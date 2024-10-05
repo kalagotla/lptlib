@@ -512,23 +512,31 @@ class DataIO:
 
             # Perform RBF interpolation on each process
             _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0, 0, 0, 2 * np.nanmax(self.flow.q[..., -1, :])]
-            # use griddata for linear interpolation
-            print(f'Rank {rank} is interpolating data using griddata\n')
-            rho_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 0], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                 fill_value=_fill_value[0], method='linear')
-            print(f'    Done interpolating density on Rank {rank} with {rho_result_chunk.shape} shape\n')
-            ux_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 1], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                fill_value=_fill_value[1], method='linear')
-            print(f'    Done interpolating x-momentum on Rank {rank} with {ux_result_chunk.shape} shape\n')
-            uy_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 2], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                fill_value=_fill_value[2], method='linear')
-            print(f'    Done interpolating y-momentum on Rank {rank} with {uy_result_chunk.shape} shape\n')
-            uz_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 3], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                fill_value=_fill_value[3], method='linear')
-            print(f'    Done interpolating z-momentum on Rank {rank} with {uz_result_chunk.shape} shape\n')
-            e_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 4], grid_chunk[:, 0], grid_chunk[:, 1],
-                                               fill_value=_fill_value[4], method='linear')
-            print(f'    Done interpolating energy on Rank {rank} with {e_result_chunk.shape} shape\n')
+            if  _qf_chunk.shape[0] <= 2:
+                print(f'Less than 2 points to interpolate on Rank {rank}. Skipping interpolation\n')
+                rho_result_chunk = np.full(grid_chunk.shape[0], _fill_value[0])
+                ux_result_chunk = np.full(grid_chunk.shape[0], _fill_value[1])
+                uy_result_chunk = np.full(grid_chunk.shape[0], _fill_value[2])
+                uz_result_chunk = np.full(grid_chunk.shape[0], _fill_value[3])
+                e_result_chunk = np.full(grid_chunk.shape[0], _fill_value[4])
+            else:
+                # use griddata for linear interpolation
+                print(f'Rank {rank} is interpolating data using griddata\n')
+                rho_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 0], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                     fill_value=_fill_value[0])
+                print(f'    Done interpolating density on Rank {rank} with {rho_result_chunk.shape} shape\n')
+                ux_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 1], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                    fill_value=_fill_value[1])
+                print(f'    Done interpolating x-momentum on Rank {rank} with {ux_result_chunk.shape} shape\n')
+                uy_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 2], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                    fill_value=_fill_value[2])
+                print(f'    Done interpolating y-momentum on Rank {rank} with {uy_result_chunk.shape} shape\n')
+                uz_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 3], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                    fill_value=_fill_value[3])
+                print(f'    Done interpolating z-momentum on Rank {rank} with {uz_result_chunk.shape} shape\n')
+                e_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 4], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                   fill_value=_fill_value[4])
+                print(f'    Done interpolating energy on Rank {rank} with {e_result_chunk.shape} shape\n')
 
             # Gather the results from all processes
             # Gather chunk sizes
@@ -627,17 +635,23 @@ class DataIO:
             # ax.legend(loc='upper right')
             # plt.show()
 
-            # Perform RBF interpolation on each process for particle data
-            print(f'Rank {rank} is interpolating particle data using griddata\n')
-            ux_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 1], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                fill_value=_fill_value[1], method='linear')
-            print(f'Done x-momentum interpolating on Rank {rank} with {ux_result_chunk.shape} shape for particle\n')
-            uy_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 2], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                fill_value=_fill_value[2], method='linear')
-            print(f'Done y-momentum interpolating on Rank {rank} with {uy_result_chunk.shape} shape for particle\n')
-            uz_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 3], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                fill_value=_fill_value[3], method='linear')
-            print(f'Done z-momentum interpolating on Rank {rank} with {uz_result_chunk.shape} shape for particle\n')
+            # Perform interpolation on each process for particle data
+            if _qp_chunk.shape[0] <= 2:
+                print(f'Less than 2 points to interpolate on Rank {rank}. Skipping interpolation\n')
+                ux_result_chunk = np.full(grid_chunk.shape[0], _fill_value[1])
+                uy_result_chunk = np.full(grid_chunk.shape[0], _fill_value[2])
+                uz_result_chunk = np.full(grid_chunk.shape[0], _fill_value[3])
+            else:
+                print(f'Rank {rank} is interpolating particle data using griddata\n')
+                ux_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 1], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                    fill_value=_fill_value[1])
+                print(f'Done x-momentum interpolating on Rank {rank} with {ux_result_chunk.shape} shape for particle\n')
+                uy_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 2], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                    fill_value=_fill_value[2])
+                print(f'Done y-momentum interpolating on Rank {rank} with {uy_result_chunk.shape} shape for particle\n')
+                uz_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 3], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                    fill_value=_fill_value[3])
+                print(f'Done z-momentum interpolating on Rank {rank} with {uz_result_chunk.shape} shape for particle\n')
 
             # Gather the results from all processes
             # Gather chunk sizes
