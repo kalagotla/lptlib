@@ -407,14 +407,10 @@ class DataIO:
             self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d_fluid.q')
             self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d_particle.q')
         except FileNotFoundError:
-            def distribute_grid(grid, rank, size):
+            def distribute_grid(grid, rank, size, overlap_fraction=0.1):
                 # Determine the number of chunks in x and y directions
-                num_x_chunks = int(np.sqrt(size))
-                num_y_chunks = size // num_x_chunks
-
-                # Ensure that the number of processes divides evenly
-                assert num_x_chunks * num_y_chunks == size, \
-                    "Size must be a perfect square or a product of two integers."
+                num_x_chunks = int(np.ceil(np.sqrt(size)))
+                num_y_chunks = int(np.ceil(size / num_x_chunks))
 
                 # Get the shape of the grid
                 grid_x = np.unique(grid[:, 0])
@@ -426,12 +422,16 @@ class DataIO:
                 rank_x = rank % num_x_chunks
                 rank_y = rank // num_x_chunks
 
-                # Get the start and end indices for x and y based on the rank
-                x_start = rank_x * x_chunk_size
-                x_end = (rank_x + 1) * x_chunk_size if rank_x != num_x_chunks - 1 else len(grid_x)
+                # Calculate the 10% overlap in each direction
+                x_overlap = int(np.ceil(overlap_fraction * x_chunk_size))
+                y_overlap = int(np.ceil(overlap_fraction * y_chunk_size))
 
-                y_start = rank_y * y_chunk_size
-                y_end = (rank_y + 1) * y_chunk_size if rank_y != num_y_chunks - 1 else len(grid_y)
+                # Get the start and end indices for x and y based on the rank
+                x_start = max(0, rank_x * x_chunk_size - x_overlap)
+                x_end = min(len(grid_x), (rank_x + 1) * x_chunk_size + x_overlap)
+
+                y_start = max(0, rank_y * y_chunk_size - y_overlap)
+                y_end = min(len(grid_y), (rank_y + 1) * y_chunk_size + y_overlap)
 
                 # Extract the grid chunk corresponding to this rank
                 x_chunk = grid_x[x_start:x_end]
@@ -512,27 +512,23 @@ class DataIO:
 
             # Perform RBF interpolation on each process
             _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0, 0, 0, 2 * np.nanmax(self.flow.q[..., -1, :])]
-            if _qf_chunk.shape[0] <= 3:
-                print(f'Found only {_qf_chunk.shape[0]} scattered points on Rank {rank}. Skipping RBF interpolation...')
-                rho_result_chunk = np.full(grid_chunk.shape[0], _fill_value[0])
-                ux_result_chunk = np.full(grid_chunk.shape[0], _fill_value[1])
-                uy_result_chunk = np.full(grid_chunk.shape[0], _fill_value[2])
-                uz_result_chunk = np.full(grid_chunk.shape[0], _fill_value[3])
-                e_result_chunk = np.full(grid_chunk.shape[0], _fill_value[4])
-                # print(f'shape of rho_result_chunk: {rho_result_chunk.shape} on Rank {rank}')
-            else:
-                rho_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 0])
-                ux_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 1])
-                uy_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 2])
-                uz_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 3])
-                e_interpolator = RBFInterpolator(_xy_chunk, _qf_chunk[:, 4])
-                # Interpolated values on this chunk of the grid
-                rho_result_chunk = rho_interpolator(grid_chunk)
-                ux_result_chunk = ux_interpolator(grid_chunk)
-                uy_result_chunk = uy_interpolator(grid_chunk)
-                uz_result_chunk = uz_interpolator(grid_chunk)
-                e_result_chunk = e_interpolator(grid_chunk)
-            print(f'Done interpolating on Rank {rank} with {rho_result_chunk.shape} shape\n')
+            # use griddata for linear interpolation
+            print(f'Rank {rank} is interpolating data using griddata\n')
+            rho_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 0], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                 fill_value=_fill_value[0], method='linear')
+            print(f'    Done interpolating density on Rank {rank} with {rho_result_chunk.shape} shape\n')
+            ux_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 1], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                fill_value=_fill_value[1], method='linear')
+            print(f'    Done interpolating x-momentum on Rank {rank} with {ux_result_chunk.shape} shape\n')
+            uy_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 2], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                fill_value=_fill_value[2], method='linear')
+            print(f'    Done interpolating y-momentum on Rank {rank} with {uy_result_chunk.shape} shape\n')
+            uz_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 3], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                fill_value=_fill_value[3], method='linear')
+            print(f'    Done interpolating z-momentum on Rank {rank} with {uz_result_chunk.shape} shape\n')
+            e_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 4], grid_chunk[:, 0], grid_chunk[:, 1],
+                                               fill_value=_fill_value[4], method='linear')
+            print(f'    Done interpolating energy on Rank {rank} with {e_result_chunk.shape} shape\n')
 
             # Gather the results from all processes
             # Gather chunk sizes
@@ -561,25 +557,47 @@ class DataIO:
 
             # Rank 0 processes final results
             if rank == 0:
-                rho_result_save = np.zeros((self.x_refinement, self.y_refinement))
-                ux_result_save = np.zeros((self.x_refinement, self.y_refinement))
-                uy_result_save = np.zeros((self.x_refinement, self.y_refinement))
-                uz_result_save = np.zeros((self.x_refinement, self.y_refinement))
-                e_result_save = np.zeros((self.x_refinement, self.y_refinement))
+                rho_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[0])
+                ux_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[1])
+                uy_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[2])
+                uz_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[3])
+                e_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[4])
 
                 def reshape_to_save(variable=rho_result, variable_save=rho_result_save, _split_indices=_split_indices):
                     # Take in the interpolated grid variable and reshape it to save it
                     length_old = 0  # Initialize the length of the data
                     # print(f'{variable.shape} is the shape of the variable')
-                    for indices in _split_indices:
+                    # fig, ax = plt.subplots(1, len(_split_indices))
+                    for count, indices in enumerate(_split_indices):
                         # Assign split indices
                         x_start, x_end, y_start, y_end = indices
                         # Calculate the length of the data to be split
                         length = length_old + (x_end - x_start) * (y_end - y_start)
                         # print(f'length: {length}, length_old: {length_old}')
-                        variable_save[x_start:x_end, y_start:y_end] = (
-                            variable[length_old:length].reshape(x_end - x_start, y_end - y_start))
+                        # print(f'x_start: {x_start}, x_end: {x_end}, y_start: {y_start}, y_end: {y_end}')
+                        # skip edge cells to copy
+                        n = 1
+                        # to remove edge cells
+                        variable_temp = variable[length_old:length].reshape(x_end - x_start, y_end - y_start)
+                        variable_save[x_start+n:x_end-n, y_start+n:y_end-n] = variable_temp[n:-n, n:-n]
                         length_old = length
+                        # ax[count].contourf(_xi, _yi, variable_save, cmap='viridis')
+                        # ax[count].scatter(_xy_chunk[:, 0], _xy_chunk[:, 1], s=1, label='Scattered points')
+
+                    # print(f'shape of the variable_save: {variable_save.shape}')
+                    # print(f'shape of the grid chunk: {grid_chunk.shape}')
+
+                    # # debug plot to check the interpolation
+                    # if variable is rho_result:
+                    #     fig, ax = plt.subplots(1, 1)
+                    #     ax.contourf(_xi, _yi, variable_save, cmap='viridis')
+                    #     cbar = plt.colorbar(ax.contourf(_xi, _yi, variable_save, cmap='viridis'))
+                    #     cbar.set_label('Density')
+                    #     ax.set_xlabel('x')
+                    #     ax.set_ylabel('y')
+
+                    # plt.show()
+
                     return variable_save
 
                 rho_result_save = reshape_to_save(rho_result, rho_result_save)
@@ -610,20 +628,16 @@ class DataIO:
             # plt.show()
 
             # Perform RBF interpolation on each process for particle data
-            if _qp_chunk.shape[0] <= 3:
-                print(f'Found only {_qp_chunk.shape[0]} scattered points on Rank {rank}. Skipping RBF interpolation...')
-                ux_result_chunk = np.full(grid_chunk.shape[0], _fill_value[1])
-                uy_result_chunk = np.full(grid_chunk.shape[0], _fill_value[2])
-                uz_result_chunk = np.full(grid_chunk.shape[0], _fill_value[3])
-            else:
-                ux_interpolator = RBFInterpolator(_xy_chunk, _qp_chunk[:, 1])
-                uy_interpolator = RBFInterpolator(_xy_chunk, _qp_chunk[:, 2])
-                uz_interpolator = RBFInterpolator(_xy_chunk, _qp_chunk[:, 3])
-                # Interpolated values on this chunk of the grid
-                ux_result_chunk = ux_interpolator(grid_chunk)
-                uy_result_chunk = uy_interpolator(grid_chunk)
-                uz_result_chunk = uz_interpolator(grid_chunk)
-            print(f'Done interpolating on Rank {rank} with {ux_result_chunk.shape} shape for particle\n')
+            print(f'Rank {rank} is interpolating particle data using griddata\n')
+            ux_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 1], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                fill_value=_fill_value[1], method='linear')
+            print(f'Done x-momentum interpolating on Rank {rank} with {ux_result_chunk.shape} shape for particle\n')
+            uy_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 2], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                fill_value=_fill_value[2], method='linear')
+            print(f'Done y-momentum interpolating on Rank {rank} with {uy_result_chunk.shape} shape for particle\n')
+            uz_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 3], grid_chunk[:, 0], grid_chunk[:, 1],
+                                                fill_value=_fill_value[3], method='linear')
+            print(f'Done z-momentum interpolating on Rank {rank} with {uz_result_chunk.shape} shape for particle\n')
 
             # Gather the results from all processes
             # Gather chunk sizes
