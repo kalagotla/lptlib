@@ -467,7 +467,7 @@ class DataIO:
                 _q_f_list = np.hstack((_q_list[:, 0].reshape(-1, 1), _p_data[:, 6:9] * _q_list[:, 0].reshape(-1, 1),
                                        _q_list[:, 4].reshape(-1, 1)))
 
-                # Flatten grid for RBF interpolation
+                # Flatten grid for interpolation
                 grid = np.column_stack([_xi.ravel(), _yi.ravel()])
                 # Split the scattered data points and grid across MPI processes on rank 0
                 _grid_chunks = []
@@ -475,7 +475,8 @@ class DataIO:
                 _split_indices = []
                 for i in range(size):
                     # Distribute the grid for each rank
-                    grid_chunk, (x_start, x_end), (y_start, y_end) = distribute_grid(grid, i, size)
+                    grid_chunk, (x_start, x_end), (y_start, y_end) = distribute_grid(grid, i, size,
+                                                                                     overlap_fraction=0.1)
                     _xy_chunk, _qf_chunk, _qp_chunk = distribute_points(grid_chunk, _locations[:, :2],
                                                                         _q_f_list, _q_p_list)
                     _scatter_chunks.append((_xy_chunk, _qf_chunk, _qp_chunk))
@@ -512,7 +513,7 @@ class DataIO:
 
             # Perform RBF interpolation on each process
             _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0, 0, 0, 2 * np.nanmax(self.flow.q[..., -1, :])]
-            if  _qf_chunk.shape[0] <= 2:
+            if _qf_chunk.shape[0] <= 2:
                 print(f'Less than 2 points to interpolate on Rank {rank}. Skipping interpolation\n')
                 rho_result_chunk = np.full(grid_chunk.shape[0], _fill_value[0])
                 ux_result_chunk = np.full(grid_chunk.shape[0], _fill_value[1])
@@ -523,19 +524,19 @@ class DataIO:
                 # use griddata for linear interpolation
                 print(f'Rank {rank} is interpolating data using griddata\n')
                 rho_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 0], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                     fill_value=_fill_value[0])
+                                                     fill_value=_fill_value[0], method='linear')
                 print(f'    Done interpolating density on Rank {rank} with {rho_result_chunk.shape} shape\n')
                 ux_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 1], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                    fill_value=_fill_value[1])
+                                                    fill_value=_fill_value[1], method='linear')
                 print(f'    Done interpolating x-momentum on Rank {rank} with {ux_result_chunk.shape} shape\n')
                 uy_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 2], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                    fill_value=_fill_value[2])
+                                                    fill_value=_fill_value[2], method='linear')
                 print(f'    Done interpolating y-momentum on Rank {rank} with {uy_result_chunk.shape} shape\n')
                 uz_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 3], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                    fill_value=_fill_value[3])
+                                                    fill_value=_fill_value[3], method='linear')
                 print(f'    Done interpolating z-momentum on Rank {rank} with {uz_result_chunk.shape} shape\n')
                 e_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 4], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                   fill_value=_fill_value[4])
+                                                   fill_value=_fill_value[4], method='linear')
                 print(f'    Done interpolating energy on Rank {rank} with {e_result_chunk.shape} shape\n')
 
             # Gather the results from all processes
@@ -583,11 +584,12 @@ class DataIO:
                         length = length_old + (x_end - x_start) * (y_end - y_start)
                         # print(f'length: {length}, length_old: {length_old}')
                         # print(f'x_start: {x_start}, x_end: {x_end}, y_start: {y_start}, y_end: {y_end}')
-                        # skip edge cells to copy
-                        n = 1
+                        # skip edge cells to copy - 5% of the grid
+                        nx = int(0.05 * (x_end - x_start))
+                        ny = int(0.05 * (y_end - y_start))
                         # to remove edge cells
                         variable_temp = variable[length_old:length].reshape(x_end - x_start, y_end - y_start)
-                        variable_save[x_start+n:x_end-n, y_start+n:y_end-n] = variable_temp[n:-n, n:-n]
+                        variable_save[x_start+nx:x_end-nx, y_start+ny:y_end-ny] = variable_temp[nx:-nx, ny:-ny]
                         length_old = length
                         # ax[count].contourf(_xi, _yi, variable_save, cmap='viridis')
                         # ax[count].scatter(_xy_chunk[:, 0], _xy_chunk[:, 1], s=1, label='Scattered points')
@@ -644,13 +646,13 @@ class DataIO:
             else:
                 print(f'Rank {rank} is interpolating particle data using griddata\n')
                 ux_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 1], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                    fill_value=_fill_value[1])
+                                                    fill_value=_fill_value[1], method='linear')
                 print(f'Done x-momentum interpolating on Rank {rank} with {ux_result_chunk.shape} shape for particle\n')
                 uy_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 2], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                    fill_value=_fill_value[2])
+                                                    fill_value=_fill_value[2], method='linear')
                 print(f'Done y-momentum interpolating on Rank {rank} with {uy_result_chunk.shape} shape for particle\n')
                 uz_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 3], grid_chunk[:, 0], grid_chunk[:, 1],
-                                                    fill_value=_fill_value[3])
+                                                    fill_value=_fill_value[3], method='linear')
                 print(f'Done z-momentum interpolating on Rank {rank} with {uz_result_chunk.shape} shape for particle\n')
 
             # Gather the results from all processes
