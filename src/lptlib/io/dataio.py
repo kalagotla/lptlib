@@ -512,7 +512,7 @@ class DataIO:
             # plt.show()
 
             # Perform RBF interpolation on each process
-            _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0, 0, 0, 2 * np.nanmax(self.flow.q[..., -1, :])]
+            _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0.0, 0.0, 0.0, 2 * np.nanmax(self.flow.q[..., -1, :])]
             if _qf_chunk.shape[0] <= 2:
                 print(f'Less than 2 points to interpolate on Rank {rank}. Skipping interpolation\n')
                 rho_result_chunk = np.full(grid_chunk.shape[0], _fill_value[0])
@@ -539,6 +539,14 @@ class DataIO:
                                                    fill_value=_fill_value[4], method='linear')
                 print(f'    Done interpolating energy on Rank {rank} with {e_result_chunk.shape} shape\n')
 
+                print(f'Rank {rank} rho before interp: {_qf_chunk[:, 0].min()}, {_qf_chunk[:, 0].max()}')
+                print(f'Rank {rank} rho after interp: {rho_result_chunk.min()}, {rho_result_chunk.max()}')
+                print(f'Rank {rank} ux before interp: {_qf_chunk[:, 1].min()}, {_qf_chunk[:, 1].max()}')
+                print(f'Rank {rank} ux after interp: {ux_result_chunk.min()}, {ux_result_chunk.max()}')
+
+            # wait for all processes to finish
+            comm.Barrier()
+
             # Gather the results from all processes
             # Gather chunk sizes
             chunk_size = np.array(rho_result_chunk.size)
@@ -564,8 +572,13 @@ class DataIO:
             comm.Gatherv(uz_result_chunk, [uz_result, chunk_sizes, displacements, MPI.DOUBLE], root=0)
             comm.Gatherv(e_result_chunk, [e_result, chunk_sizes, displacements, MPI.DOUBLE], root=0)
 
+            # wait for all processes to finish
+            comm.Barrier()
+
             # Rank 0 processes final results
             if rank == 0:
+                print(f'rho after gather: {rho_result.min()}, {rho_result.max()}')
+                print(f'ux after gather: {ux_result.min()}, {ux_result.max()}')
                 rho_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[0])
                 ux_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[1])
                 uy_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[2])
@@ -615,6 +628,9 @@ class DataIO:
                 uy_result_save = reshape_to_save(uy_result, uy_result_save)
                 uz_result_save = reshape_to_save(uz_result, uz_result_save)
                 e_result_save = reshape_to_save(e_result, e_result_save)
+
+                print(f'rho after reshape: {rho_result_save.min()}, {rho_result_save.max()}')
+                print(f'ux after reshape: {ux_result_save.min()}, {ux_result_save.max()}')
 
                 _qf = np.stack([rho_result_save, ux_result_save, uy_result_save, uz_result_save, e_result_save])
                 np.save(self.location + 'dataio/flow_data', _qf)
