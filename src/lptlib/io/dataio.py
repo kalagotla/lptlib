@@ -125,46 +125,64 @@ class DataIO:
         return _q
 
     @staticmethod
-    def _sample_data(self, _data, _percent):
+    def _sample_data(self, _data, _percent, xn_bins=10, yn_bins=10):
         """
-            Uniformly samples the given percentage of data spread on an XY plane.
+        Uniformly samples the given percentage of data spread on an XY plane using a binning approach.
 
-            Parameters:
-            data (numpy.ndarray): An array of shape (n, 15) where the first two columns are x and y coordinates.
-            percent (float): The percentage of data to sample (0 < percent <= 100).
+        Parameters:
+        data (numpy.ndarray): An array of shape (n, 15) where the first two columns are x and y coordinates.
+        percent (float): The percentage of data to sample (0 < percent <= 100).
+        n_bins (int): The number of bins to divide the XY plane into along each axis.
 
-            Returns:
-            numpy.ndarray: The uniformly sampled subset of the data.
-            """
+        Returns:
+        numpy.ndarray: The uniformly sampled subset of the data with shape (m, 15), where m is the sampled number of rows.
+        """
+        print('Sampling data using stratified sampling in x and y...\n')
         # Ensure percent is between 0 and 100
         if _percent <= 0 or _percent > 100:
             raise ValueError("Percent must be between 0 and 100")
 
-        # Calculate the number of samples to take
-        n_samples = int(len(_data[:, 0]) * _percent / 100)
+        # Binning the data to ensure uniform sampling across space
+        x_bins = np.linspace(_data[:, 0].min(), _data[:, 0].max(), xn_bins + 1)
+        y_bins = np.linspace(_data[:, 1].min(), _data[:, 1].max(), yn_bins + 1)
 
-        # Uniformly sample indices
-        sampled_indices = np.random.choice(len(_data), n_samples, replace=False)
+        sampled_indices = []
+
+        # Sample points from each bin
+        for i in range(xn_bins):
+            for j in range(yn_bins):
+                # Find points in this bin
+                bin_mask = (_data[:, 0] >= x_bins[i]) & (_data[:, 0] < x_bins[i + 1]) & \
+                           (_data[:, 1] >= y_bins[j]) & (_data[:, 1] < y_bins[j + 1])
+                bin_points = np.where(bin_mask)[0]
+
+                # Sample from this bin if there are points in it
+                if len(bin_points) > 0:
+                    n_bin_samples = max(1, int(len(bin_points) * _percent / 100))
+                    sampled_indices.extend(np.random.choice(bin_points, n_bin_samples, replace=False))
+
+        sampled_indices = np.array(sampled_indices)
 
         # create a xy plot and save it
         fig, ax = plt.subplots()
         ax.scatter(_data[:, 0], _data[:, 1], s=1, label=f'Original data: {len(_data[:, 0])} points')
         ax.scatter(_data[sampled_indices, 0], _data[sampled_indices, 1], s=1, color='red',
-                   label=f'Sampled data: {n_samples} points')
+                   label=f'Sampled data: {len(sampled_indices)} points')
         ax.set_xlabel('x')
         ax.set_ylabel('y')
         ax.set_xlim(_data[:, 0].min(), _data[:, 0].max())
         ax.set_ylim(_data[:, 1].min(), _data[:, 1].max())
         ax.legend(loc='upper right')
-        try:
-            # Try creating the directory; if exists errors out and except
-            os.mkdir(self.location + 'dataio')
-            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
-        except FileExistsError:
-            plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
 
-        # Return the sampled data
-        return _data[sampled_indices]
+        # Save the plot
+        try:
+            os.mkdir(self.location + 'dataio')
+        except FileExistsError:
+            pass
+        plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
+
+        # Return the sampled data (all 15 columns)
+        return _data[sampled_indices, :]
 
     def _mpi_read(self, _files, comm):
         """
@@ -362,6 +380,7 @@ class DataIO:
                 except FileExistsError:
                     np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
                     np.save(self.location + 'dataio/_old_p_data', _p_data)
+                    print('Saved old interpolated flow data to scattered points.\n')
 
             # Run the outlier removal process and save the data
             if rank == 0:
