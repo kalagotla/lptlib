@@ -180,6 +180,8 @@ class DataIO:
         except FileExistsError:
             pass
         plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
+        plt.close()
+        print(f'Sampled data saved to {self.location}dataio/sampled_data.png\n')
 
         # Return the sampled data (all 15 columns)
         return _data[sampled_indices, :]
@@ -426,6 +428,8 @@ class DataIO:
             self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d_fluid.q')
             self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d_particle.q')
         except FileNotFoundError:
+
+            print('&&&&&&&Interpolating data to the grid using MPI...&&&&&&&\n')
             def distribute_grid(grid, rank, size, overlap_fraction=0.1):
                 # Determine the number of chunks in x and y directions
                 num_x_chunks = int(np.ceil(np.sqrt(size)))
@@ -441,7 +445,7 @@ class DataIO:
                 rank_x = rank % num_x_chunks
                 rank_y = rank // num_x_chunks
 
-                # Calculate the 10% overlap in each direction
+                # Calculate the % overlap in each direction
                 x_overlap = int(np.ceil(overlap_fraction * x_chunk_size))
                 y_overlap = int(np.ceil(overlap_fraction * y_chunk_size))
 
@@ -495,7 +499,7 @@ class DataIO:
                 for i in range(size):
                     # Distribute the grid for each rank
                     grid_chunk, (x_start, x_end), (y_start, y_end) = distribute_grid(grid, i, size,
-                                                                                     overlap_fraction=0.1)
+                                                                                     overlap_fraction=0.5)
                     _xy_chunk, _qf_chunk, _qp_chunk = distribute_points(grid_chunk, _locations[:, :2],
                                                                         _q_f_list, _q_p_list)
                     _scatter_chunks.append((_xy_chunk, _qf_chunk, _qp_chunk))
@@ -518,8 +522,8 @@ class DataIO:
             _qf_chunk = comm.scatter([chunk[1] for chunk in _scatter_chunks], root=0)
             _qp_chunk = comm.scatter([chunk[2] for chunk in _scatter_chunks], root=0)
             # progress statements
-            print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
-            print(f'Rank {rank} has {grid_chunk.shape} grid points')
+            # print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
+            # print(f'Rank {rank} has {grid_chunk.shape} grid points')
 
             # # Debugging plot
             # fig, ax = plt.subplots()
@@ -558,10 +562,10 @@ class DataIO:
                                                    fill_value=_fill_value[4], method='linear')
                 print(f'    Done interpolating energy on Rank {rank} with {e_result_chunk.shape} shape\n')
 
-                print(f'Rank {rank} rho before interp: {_qf_chunk[:, 0].min()}, {_qf_chunk[:, 0].max()}')
-                print(f'Rank {rank} rho after interp: {rho_result_chunk.min()}, {rho_result_chunk.max()}')
-                print(f'Rank {rank} ux before interp: {_qf_chunk[:, 1].min()}, {_qf_chunk[:, 1].max()}')
-                print(f'Rank {rank} ux after interp: {ux_result_chunk.min()}, {ux_result_chunk.max()}')
+                # print(f'Rank {rank} rho before interp: {_qf_chunk[:, 0].min()}, {_qf_chunk[:, 0].max()}')
+                # print(f'Rank {rank} rho after interp: {rho_result_chunk.min()}, {rho_result_chunk.max()}')
+                # print(f'Rank {rank} ux before interp: {_qf_chunk[:, 1].min()}, {_qf_chunk[:, 1].max()}')
+                # print(f'Rank {rank} ux after interp: {ux_result_chunk.min()}, {ux_result_chunk.max()}')
 
             # wait for all processes to finish
             comm.Barrier()
@@ -596,8 +600,8 @@ class DataIO:
 
             # Rank 0 processes final results
             if rank == 0:
-                print(f'rho after gather: {rho_result.min()}, {rho_result.max()}')
-                print(f'ux after gather: {ux_result.min()}, {ux_result.max()}')
+                # print(f'rho after gather: {rho_result.min()}, {rho_result.max()}')
+                # print(f'ux after gather: {ux_result.min()}, {ux_result.max()}')
                 rho_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[0])
                 ux_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[1])
                 uy_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[2])
@@ -617,14 +621,35 @@ class DataIO:
                         # print(f'length: {length}, length_old: {length_old}')
                         # print(f'x_start: {x_start}, x_end: {x_end}, y_start: {y_start}, y_end: {y_end}')
                         # skip edge cells to copy - 5% of the grid
-                        nx = int(0.05 * (x_end - x_start))
-                        ny = int(0.05 * (y_end - y_start))
+                        nx = int(0.25 * (x_end - x_start))
+                        ny = int(0.25 * (y_end - y_start))
                         # to remove edge cells
                         variable_temp = variable[length_old:length].reshape(x_end - x_start, y_end - y_start)
-                        variable_save[x_start+nx:x_end-nx, y_start+ny:y_end-ny] = variable_temp[nx:-nx, ny:-ny]
+                        nx_temp_min, nx_temp_max = nx, -nx
+                        ny_temp_min, ny_temp_max = ny, -ny
+                        # debug = []
+                        if x_start == 0:
+                            x_start = x_start - nx
+                            nx_temp_min = 0
+                            # debug.append('x_start')
+                        if x_end == self.x_refinement:
+                            x_end = x_end + nx
+                            nx_temp_max = None
+                            # debug.append('x_end')
+                        if y_start == 0:
+                            y_start = y_start - ny
+                            ny_temp_min = 0
+                            # debug.append('y_start')
+                        if y_end == self.y_refinement:
+                            y_end = y_end + ny
+                            ny_temp_max = None
+                            # debug.append('y_end')
+                        variable_save[x_start+nx:x_end-nx, y_start+ny:y_end-ny] = variable_temp[nx_temp_min:nx_temp_max,
+                                                                                                ny_temp_min:ny_temp_max]
                         length_old = length
                         # ax[count].contourf(_xi, _yi, variable_save, cmap='viridis')
                         # ax[count].scatter(_xy_chunk[:, 0], _xy_chunk[:, 1], s=1, label='Scattered points')
+                        # ax[count].set_title(f'debug: {debug}')
 
                     # print(f'shape of the variable_save: {variable_save.shape}')
                     # print(f'shape of the grid chunk: {grid_chunk.shape}')
@@ -648,8 +673,8 @@ class DataIO:
                 uz_result_save = reshape_to_save(uz_result, uz_result_save)
                 e_result_save = reshape_to_save(e_result, e_result_save)
 
-                print(f'rho after reshape: {rho_result_save.min()}, {rho_result_save.max()}')
-                print(f'ux after reshape: {ux_result_save.min()}, {ux_result_save.max()}')
+                # print(f'rho after reshape: {rho_result_save.min()}, {rho_result_save.max()}')
+                # print(f'ux after reshape: {ux_result_save.min()}, {ux_result_save.max()}')
 
                 _qf = np.stack([rho_result_save, ux_result_save, uy_result_save, uz_result_save, e_result_save])
                 np.save(self.location + 'dataio/flow_data', _qf)
