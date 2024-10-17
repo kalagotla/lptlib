@@ -67,6 +67,7 @@ class DataIO:
         self.x_refinement = x_refinement
         self.y_refinement = y_refinement
         self.file_number_split = 10
+        self.oblique_shock = False
 
     @staticmethod
     def _natural_sort(_l: list):
@@ -142,26 +143,36 @@ class DataIO:
         if _percent <= 0 or _percent > 100:
             raise ValueError("Percent must be between 0 and 100")
 
-        # Binning the data to ensure uniform sampling across space
-        x_bins = np.linspace(_data[:, 0].min(), _data[:, 0].max(), xn_bins + 1)
-        y_bins = np.linspace(_data[:, 1].min(), _data[:, 1].max(), yn_bins + 1)
+        if self.oblique_shock:
+            # include all the data before shock for better interpolation and sample post shock
+            pre_shock = np.where(_data[:, 0] < 1e-3)[0]
+            # sample post shock data uniformly
+            post_shock = np.random.choice(np.where(_data[:, 0] > 1e-3)[0], int(len(_data[:, 0]) * _percent / 100),
+                                          replace=False)
+            sampled_indices = np.concatenate((pre_shock, post_shock))
 
-        sampled_indices = []
 
-        # Sample points from each bin
-        for i in range(xn_bins):
-            for j in range(yn_bins):
-                # Find points in this bin
-                bin_mask = (_data[:, 0] >= x_bins[i]) & (_data[:, 0] < x_bins[i + 1]) & \
-                           (_data[:, 1] >= y_bins[j]) & (_data[:, 1] < y_bins[j + 1])
-                bin_points = np.where(bin_mask)[0]
+        else:
+            # Binning the data to ensure uniform sampling across space
+            x_bins = np.linspace(_data[:, 0].min(), _data[:, 0].max(), xn_bins + 1)
+            y_bins = np.linspace(_data[:, 1].min(), _data[:, 1].max(), yn_bins + 1)
 
-                # Sample from this bin if there are points in it
-                if len(bin_points) > 0:
-                    n_bin_samples = max(1, int(len(bin_points) * _percent / 100))
-                    sampled_indices.extend(np.random.choice(bin_points, n_bin_samples, replace=False))
+            sampled_indices = []
 
-        sampled_indices = np.array(sampled_indices)
+            # Sample points from each bin
+            for i in range(xn_bins):
+                for j in range(yn_bins):
+                    # Find points in this bin
+                    bin_mask = (_data[:, 0] >= x_bins[i]) & (_data[:, 0] < x_bins[i + 1]) & \
+                               (_data[:, 1] >= y_bins[j]) & (_data[:, 1] < y_bins[j + 1])
+                    bin_points = np.where(bin_mask)[0]
+
+                    # Sample from this bin if there are points in it
+                    if len(bin_points) > 0:
+                        n_bin_samples = max(1, int(len(bin_points) * _percent / 100))
+                        sampled_indices.extend(np.random.choice(bin_points, n_bin_samples, replace=False))
+
+            sampled_indices = np.array(sampled_indices)
 
         # create a xy plot and save it
         fig, ax = plt.subplots()
