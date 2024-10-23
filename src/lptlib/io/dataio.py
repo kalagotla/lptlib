@@ -145,9 +145,9 @@ class DataIO:
 
         if self.oblique_shock:
             # include all the data before shock for better interpolation and sample post shock
-            pre_shock = np.where(_data[:, 0] < 1e-3)[0]
+            pre_shock = np.where(_data[:, 0] < 1e-2)[0]
             # sample post shock data uniformly
-            post_shock = np.random.choice(np.where(_data[:, 0] > 1e-3)[0], int(len(_data[:, 0]) * _percent / 100),
+            post_shock = np.random.choice(np.where(_data[:, 0] > 1e-2)[0], int(len(_data[:, 0]) * _percent / 100),
                                           replace=False)
             sampled_indices = np.concatenate((pre_shock, post_shock))
 
@@ -160,7 +160,7 @@ class DataIO:
             sampled_indices = []
 
             # Sample points from each bin
-            for i in range(xn_bins):
+            for i in tqdm(range(xn_bins), desc='Sampling data'):
                 for j in range(yn_bins):
                     # Find points in this bin
                     bin_mask = (_data[:, 0] >= x_bins[i]) & (_data[:, 0] < x_bins[i + 1]) & \
