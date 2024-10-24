@@ -294,6 +294,7 @@ class DataIO:
             # Read if saved files are available
             _q_list = np.load(self.location + 'dataio/interpolated_q_data.npy', allow_pickle=False)
             _p_data = np.load(self.location + 'dataio/new_p_data.npy', allow_pickle=False)
+            _locations = np.load(self.location + 'dataio/locations.npy', allow_pickle=False)
             print('Read the available interpolated data to continue with the griddata algorithm')
         except FileNotFoundError:
             # Run through the process of creating interpolation files
@@ -302,6 +303,7 @@ class DataIO:
                 # Read old interpolation files before removing outliers if available
                 _q_list = np.load(self.location + 'dataio/_old_interpolated_q_data.npy', allow_pickle=True)
                 _p_data = np.load(self.location + 'dataio/_old_p_data.npy', allow_pickle=True)
+                _locations = np.load(self.location + 'dataio/_old_locations.npy', allow_pickle=True)
                 print('Read the available old interpolated data to continue with the outliers algorithm')
             except FileNotFoundError:
                 # Run the interpolation process on all the scattered points
@@ -388,10 +390,12 @@ class DataIO:
                     os.mkdir(self.location + 'dataio')
                     np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
                     np.save(self.location + 'dataio/_old_p_data', _p_data)
+                    np.save(self.location + 'dataio/_old_locations', _locations)
                     print('Created dataio folder and saved old interpolated flow data to scattered points.\n')
                 except FileExistsError:
                     np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
                     np.save(self.location + 'dataio/_old_p_data', _p_data)
+                    np.save(self.location + 'dataio/_old_locations', _locations)
                     print('Saved old interpolated flow data to scattered points.\n')
 
             # Run the outlier removal process and save the data
@@ -413,6 +417,7 @@ class DataIO:
                 # Save both interpolated data and new particle data for easy future computations
                 np.save(self.location + 'dataio/interpolated_q_data', _q_list)
                 np.save(self.location + 'dataio/new_p_data', _p_data)
+                np.save(self.location + 'dataio/locations', _locations)
             else:
                 _q_list, _p_data, _locations = None, None, None
             # synchronize the processes
@@ -510,6 +515,9 @@ class DataIO:
                     # Distribute the grid for each rank
                     grid_chunk, (x_start, x_end), (y_start, y_end) = distribute_grid(grid, i, size,
                                                                                      overlap_fraction=0.5)
+                    # print(f'_locations shape: {_locations.shape}')
+                    # print(f'_q_f_list shape: {_q_f_list.shape}')
+                    # print(f'_q_p_list shape: {_q_p_list.shape}')
                     _xy_chunk, _qf_chunk, _qp_chunk = distribute_points(grid_chunk, _locations[:, :2],
                                                                         _q_f_list, _q_p_list)
                     _scatter_chunks.append((_xy_chunk, _qf_chunk, _qp_chunk))
