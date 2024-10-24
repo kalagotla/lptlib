@@ -292,18 +292,18 @@ class DataIO:
         # Load interpolated data after outlier removal if available
         try:
             # Read if saved files are available
+            _locations = np.load(self.location + 'dataio/locations.npy', allow_pickle=False)
             _q_list = np.load(self.location + 'dataio/interpolated_q_data.npy', allow_pickle=False)
             _p_data = np.load(self.location + 'dataio/new_p_data.npy', allow_pickle=False)
-            _locations = np.load(self.location + 'dataio/locations.npy', allow_pickle=False)
             print('Read the available interpolated data to continue with the griddata algorithm')
         except FileNotFoundError:
             # Run through the process of creating interpolation files
             # check first if the old interpolated data is available
             try:
                 # Read old interpolation files before removing outliers if available
+                _locations = np.load(self.location + 'dataio/_old_locations.npy', allow_pickle=True)
                 _q_list = np.load(self.location + 'dataio/_old_interpolated_q_data.npy', allow_pickle=True)
                 _p_data = np.load(self.location + 'dataio/_old_p_data.npy', allow_pickle=True)
-                _locations = np.load(self.location + 'dataio/_old_locations.npy', allow_pickle=True)
                 print('Read the available old interpolated data to continue with the outliers algorithm')
             except FileNotFoundError:
                 # Run the interpolation process on all the scattered points
@@ -385,18 +385,21 @@ class DataIO:
                 comm.Barrier()
 
                 # Intermediate save of the data -- if the process is interrupted we can restart it from here
-                try:
-                    # Try creating the directory; if exists errors out and except
-                    os.mkdir(self.location + 'dataio')
-                    np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
-                    np.save(self.location + 'dataio/_old_p_data', _p_data)
-                    np.save(self.location + 'dataio/_old_locations', _locations)
-                    print('Created dataio folder and saved old interpolated flow data to scattered points.\n')
-                except FileExistsError:
-                    np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
-                    np.save(self.location + 'dataio/_old_p_data', _p_data)
-                    np.save(self.location + 'dataio/_old_locations', _locations)
-                    print('Saved old interpolated flow data to scattered points.\n')
+                if rank == 0:
+                    try:
+                        # Try creating the directory; if exists errors out and except
+                        os.mkdir(self.location + 'dataio')
+                        np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
+                        np.save(self.location + 'dataio/_old_p_data', _p_data)
+                        np.save(self.location + 'dataio/_old_locations', _locations)
+                        print('Created dataio folder and saved old interpolated flow data to scattered points.\n')
+                    except FileExistsError:
+                        np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
+                        np.save(self.location + 'dataio/_old_p_data', _p_data)
+                        np.save(self.location + 'dataio/_old_locations', _locations)
+                        print('Saved old interpolated flow data to scattered points.\n')
+                else:
+                    pass
 
             # Run the outlier removal process and save the data
             if rank == 0:
