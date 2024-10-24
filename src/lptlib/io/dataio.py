@@ -147,8 +147,7 @@ class DataIO:
             # include all the data before shock for better interpolation and sample post shock
             pre_shock = np.where(_data[:, 0] < 1e-2)[0]
             # sample post shock data uniformly
-            post_shock = np.random.choice(np.where(_data[:, 0] > 1e-2)[0], int(len(_data[:, 0]) * _percent / 100),
-                                          replace=False)
+            post_shock = np.random.choice(np.where(_data[:, 0] > 1e-2)[0], int(len(_data[:, 0]) * _percent / 100))
             sampled_indices = np.concatenate((pre_shock, post_shock))
 
 
