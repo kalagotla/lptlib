@@ -144,11 +144,39 @@ class DataIO:
             raise ValueError("Percent must be between 0 and 100")
 
         if self.oblique_shock:
-            # include all the data before shock for better interpolation and sample post shock
-            pre_shock = np.where(_data[:, 0] < 3e-3)[0]
-            # sample post shock data uniformly
-            post_shock = np.random.choice(np.where(_data[:, 0] > 3e-3)[0], int(len(_data[:, 0]) * _percent / 100))
-            sampled_indices = np.concatenate((pre_shock, post_shock))
+            _xi, _yi = np.linspace(_data[:, 0].min(), _data[:, 0].max(), self.x_refinement), \
+                          np.linspace(_data[:, 1].min(), _data[:, 1].max(), self.y_refinement)
+            # Dictionary to hold points in each cell
+            cell_indices = {}
+
+            # Bin scattered data points into cells
+            for idx, point in enumerate(tqdm(_data, desc='Binning data')):
+                x, y = point[:2]
+
+                # Find cell indices based on x and y
+                i = np.searchsorted(_xi, x) - 1
+                j = np.searchsorted(_yi, y) - 1
+
+                # Ensure point is within grid bounds
+                if 0 <= i < self.x_refinement and 0 <= j < self.y_refinement:
+                    cell_key = (i, j)
+                    if cell_key not in cell_indices:
+                        cell_indices[cell_key] = []
+                    cell_indices[cell_key].append(idx)
+
+            # List to hold final sampled indices
+            sampled_indices = []
+
+            # Sample from each cell
+            for cell_key, indices in cell_indices.items():
+                if len(indices) >= 2:
+                    # Dense region: Randomly select 2 indices
+                    sampled = np.random.choice(indices, 2, replace=False)
+                else:
+                    # Sparse region: Keep all indices
+                    sampled = indices
+                sampled_indices.extend(sampled)
+
 
 
         else:
