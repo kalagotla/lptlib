@@ -223,3 +223,17 @@ class SpawnLocations:
             _y_temp = np.linspace(self.y_min, self.y_max, _size).reshape(_size, 1)
 
             self.locations = np.hstack((_x_temp, _y_temp, _z_temp))
+
+        if self.y_max is None and self.z_max is None:
+            _x_temp = np.linspace(self.x_min, self.x_max, _size).reshape(_size, 1)
+            _z_temp = np.repeat(self.z_min, _size).reshape(_size, 1)
+            _y_temp = np.repeat(self.y_min, _size).reshape(_size, 1)
+
+            self.locations = np.hstack((_x_temp, _y_temp, _z_temp))
+
+        if self.x_max is None and self.y_max is None:
+            _x_temp = np.repeat(self.x_min, _size).reshape(_size, 1)
+            _z_temp = np.linspace(self.z_min, self.z_max, _size).reshape(_size, 1)
+            _y_temp = np.repeat(self.y_min, _size).reshape(_size, 1)
+
+            self.locations = np.hstack((_x_temp, _y_temp, _z_temp))
