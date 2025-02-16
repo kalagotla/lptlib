@@ -226,37 +226,74 @@ class DataIO:
 
     def _mpi_read(self, _files, comm):
         """
-        Read files using MPI
+        Read files using MPI and gather large amounts of data efficiently using MPI.Gatherv.
+
         Args:
-            _files: list of files to be read
-            comm: communicator object from MPI
+            _files: list of files to be read.
+            comm: communicator object from MPI.
 
         Returns:
-
+            final_data (np.ndarray): The stacked data on rank 0, or None on other ranks.
         """
         rank = comm.Get_rank()
         size = comm.Get_size()
-        _data = []
-        # scatter
-        _files = np.array_split(_files, size)[rank]
-        for _file in tqdm(_files, desc=f'Reading files on Rank {rank}', position=1):
-            if np.load(self.location + _file).shape[0] == 0:
+
+        # Scatter files among processes
+        local_files = np.array_split(_files, size)[rank]
+
+        # Read files locally and store results in a list
+        local_data_list = []
+        for _file in tqdm(local_files, desc=f'Reading files on Rank {rank}', position=1):
+            # Load the file
+            data = np.load(self.location + _file)
+            if data.shape[0] == 0:
+                print(f'File {_file} is empty. Skipping...')
                 continue
-            _data.append(np.load(self.location + _file))
-        # gather -- fails if there are a lot of files
-        _data = comm.gather(_data, root=0)
-        if rank == 0:
-            # remove empty arrays -- happens when there are more files than processes
-            _data = [data for data in _data if len(data) > 0]
-            # flatten the list
-            _data = [data for sublist in _data for data in sublist]
-            # stack the data
-            _data = np.vstack(_data)
+            print(f'Rank {rank} reading file {_file}')
+            local_data_list.append(data)
+
+        # Stack local arrays (assumes all arrays have the same number of columns)
+        if local_data_list:
+            local_data = np.vstack(local_data_list)
         else:
-            _data = None
-        # synchronize the processes
-        comm.Barrier()
-        return _data
+            # If no data is read on this rank, create an empty array.
+            # Here, we assume the number of columns is known (for example, self.n_cols).
+            # Adjust self.n_cols accordingly. If unknown, you might need extra logic.
+            local_data = np.empty((0, self.n_cols))
+
+        # Get local shape information (number of rows)
+        local_rows, local_cols = local_data.shape
+
+        # Gather the number of rows from all processes on root
+        all_rows = comm.gather(local_rows, root=0)
+
+        # Prepare the receive buffer on root (all arrays must have the same number of columns)
+        if rank == 0:
+            total_rows = sum(all_rows)
+            final_data = np.empty((total_rows, local_cols), dtype=local_data.dtype)
+        else:
+            final_data = None
+
+        # Flatten the local data for sending
+        sendbuf = local_data.ravel()
+
+        # Determine the MPI datatype corresponding to the numpy dtype.
+        # This works for common types (e.g. 'd' for float64, 'i' for int32, etc.).
+        mpi_dtype = MPI._typedict[local_data.dtype.char]
+
+        # On root, prepare counts and displacements for Gatherv.
+        if rank == 0:
+            counts = [r * local_cols for r in all_rows]
+            displacements = [sum(counts[:i]) for i in range(len(counts))]
+        else:
+            counts = None
+            displacements = None
+
+        # Use Gatherv to gather the flattened arrays into final_data (also flattened).
+        comm.Gatherv(sendbuf, [final_data, counts, displacements, mpi_dtype], root=0)
+
+        comm.Barrier()  # Synchronize processes
+        return final_data if rank == 0 else None
 
     def compute(self):
         """
