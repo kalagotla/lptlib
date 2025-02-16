@@ -259,7 +259,7 @@ class DataIO:
             # If no data is read on this rank, create an empty array.
             # Here, we assume the number of columns is known (for example, self.n_cols).
             # Adjust self.n_cols accordingly. If unknown, you might need extra logic.
-            local_data = np.empty((0, self.n_cols))
+            local_data = np.empty((0, 15))
 
         # Get local shape information (number of rows)
         local_rows, local_cols = local_data.shape
