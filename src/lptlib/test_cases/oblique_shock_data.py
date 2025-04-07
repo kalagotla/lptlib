@@ -2,6 +2,7 @@
 
 import numpy as np
 from ..io.plot3dio import GridIO, FlowIO
+from ..function.variables import Variables
 
 
 # Create a class to calculate oblique shock properties from given mach and deflection angle
@@ -192,6 +193,10 @@ class ObliqueShockData:
         # Create a vector with density, shock-normal, shock-tangential, zero velocities, and energy
         # Have pre-shock before x=0 and post-shock after
 
+        # compute viscosity using sutherland's law
+        _c1 = 1.716e-5 * (273.15 + 110.4) / 273.15 ** 1.5
+        viscosity = _c1 * self.inlet_temperature ** 1.5 * 0.4 / (self.inlet_temperature + 110.4)
+
         # create plot3dio flow similar object
         self.flow.nb = 1
         # ni, nj, nk
@@ -201,7 +206,7 @@ class ObliqueShockData:
         # mach, aoa/alpha, re, t
         self.flow.mach = self.oblique_shock.mach
         self.flow.alpha = 0.0
-        self.flow.rey = (_density * _velocity * (self.grid.grd[1, 0, 0, 0, 0] - self.grid.grd[0, 0, 0, 0, 0])) / 1.8e-5
+        self.flow.rey = (_density * _velocity * (self.grid.grd[1, 0, 0, 0, 0] - self.grid.grd[0, 0, 0, 0, 0])) / viscosity
         self.flow.time = 1.0
         # flow
         self.flow.q = np.zeros((self.flow.ni[0], self.flow.nj[0], self.flow.nk[0], 5, self.flow.nb), dtype='f8')
@@ -209,4 +214,133 @@ class ObliqueShockData:
         self.flow.q[self.xpoints:, ...] = _post_shock[..., None]
         return
 
+
+class ObliqueShockAlignedData:
+    """
+    Creates a 3D grid and flow field where the shock plane is aligned along the computed
+    shock angle (β) and the incoming flow is horizontal. The shock plane in the x-y plane
+    passes through (0, ny_max/2) and is defined by the signed distance
+        s = sin(β)*x - cos(β)*(y - ny_max/2)
+    with:
+      - s < 0 : upstream (pre-shock) state
+      - s >= 0 : downstream (post-shock) state
+    The z-direction is handled as a full 3D extension.
+    """
+
+    def __init__(self, oblique_shock=ObliqueShock()):
+        self.oblique_shock = oblique_shock
+        self.nx_max = None
+        self.ny_max = None
+        self.nz_max = None
+        self.xpoints = None
+        self.ypoints = None
+        self.zpoints = None
+        self.grid = GridIO('dummy')
+        self.flow = FlowIO('dummy')
+        self.shock_strength = 'weak'
+        self.inlet_temperature = None
+        self.inlet_density = None
+
+    def create_grid(self):
+        # Create a structured 3D grid: x in [-nx_max, nx_max], y in [0, ny_max], z in [0, nz_max]
+        _xx, _yy, _zz = np.meshgrid(np.linspace(-self.nx_max, self.nx_max, 2 * self.xpoints),
+                                    np.linspace(0, self.ny_max, self.ypoints),
+                                    np.linspace(0, self.nz_max, self.zpoints),
+                                    indexing='ij')
+        self.grid.nb = 1
+        self.grid.ni = np.array([2 * self.xpoints], dtype='i4')
+        self.grid.nj = np.array([self.ypoints], dtype='i4')
+        self.grid.nk = np.array([self.zpoints], dtype='i4')
+        self.grid.grd = np.stack((_xx[..., None], _yy[..., None], _zz[..., None]), axis=3)
+        self.grid.grd_min = np.array([[-self.nx_max, 0, 0]])
+        self.grid.grd_max = np.array([[self.nx_max, self.ny_max, self.nz_max]])
+        GridIO.compute_metrics(self.grid)
+        return
+
+    def create_flow(self):
+        gamma = self.oblique_shock.gamma
+        R = self.oblique_shock.gas_constant
+        T1 = self.inlet_temperature
+        rho1 = self.inlet_density
+
+        # Select weak or strong shock solution
+        if self.shock_strength == 'weak':
+            beta_deg = (self.oblique_shock.shock_angle[0] if hasattr(self.oblique_shock.shock_angle, '__iter__')
+                        else self.oblique_shock.shock_angle)
+            dens_ratio = (self.oblique_shock.density_ratio[0] if hasattr(self.oblique_shock.density_ratio, '__iter__')
+                          else self.oblique_shock.density_ratio)
+            temp_ratio = (
+                self.oblique_shock.temperature_ratio[0] if hasattr(self.oblique_shock.temperature_ratio, '__iter__')
+                else self.oblique_shock.temperature_ratio)
+            mach_ratio = (self.oblique_shock.mach_ratio[0] if hasattr(self.oblique_shock.mach_ratio, '__iter__')
+                          else self.oblique_shock.mach_ratio)
+        elif self.shock_strength == 'strong':
+            beta_deg = (self.oblique_shock.shock_angle[1] if hasattr(self.oblique_shock.shock_angle, '__iter__')
+                        else self.oblique_shock.shock_angle)
+            dens_ratio = (self.oblique_shock.density_ratio[1] if hasattr(self.oblique_shock.density_ratio, '__iter__')
+                          else self.oblique_shock.density_ratio)
+            temp_ratio = (
+                self.oblique_shock.temperature_ratio[1] if hasattr(self.oblique_shock.temperature_ratio, '__iter__')
+                else self.oblique_shock.temperature_ratio)
+            mach_ratio = (self.oblique_shock.mach_ratio[1] if hasattr(self.oblique_shock.mach_ratio, '__iter__')
+                          else self.oblique_shock.mach_ratio)
+        else:
+            raise ValueError("shock_strength must be either 'weak' or 'strong'")
+
+        beta = np.radians(beta_deg)
+        delta = np.radians(self.oblique_shock.deflection)
+
+        # Pre-shock: incoming flow is horizontal (along x)
+        U1 = self.oblique_shock.mach * np.sqrt(gamma * R * T1)
+        pre_shock = np.array([
+            rho1,
+            rho1 * U1,  # momentum in x
+            0,  # momentum in y
+            0,  # momentum in z
+            rho1 * (R * T1 / (gamma - 1) + 0.5 * U1 ** 2)
+        ])
+
+        # Post-shock: properties computed using shock ratios
+        rho2 = rho1 * dens_ratio
+        T2 = T1 * temp_ratio
+        U2 = self.oblique_shock.mach * mach_ratio * np.sqrt(gamma * R * T2)
+        # Flow deflected by δ (assumed downward in y)
+        post_shock = np.array([
+            rho2,
+            rho2 * U2 * np.cos(delta),  # x-component
+            rho2 * U2 * np.sin(delta),  # y-component
+            0,  # z-component remains 0
+            rho2 * (R * T2 / (gamma - 1) + 0.5 * U2 ** 2)
+        ])
+
+        grd = self.grid.grd  # shape (ni, nj, nk, 3)
+        x_coord = grd[..., 0, 0]
+        y_coord = grd[..., 1, 0]
+        # Compute signed distance from the shock plane in the x-y plane.
+        s = x_coord * np.sin(beta) - (y_coord - self.ny_max / 2) * np.cos(beta)
+
+        # compute viscosity using sutherland's law
+        _c1 = 1.716e-5 * (273.15 + 110.4) / 273.15 ** 1.5
+        viscosity = _c1 * self.inlet_temperature ** 1.5 * 0.4 / (self.inlet_temperature + 110.4)
+
+        self.flow.nb = 1
+        self.flow.ni = self.grid.ni
+        self.flow.nj = self.grid.nj
+        self.flow.nk = self.grid.nk
+        self.flow.mach = self.oblique_shock.mach
+        self.flow.alpha = 0.0
+        dx = self.grid.grd[1, 0, 0, 0, 0] - self.grid.grd[0, 0, 0, 0, 0]
+        self.flow.rey = (rho1 * U1 * dx) / viscosity
+        self.flow.time = 1.0
+
+        ni = self.flow.ni[0]
+        nj = self.flow.nj[0]
+        nk = self.flow.nk[0]
+        self.flow.q = np.zeros((ni, nj, nk, 5, self.flow.nb), dtype='f8')
+        # Partition the 3D grid based on s: pre_shock for s < 0, post_shock otherwise.
+        mask = s  < 0
+        for var in range(5):
+            self.flow.q[..., var, 0][mask] = pre_shock[var]
+            self.flow.q[..., var, 0][~mask] = post_shock[var]
+        return
 
