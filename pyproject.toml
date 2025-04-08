@@ -27,12 +27,12 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Education",
     "Topic :: Scientific/Engineering",
 ]
+license = "MIT AND (Apache-2.0 OR BSD-2-Clause)"
 
 [tool.ruff]
 exclude = [
@@ -44,5 +44,5 @@ exclude = [
 ]
 
 [project.urls]
-homepage = "https://github.com/kalagotla/project-arrakis"
-issues = "https://github.com/kalagotla/project-arrakis/issues"
+homepage = "https://github.com/kalagotla/lptlib"
+issues = "https://github.com/kalagotla/lptlib/issues"
