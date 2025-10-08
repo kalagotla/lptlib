@@ -4,6 +4,7 @@
 **/__pycache__/
 # Ignore pycharm project files
 /.idea/
+/.idea_old/
 # Ignore .ipynb files
 .ipynb
 

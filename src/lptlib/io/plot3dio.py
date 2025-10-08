@@ -374,7 +374,7 @@ class FlowIO:
               "q -- The flow data\n"
         return doc
 
-    def read_flow(self, data_type='f4'):
+    def read_flow(self, data_type='f4', print_progress=True):
         """Reads in the flow file and changes the instance attributes
 
         Parameters
@@ -427,7 +427,8 @@ class FlowIO:
                     _temp[sum(_nt[0:_i]):sum(_nt[0:_i]) + _nt[_i]] \
                     .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 5), order='F')
 
-            print("Flow data reading is successful for " + self.filename + "\n")
+            if print_progress:
+                print("Flow data reading is successful for " + self.filename + "\n")
 
     def two_to_three(self, steps: int = 5, data_type='f4'):
         """
@@ -555,6 +556,10 @@ class FlowIO:
         """
         import os
         import glob
+        try:
+            from tqdm import tqdm
+        except Exception:
+            tqdm = None
         self.read_flow(data_type=data_type)
 
         # Find all the files relevant to initial flow file
@@ -569,6 +574,9 @@ class FlowIO:
         # Read all the flow files into a list as objects
         self.unsteady_flow = [FlowIO(filename) for filename in _filenames]
         # Read all the flow files
-        for _flowfile in self.unsteady_flow:
-            _flowfile.read_flow(data_type=data_type)
+        _iterator = self.unsteady_flow
+        if tqdm is not None:
+            _iterator = tqdm(self.unsteady_flow, desc='Reading unsteady flow', unit='file')
+        for _flowfile in _iterator:
+            _flowfile.read_flow(data_type=data_type, print_progress=False)
 
