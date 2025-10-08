@@ -77,7 +77,7 @@ def create_git_tag():
         version = match.group(1)
         tag_name = f"v{version}"
         print(f"Creating git tag: {tag_name}")
-        run_command(f"git add .")
+        run_command(f"git add pyproject.toml setup.py")
         run_command(f"git commit -m 'Release {version}'")
         run_command(f"git tag {tag_name}")
         print(f"Created tag: {tag_name}")

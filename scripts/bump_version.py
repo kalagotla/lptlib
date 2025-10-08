@@ -55,17 +55,33 @@ def bump_version(current_version, bump_type):
         prerelease_type = None
         prerelease_num = None
     elif bump_type in ["alpha", "beta", "rc"]:
-        if prerelease_type == bump_type:
+        # Convert full names to short forms for comparison
+        current_prerelease_type = prerelease_type
+        if current_prerelease_type == "alpha":
+            current_prerelease_type = "a"
+        elif current_prerelease_type == "beta":
+            current_prerelease_type = "b"
+        
+        target_type = bump_type
+        if target_type == "alpha":
+            target_type = "a"
+        elif target_type == "beta":
+            target_type = "b"
+        
+        if current_prerelease_type == target_type:
+            # Same prerelease type, increment number
             prerelease_num = (prerelease_num or 0) + 1
         else:
-            prerelease_type = bump_type
-            prerelease_num = 1
+            # Different prerelease type, start from 0
+            prerelease_num = 0
+        
+        prerelease_type = target_type
     else:
         raise ValueError(f"Invalid bump type: {bump_type}")
     
     # Build new version string
     new_version = f"{major}.{minor}.{patch}"
-    if prerelease_type and prerelease_num:
+    if prerelease_type and prerelease_num is not None:
         new_version += f"{prerelease_type}{prerelease_num}"
     
     return new_version
