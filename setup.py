@@ -1,0 +1,40 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="lptlib",
+    version="0.0.5a4",
+    author="Dilip Kalagotla",
+    author_email="dilipkalagotla@gmail.com",
+    description="One-way coupled Lagrangian Particle Tracking algorithms.",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
+    url="https://github.com/kalagotla/lptlib",
+    project_urls={
+        "Bug Tracker": "https://github.com/kalagotla/lptlib/issues",
+    },
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Operating System :: OS Independent",
+        "Intended Audience :: Science/Research",
+        "Intended Audience :: Education",
+        "Topic :: Scientific/Engineering",
+    ],
+    package_dir={"": "src"},
+    packages=find_packages(where="src"),
+    python_requires=">=3.10",
+    install_requires=[
+        "numpy",
+        "scipy",
+        "matplotlib",
+        "pandas",
+        "seaborn",
+        "tqdm",
+        "mpi4py",
+        "scikit-learn",
+    ],
+    include_package_data=True,
+    zip_safe=False,
+)

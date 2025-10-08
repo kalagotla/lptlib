@@ -1,13 +1,12 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "lptlib"
-version = "0.0.5a3"
+version = "0.0.5a4"
 authors = [
-    {name="Dilip Kalagotla"},
-    {email="dilipkalagotla@gmail.com"},
+    {name="Dilip Kalagotla", email="dilipkalagotla@gmail.com"},
     ]
 description = "One-way coupled Lagrangian Particle Tracking algorithms."
 readme = "README.md"
@@ -32,7 +31,7 @@ classifiers = [
     "Intended Audience :: Education",
     "Topic :: Scientific/Engineering",
 ]
-license = "MIT AND (Apache-2.0 OR BSD-2-Clause)"
+license = {text = "MIT AND (Apache-2.0 OR BSD-2-Clause)"}
 
 [tool.ruff]
 exclude = [
