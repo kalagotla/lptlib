@@ -610,7 +610,7 @@ class Integration:
                     # All temperatures must be in kelvin
                     # Formula from cfd-online
                     _c1 = 1.716e-5 * (273.15 + 110.4) / 273.15**1.5
-                    _mu = _c1 * _temperature**1.5 * 0.4 / (_temperature + 110.4)
+                    _mu = _c1 * _temperature**1.5 / (_temperature + 110.4)
                 case 'keyes':
                     # New formula from keyes et al.
                     a0, a, a1 = 1.488, 122.1, 5.0
