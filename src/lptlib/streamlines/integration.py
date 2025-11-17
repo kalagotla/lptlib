@@ -615,7 +615,7 @@ class Integration:
                     # New formula from keyes et al.
                     a0, a, a1 = 1.488, 122.1, 5.0
                     _tau = 1/_temperature
-                    _mu = a0 * _temperature**0.5 * 10e-6 / (1 + a * _tau / 10 ** (a1 * _tau))
+                    _mu = a0 * _temperature**0.5 * 1e-6 / (1 + a * _tau / 10 ** (a1 * _tau))
             return _mu
 
         match method:
