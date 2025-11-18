@@ -29,3 +29,6 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+
+.DS_Store
+.env

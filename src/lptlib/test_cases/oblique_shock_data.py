@@ -121,6 +121,7 @@ class ObliqueShockData:
         self.shock_strength = 'weak'
         self.inlet_temperature = None
         self.inlet_density = None
+        self.inlet_pressure = None
 
     def create_grid(self):
         # create a structured grid from -nx_max to nx_max, 0 to ny_max, 0 to nz_max
@@ -162,6 +163,13 @@ class ObliqueShockData:
             self.oblique_shock.temperature_ratio = self.oblique_shock.temperature_ratio[1]
             self.oblique_shock.mach_ratio = self.oblique_shock.mach_ratio[1]
         # Compute inlet flow properties -- pre-shock
+        if self.inlet_density is None and self.inlet_pressure is not None:
+            self.inlet_density = self.inlet_pressure / (self.oblique_shock.gas_constant * self.inlet_temperature)
+        elif self.inlet_density is not None and self.inlet_pressure is None:
+            self.inlet_pressure = self.inlet_density * self.oblique_shock.gas_constant * self.inlet_temperature
+        elif self.inlet_density is None and self.inlet_pressure is None:
+            raise ValueError("Either inlet density or inlet pressure must be provided")
+
         _density = self.inlet_density
         _velocity = self.oblique_shock.mach * np.sqrt(self.oblique_shock.gamma * self.oblique_shock.gas_constant *
                                                       self.inlet_temperature)
