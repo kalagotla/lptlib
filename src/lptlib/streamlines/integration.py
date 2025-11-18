@@ -593,7 +593,7 @@ class Integration:
 
                     return 24/_re * k * (1 + 0.15 * (k*_re)**0.687) * c * _epsilon_kn
 
-        def _viscosity(_temperature, law='keyes'):
+        def _viscosity(_temperature, law='sutherland'):
             """
             Viscosity of air as a function of temperature
             Args:
