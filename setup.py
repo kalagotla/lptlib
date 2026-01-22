@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="lptlib",
-    version="0.0.5a10",
+    version="0.0.5a11",
     author="Dilip Kalagotla",
     author_email="dilipkalagotla@gmail.com",
     description="One-way coupled Lagrangian Particle Tracking algorithms.",
