@@ -539,10 +539,10 @@ class Integration:
 
                     if _re < 45:
                     # Rarefraction dominated domain
-                        import math
+                        from scipy.special import erf
                         _s = _mach * np.sqrt(_gamma/2)
                         _cd_fm = (1 + 2 * _s**2) * np.exp(-_s**2) / (_s**3 * np.pi**0.5) + \
-                                 (4*_s**4 + 4*_s**2 - 1) * math.erf(_s) / (2*_s**4) + 2 * np.pi**0.5 / (3 * _s)
+                                 (4*_s**4 + 4*_s**2 - 1) * erf(_s) / (2*_s**4) + 2 * np.pi**0.5 / (3 * _s)
                         _cd_fm_re = _cd_fm / (1 + (_cd_fm/1.63 - 1) * (_re/45)**0.5)
                         _kn = (np.pi * _gamma / 2)**0.5 * _mach / _re
                         _f_kn = (1 + _kn * (2.514 + 0.8 * np.exp(-0.55/_kn)))**-1
