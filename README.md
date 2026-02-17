@@ -38,6 +38,18 @@ flow.read_flow()
 grid.compute_metrics()
 ```
 
+To read 2D Plot3D-style plane grid files that use Fortran unformatted records
+(e.g., for an `i`, `j`, or `k` plane), you can use the `GridIO` helper:
+
+```python
+from lptlib.io.plot3dio import GridIO
+
+grid = GridIO('path/to/iplane.grd')
+grid.read_grid_fortran_2d(precision='single', plane='i')
+xi = grid.grd[..., 0, 0]  # x-coordinates on the plane
+yi = grid.grd[..., 1, 0]  # y-coordinates on the plane
+```
+
 ### Interpolate and integrate a streamline
 
 ```python

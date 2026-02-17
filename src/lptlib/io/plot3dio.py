@@ -1,5 +1,4 @@
 # This file contains classes for plot3d data io
-# TODO: implement output for p3d data - Assigned to Harpreet.
 #  Each output function should be added to respective GridIO/FlowIO classes
 #  Change docstrings for doctest in test_io
 
@@ -126,6 +125,243 @@ class GridIO:
             # Convert lists to arrays
             self.grd_min = np.array(self.grd_min)
             self.grd_max = np.array(self.grd_max)
+
+    def read_grid_fortran_2d(
+        self,
+        precision: str = "single",
+        plane: str = "i",
+    ) -> None:
+        """Read a 2D Fortran-record Plot3D-style grid plane and populate attributes.
+
+        This method is a Python analogue of the MATLAB ``gridread2d`` helper,
+        but instead of returning the coordinates directly it fills the
+        :class:`GridIO` attributes in a way that is compatible with the rest of
+        the API (``nb``, ``ni``, ``nj``, ``nk``, ``grd``, ``grd_min``,
+        ``grd_max``).
+
+        The file is assumed to contain a single 2D plane written as big-endian
+        unformatted Fortran records with two coordinate components.
+
+        Parameters
+        ----------
+        precision:
+            Either ``'single'`` (32-bit) or ``'double'`` (64-bit) floating-point
+            precision used for the coordinate data in the file.
+        plane:
+            Which plane the file represents:
+
+            - ``'i'``: i-plane, varying :math:`(j, k)`
+            - ``'j'``: j-plane, varying :math:`(i, k)`
+            - ``'k'``: k-plane, varying :math:`(i, j)`
+
+        Returns
+        -------
+        None
+        """
+        _plane = plane.lower()
+        if _plane not in {"i", "j", "k"}:
+            raise ValueError("plane must be one of 'i', 'j', or 'k'")
+
+        _prec = precision.lower()
+        if _prec == "single":
+            float_dtype = ">f4"
+        elif _prec == "double":
+            float_dtype = ">f8"
+        else:
+            raise ValueError("precision must be 'single' or 'double'")
+
+        int_dtype = ">i4"
+
+        with open(self.filename, "rb") as f:
+            # Leading record marker
+            hdr = np.fromfile(f, dtype=int_dtype, count=1)
+            if hdr.size != 1:
+                raise IOError("Failed to read record header from grid file.")
+
+            if _plane in {"i", "j"}:
+                ng = np.fromfile(f, dtype=int_dtype, count=3)
+                if ng.size != 3:
+                    raise IOError("Failed to read (imax, jmax, kmax) from grid file.")
+                imax, jmax, kmax = (int(v) for v in ng)
+            else:  # 'k' plane stores only imax, jmax
+                ng = np.fromfile(f, dtype=int_dtype, count=2)
+                if ng.size != 2:
+                    raise IOError("Failed to read (imax, jmax) from grid file.")
+                imax, jmax = (int(v) for v in ng)
+
+            # Trailing record marker for the header
+            _ = np.fromfile(f, dtype=int_dtype, count=1)
+
+            # Leading record marker for the coordinate data block
+            _ = np.fromfile(f, dtype=int_dtype, count=1)
+
+            if _plane == "i":
+                count = jmax * kmax * 2
+                shape = (jmax, kmax, 2)
+            elif _plane == "j":
+                count = imax * kmax * 2
+                shape = (imax, kmax, 2)
+            else:  # _plane == "k"
+                count = imax * jmax * 2
+                shape = (imax, jmax, 2)
+
+            f2 = np.fromfile(f, dtype=float_dtype, count=count)
+            if f2.size != count:
+                raise IOError(
+                    "Coordinate data block is incomplete or file format does not "
+                    "match expected 2D plane layout."
+                )
+
+            # Trailing record marker for the coordinate data block
+            _ = np.fromfile(f, dtype=int_dtype, count=1)
+
+        # Reshape to 2D coordinates (MATLAB uses column-major ordering)
+        f3 = f2.reshape(shape, order="F")
+        a = f3[..., 0]
+        b = f3[..., 1]
+
+        # Make this compatible with the rest of GridIO by treating the plane
+        # as a single block with one cell in the thin direction (nk = 1).
+        self.nb = 1
+        if _plane == "i":
+            # i-plane: fixed i, varying (j, k)
+            ni, nj, nk = 1, a.shape[0], a.shape[1]
+        elif _plane == "j":
+            # j-plane: fixed j, varying (i, k)
+            ni, nj, nk = a.shape[0], 1, a.shape[1]
+        else:  # 'k' plane: fixed k, varying (i, j)
+            ni, nj, nk = a.shape[0], a.shape[1], 1
+
+        self.ni = np.array([ni], dtype=int)
+        self.nj = np.array([nj], dtype=int)
+        self.nk = np.array([nk], dtype=int)
+
+        # Allocate grid in the same layout as read_grid: (ni, nj, nk, 3, nb)
+        self.grd = np.zeros((ni, nj, nk, 3, self.nb), dtype=float)
+
+        if _plane == "i":
+            # Map (j, k) -> (0, j, k)
+            self.grd[0, :, :, 0, 0] = a
+            self.grd[0, :, :, 1, 0] = b
+        elif _plane == "j":
+            # Map (i, k) -> (i, 0, k)
+            self.grd[:, 0, :, 0, 0] = a
+            self.grd[:, 0, :, 1, 0] = b
+        else:  # 'k'
+            # Map (i, j) -> (i, j, 0)
+            self.grd[:, :, 0, 0, 0] = a
+            self.grd[:, :, 0, 1, 0] = b
+
+        # z-coordinate is zero for a strictly 2D plane
+        # (already zero from initialization)
+
+        # Compute min and max coordinates for the single block
+        self.grd_min = np.array(
+            [np.amin(self.grd[:ni, :nj, :nk, :, 0], axis=(0, 1, 2))]
+        )
+        self.grd_max = np.array(
+            [np.amax(self.grd[:ni, :nj, :nk, :, 0], axis=(0, 1, 2))]
+        )
+
+    def plot_grid_2d(
+        self,
+        plane: str = "k",
+        block: int = 0,
+        ax=None,
+        line_color="k",
+        line_width=0.4,
+        alpha=0.8,
+    ):
+        """
+        Plot structured grid lines.
+        """
+
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        if self.grd is None:
+            raise ValueError("Grid data is not loaded.")
+
+        if not (0 <= block < self.nb):
+            raise ValueError(f"Block index {block} out of range.")
+
+        plane = plane.lower()
+        if plane not in {"i", "j", "k"}:
+            raise ValueError("plane must be 'i', 'j', or 'k'")
+
+        ni, nj, nk = int(self.ni[block]), int(self.nj[block]), int(self.nk[block])
+
+        # --- Extract plane ---
+        if plane == "i":
+            idx = 0 if ni == 1 else ni // 2
+            x = self.grd[idx, :nj, :nk, 0, block]
+            y = self.grd[idx, :nj, :nk, 1, block]
+        elif plane == "j":
+            idx = 0 if nj == 1 else nj // 2
+            x = self.grd[:ni, idx, :nk, 0, block]
+            y = self.grd[:ni, idx, :nk, 1, block]
+        else:
+            idx = 0 if nk == 1 else nk // 2
+            x = self.grd[:ni, :nj, idx, 0, block]
+            y = self.grd[:ni, :nj, idx, 1, block]
+
+        x2d = np.squeeze(x)
+        y2d = np.squeeze(y)
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(6, 6))
+        else:
+            fig = ax.figure
+
+        # --- Draw structured grid lines ---
+        if x2d.ndim == 2:
+            ni2, nj2 = x2d.shape
+
+            # Lines in i-direction
+            for i in range(ni2):
+                ax.plot(
+                    x2d[i, :],
+                    y2d[i, :],
+                    color=line_color,
+                    linewidth=line_width,
+                    alpha=alpha,
+                )
+
+            # Lines in j-direction
+            for j in range(nj2):
+                ax.plot(
+                    x2d[:, j],
+                    y2d[:, j],
+                    color=line_color,
+                    linewidth=line_width,
+                    alpha=alpha,
+                )
+
+        elif x2d.ndim == 1:
+            ax.plot(
+                x2d,
+                y2d,
+                color=line_color,
+                linewidth=line_width,
+                alpha=alpha,
+            )
+        else:
+            raise ValueError("Slice not suitable for 1D/2D plotting.")
+
+        # --- Make it look like a CFD grid window ---
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_title(f"Grid plane {plane.upper()} (block {block})")
+        ax.grid(False)
+
+        # Remove top/right spines (more CFD-like)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+        fig.tight_layout()
+        return ax
+
 
     def compute_metrics(self):
         """Calculate grid metrics from grid data.
@@ -305,6 +541,7 @@ class GridIO:
         print(f'\n File is successfully written in the working directory as {out_file}')
 
         return
+
 
 
 class FlowIO:
