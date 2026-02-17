@@ -45,3 +45,6 @@ exclude = [
 [project.urls]
 homepage = "https://github.com/kalagotla/lptlib"
 issues = "https://github.com/kalagotla/lptlib/issues"
+
+[tool.uv]
+link-mode = "copy"

@@ -1,0 +1,3 @@
+[submodule "external/inlet_isolator_pdh"]
+	path = external/inlet_isolator_pdh
+	url = https://github.com/kalagotla/inlet_isolator_pdh.git
