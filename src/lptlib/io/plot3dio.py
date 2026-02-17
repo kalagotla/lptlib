@@ -362,7 +362,6 @@ class GridIO:
         fig.tight_layout()
         return ax
 
-
     def compute_metrics(self):
         """Calculate grid metrics from grid data.
         Need to call read_grid() before computing metrics
@@ -492,6 +491,7 @@ class GridIO:
         """
         Converts 2D plot3d grid file to 3D format
         TODO: Current limitation is that the code works only for 3d written 2d files and single block
+        Note: This works only on single block grids.
         Returns: None
 
         """
@@ -499,6 +499,11 @@ class GridIO:
             print("Step size is not provided; Using minimum grid size")
             step_size = abs(min(np.diff(self.grd[:, 0, 0, 0, 0])))
 
+        # check self.ni, self.nj dtype -- This is to keep the old functionality working.
+        if type(self.ni) == np.ndarray or type(self.nj) == np.ndarray:
+            self.ni = self.ni[0]
+            self.nj = self.nj[0]
+        # old code:
         _a_temp = np.array([self.nb, self.ni, self.nj, steps], dtype='i4')
         _x_temp = self.grd[..., 0, 0].repeat(steps, axis=2)
         _y_temp = self.grd[..., 1, 0].repeat(steps, axis=2)
