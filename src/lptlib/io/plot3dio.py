@@ -3,6 +3,7 @@
 #  Change docstrings for doctest in test_io
 
 import numpy as np
+import os
 
 
 class GridIO:
@@ -500,9 +501,9 @@ class GridIO:
             step_size = abs(min(np.diff(self.grd[:, 0, 0, 0, 0])))
 
         # check self.ni, self.nj dtype -- This is to keep the old functionality working.
-        if type(self.ni) == np.ndarray or type(self.nj) == np.ndarray:
-            self.ni = self.ni[0]
-            self.nj = self.nj[0]
+        self.ni = self.ni[0] if type(self.ni) == np.ndarray else self.ni
+        self.nj = self.nj[0] if type(self.nj) == np.ndarray else self.nj
+        self.nk = self.nk[0] if type(self.nk) == np.ndarray else self.nk
         # old code:
         _a_temp = np.array([self.nb, self.ni, self.nj, steps], dtype='i4')
         _x_temp = self.grd[..., 0, 0].repeat(steps, axis=2)
@@ -510,7 +511,9 @@ class GridIO:
         _z_temp = np.ones((int(self.ni), int(self.nj), steps)) * np.linspace(0, steps*step_size, steps)
         _b_temp = np.array([_x_temp.T, _y_temp.T, _z_temp.T], dtype=data_type)
 
-        _temp_filename = self.filename.replace('.x', '_3D.x')
+        # Build output filename cleanly: "<original_path>_3D<ext>"
+        _base, _ext = os.path.splitext(self.filename)
+        _temp_filename = _base + '_3D' + _ext
         with open(_temp_filename, 'wb') as f:
             f.write(_a_temp.tobytes())
             f.write(_b_temp.tobytes())
@@ -604,6 +607,7 @@ class FlowIO:
         self.time = None
         self.q = None
         self.unsteady_flow = None
+        self.gamma = 1.4
 
     def __str__(self):
         doc = "This instance has the filename " + self.filename + "\n" + \
@@ -672,6 +676,332 @@ class FlowIO:
             if print_progress:
                 print("Flow data reading is successful for " + self.filename + "\n")
 
+    def read_flow_fortran_2d(
+        self,
+        precision: str = "single",
+        plane: str = "i",
+    ) -> None:
+        """Read a 2D Fortran-record RANS flow plane and populate attributes.
+
+        This is a 2D analogue of :meth:`read_flow` for legacy unformatted
+        Fortran files that store a single ``i``, ``j``, or ``k`` plane of
+        primitive variables (for example ``u, v, p, w, k, epsilon, mu``).
+
+        The file is assumed to be big-endian and to begin with a record
+        containing four integers:
+
+        - ``imax``, ``jmax``, ``kmax`` (or a subset, depending on ``plane``)
+        - ``nfun`` number of primitive variables
+
+        followed by a record containing ``imax * jmax * kmax * nfun`` values.
+
+        Parameters
+        ----------
+        precision:
+            Either ``'single'`` (32-bit) or ``'double'`` (64-bit) floating-point
+            precision used for the flow data.
+        plane:
+            Which plane the file represents:
+
+            - ``'i'``: i-plane, varying :math:`(j, k)`
+            - ``'j'``: j-plane, varying :math:`(i, k)`
+            - ``'k'``: k-plane, varying :math:`(i, j)`
+
+        Returns
+        -------
+        None
+        """
+        _plane = plane.lower()
+        if _plane not in {"i", "j", "k"}:
+            raise ValueError("plane must be one of 'i', 'j', or 'k'")
+
+        _prec = precision.lower()
+        if _prec == "single":
+            float_dtype = ">f4"
+        elif _prec == "double":
+            float_dtype = ">f8"
+        else:
+            raise ValueError("precision must be 'single' or 'double'")
+
+        int_dtype = ">i4"  # this needs to be updated with try catch block to handle big endian and little endian
+
+        with open(self.filename, "rb") as f:
+            # Leading record marker
+            hdr = np.fromfile(f, dtype=int_dtype, count=1)
+            if hdr.size != 1:
+                raise IOError("Failed to read record header from flow file.")
+
+            # Header with dimensions and number of functions
+            ng = np.fromfile(f, dtype=int_dtype, count=3)
+            if ng.size != 3:
+                raise IOError("Failed to read header (imax, jmax, nfun) from flow file.")
+
+            # Trailing record marker for the header
+            _ = np.fromfile(f, dtype=int_dtype, count=1)
+
+            # Leading record marker for the data block
+            _ = np.fromfile(f, dtype=int_dtype, count=1)
+
+            if _plane == "i":
+                jmax, kmax, nfun = (int(v) for v in ng)
+                ni, nj, nk = 1, jmax, kmax
+                count = jmax * kmax * nfun
+                shape = (jmax, kmax, nfun)
+            elif _plane == "j":
+                imax, kmax, nfun = (int(v) for v in ng)
+                ni, nj, nk = imax, 1, kmax
+                count = imax * kmax * nfun
+                shape = (imax, kmax, nfun)
+            else:  # "k"
+                imax, jmax, nfun = (int(v) for v in ng)
+                ni, nj, nk = imax, jmax, 1
+                count = imax * jmax * nfun
+                shape = (imax, jmax, nfun)
+
+            f2 = np.fromfile(f, dtype=float_dtype, count=count)
+            if f2.size != count:
+                raise IOError(
+                    "Flow data block is incomplete or file format does not "
+                    "match expected 2D plane layout."
+                )
+
+            # Trailing record marker for the data block
+            _ = np.fromfile(f, dtype=int_dtype, count=1)
+
+        # Reshape to (.., nfun) in column-major sense
+        f3 = f2.reshape(shape, order="F")
+        # reshape to match the shape of the flow data object
+        f3 = f3.reshape(ni, nj, nk, nfun, 1)
+
+        # Update FlowIO attributes to be consistent with the rest of the API
+        self.nb = 1
+        self.ni = np.array([ni], dtype=int)
+        self.nj = np.array([nj], dtype=int)
+        self.nk = np.array([nk], dtype=int)
+
+        # Store all primitive variables in q with nfun components
+        self.q = np.zeros((ni, nj, nk, nfun, self.nb), dtype=float)
+
+        # convert this to be compatible with the rest of the API
+        # self.q is made up of (ni, nj, nk, 5, nb), where rho, rho-u, rho-v, rho-w, e are the five columns
+        # File format assumption from Gargi Doshara: u
+        # For different planes, the velocity components vary:
+        # - i-plane: fixed i, varying (j, k) -> in-plane velocities are v and w
+        # - j-plane: fixed j, varying (i, k) -> in-plane velocities are u and w  
+        # - k-plane: fixed k, varying (i, j) -> in-plane velocities are u and v
+        # Note: Original k-plane code used f3[..., 1, 0] = u, f3[..., 2, 0] = v, but that conflicts
+        # with f3[..., 2, 0] being used as pressure. Updated to use consistent indexing.
+        
+        rho = f3[..., 3, 0]
+        p = f3[..., 2, 0]
+        
+        if _plane == "i":
+            # i-plane: f3[..., 0, 0] = v, f3[..., 1, 0] = w (in-plane velocities)
+            v_vel = f3[..., 0, 0]
+            w_vel = f3[..., 1, 0]
+            u_vel = np.zeros_like(v_vel)  # u is zero (normal to plane)
+            self.q[..., 0, 0] = rho
+            self.q[..., 1, 0] = 0  # rho-u = 0
+            self.q[..., 2, 0] = v_vel * rho  # rho-v
+            self.q[..., 3, 0] = w_vel * rho  # rho-w
+            # energy = p/(gamma - 1) + 0.5 * rho * (v^2 + w^2)
+            self.q[..., 4, 0] = p / (self.gamma - 1) + 0.5 * rho * (v_vel**2 + w_vel**2)
+        elif _plane == "j":
+            # j-plane: f3[..., 0, 0] = u, f3[..., 1, 0] = w (in-plane velocities)
+            u_vel = f3[..., 0, 0]
+            w_vel = f3[..., 1, 0]
+            v_vel = np.zeros_like(u_vel)  # v is zero (normal to plane)
+            self.q[..., 0, 0] = rho
+            self.q[..., 1, 0] = u_vel * rho  # rho-u
+            self.q[..., 2, 0] = 0  # rho-v = 0
+            self.q[..., 3, 0] = w_vel * rho  # rho-w
+            # energy = p/(gamma - 1) + 0.5 * rho * (u^2 + w^2)
+            self.q[..., 4, 0] = p / (self.gamma - 1) + 0.5 * rho * (u_vel**2 + w_vel**2)
+        else:  # _plane == "k"
+            # k-plane: f3[..., 0, 0] = u, f3[..., 1, 0] = v (in-plane velocities)
+            # Updated from original: f3[..., 1, 0] = u, f3[..., 2, 0] = v to use consistent indexing
+            u_vel = f3[..., 0, 0]
+            v_vel = f3[..., 1, 0]
+            w_vel = np.zeros_like(u_vel)  # w is zero (normal to plane)
+            self.q[..., 0, 0] = rho
+            self.q[..., 1, 0] = u_vel * rho  # rho-u
+            self.q[..., 2, 0] = v_vel * rho  # rho-v
+            self.q[..., 3, 0] = 0  # rho-w = 0
+            # energy = p/(gamma - 1) + 0.5 * rho * (u^2 + v^2)
+            self.q[..., 4, 0] = p / (self.gamma - 1) + 0.5 * rho * (u_vel**2 + v_vel**2)
+
+    def plot_contour(
+        self,
+        variable,
+        grid=None,
+        plane: str = "k",
+        block: int = 0,
+        index: int = None,
+        ax=None,
+        levels=None,
+        cmap=None,
+        colorbar=True,
+        **kwargs
+    ):
+        """
+        Plot contour of any variable from q array.
+
+        Parameters
+        ----------
+        variable : int or str
+            Variable to plot:
+            - int (0-4): Direct index into q array
+                - 0: density (rho)
+                - 1: rho-u (momentum x)
+                - 2: rho-v (momentum y)
+                - 3: rho-w (momentum z)
+                - 4: energy (e)
+            - str: Variable name ('density', 'rho-u', 'rho-v', 'rho-w', 'energy')
+        grid : GridIO, optional
+            Grid object for coordinates. If None, uses index-based coordinates.
+        plane : str, default 'k'
+            Plane to extract: 'i', 'j', or 'k'
+        block : int, default 0
+            Block index to plot
+        index : int, optional
+            Index along the plane direction (e.g., i-index for i-plane).
+            If None, uses middle of the domain.
+        ax : matplotlib.axes.Axes, optional
+            Axes to plot on. If None, creates a new figure.
+        levels : int or array-like, optional
+            Number of contour levels or array of specific levels.
+            If None, uses default matplotlib levels.
+        cmap : str or Colormap, optional
+            Colormap to use for contours.
+        colorbar : bool, default True
+            Whether to add a colorbar.
+        **kwargs
+            Additional keyword arguments passed to matplotlib contour/contourf.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            The axes object with the contour plot.
+
+        Examples
+        --------
+        >>> flow = FlowIO('flow.q')
+        >>> flow.read_flow()
+        >>> grid = GridIO('grid.x')
+        >>> grid.read_grid()
+        >>> flow.plot_contour(0, grid=grid)  # Plot density
+        >>> flow.plot_contour('density', grid=grid, plane='j', index=50)
+        >>> flow.plot_contour(4, grid=grid, levels=20, cmap='viridis')
+        """
+        import matplotlib.pyplot as plt
+
+        if self.q is None:
+            raise ValueError("Flow data is not loaded. Call read_flow() first.")
+
+        if not (0 <= block < self.nb):
+            raise ValueError(f"Block index {block} out of range [0, {self.nb-1}].")
+
+        plane = plane.lower()
+        if plane not in {"i", "j", "k"}:
+            raise ValueError("plane must be 'i', 'j', or 'k'")
+
+        # Map variable name to index if string provided
+        var_map = {
+            'density': 0, 'rho': 0,
+            'rho-u': 1, 'rhou': 1, 'momentum_x': 1,
+            'rho-v': 2, 'rhov': 2, 'momentum_y': 2,
+            'rho-w': 3, 'rhow': 3, 'momentum_z': 3,
+            'energy': 4, 'e': 4
+        }
+
+        if isinstance(variable, str):
+            variable = var_map.get(variable.lower())
+            if variable is None:
+                raise ValueError(f"Unknown variable name '{variable}'. "
+                               f"Valid names: {list(var_map.keys())}")
+
+        if not (0 <= variable < 5):
+            raise ValueError(f"Variable index must be between 0 and 4, got {variable}")
+
+        ni, nj, nk = int(self.ni[block]), int(self.nj[block]), int(self.nk[block])
+
+        # Extract 2D slice of the variable
+        if plane == "i":
+            idx = index if index is not None else (0 if ni == 1 else ni // 2)
+            if not (0 <= idx < ni):
+                raise ValueError(f"Index {idx} out of range [0, {ni-1}] for i-plane")
+            var_2d = self.q[idx, :nj, :nk, variable, block]
+            if grid is not None:
+                x = grid.grd[idx, :nj, :nk, 0, block]
+                y = grid.grd[idx, :nj, :nk, 1, block]
+            else:
+                x, y = np.meshgrid(np.arange(nj), np.arange(nk), indexing='ij')
+        elif plane == "j":
+            idx = index if index is not None else (0 if nj == 1 else nj // 2)
+            if not (0 <= idx < nj):
+                raise ValueError(f"Index {idx} out of range [0, {nj-1}] for j-plane")
+            var_2d = self.q[:ni, idx, :nk, variable, block]
+            if grid is not None:
+                x = grid.grd[:ni, idx, :nk, 0, block]
+                y = grid.grd[:ni, idx, :nk, 1, block]
+            else:
+                x, y = np.meshgrid(np.arange(ni), np.arange(nk), indexing='ij')
+        else:  # plane == "k"
+            idx = index if index is not None else (0 if nk == 1 else nk // 2)
+            if not (0 <= idx < nk):
+                raise ValueError(f"Index {idx} out of range [0, {nk-1}] for k-plane")
+            var_2d = self.q[:ni, :nj, idx, variable, block]
+            if grid is not None:
+                x = grid.grd[:ni, :nj, idx, 0, block]
+                y = grid.grd[:ni, :nj, idx, 1, block]
+            else:
+                x, y = np.meshgrid(np.arange(ni), np.arange(nj), indexing='ij')
+
+        # Squeeze to remove singleton dimensions
+        x = np.squeeze(x)
+        y = np.squeeze(y)
+        var_2d = np.squeeze(var_2d)
+
+        if x.ndim != 2 or y.ndim != 2 or var_2d.ndim != 2:
+            raise ValueError(f"Slice not suitable for 2D contour plotting. "
+                             f"Shapes: x={x.shape}, y={y.shape}, var={var_2d.shape}")
+
+        # Create figure if needed
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 6))
+        else:
+            fig = ax.figure
+
+        # Plot contours
+        var_names = ['Density (ρ)', 'Momentum-x (ρu)', 'Momentum-y (ρv)', 
+                     'Momentum-z (ρw)', 'Energy (e)']
+        var_name = var_names[variable]
+
+        # Plot filled contours
+        cs = ax.contourf(x, y, var_2d, levels=levels, cmap=cmap, **kwargs)
+        
+        # Add contour lines
+        ax.contour(x, y, var_2d, levels=levels, colors='k', linewidths=0.5, alpha=0.3)
+
+        # Add colorbar
+        if colorbar:
+            cbar = fig.colorbar(cs, ax=ax)
+            cbar.set_label(var_name, rotation=90, labelpad=15)
+
+        # Format axes
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_title(f"{var_name} contour - Plane {plane.upper()} (block {block}, index {idx})")
+        ax.grid(False)
+
+        # Remove top/right spines
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+        fig.tight_layout()
+        return ax
+
     def two_to_three(self, steps: int = 5, data_type='f4'):
         """
         Converts 2D plot3d flow file to 3D format
@@ -680,6 +1010,10 @@ class FlowIO:
 
         """
         # TODO: The code below needs debugging. It's not tested. mgrd_to_p3d might help!
+        # check self.ni, self.nj dtype -- This is to keep the old functionality working.
+        self.ni = self.ni[0] if type(self.ni) == np.ndarray else self.ni
+        self.nj = self.nj[0] if type(self.nj) == np.ndarray else self.nj
+        self.nk = self.nk[0] if type(self.nk) == np.ndarray else self.nk
         _a_temp = np.array([self.nb, self.ni, self.nj, int(steps)], dtype='i4')
         _b_temp = np.array([self.mach, self.alpha, self.rey, self.time], dtype=data_type)
         _q0_temp = self.q[..., 0, 0].repeat(int(steps), axis=2)
@@ -689,7 +1023,8 @@ class FlowIO:
         _q4_temp = self.q[..., 4, 0].repeat(int(steps), axis=2)
         _q_temp = np.array([_q0_temp, _q1_temp, _q2_temp, _q3_temp, _q4_temp], dtype=data_type)
 
-        _temp_filename = self.filename.replace('.q', '_3D.q')
+        _base, _ext = os.path.splitext(self.filename)
+        _temp_filename = _base + '_3D' + _ext
         with open(_temp_filename, 'wb') as f:
             f.write(_a_temp.tobytes())
             f.write(_b_temp.tobytes())
