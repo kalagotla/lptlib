@@ -158,21 +158,42 @@ class Streamlines:
 
     @staticmethod
     def plot_live(func):
-        # Interactive mode for jupyter notebook
-        # plt.ion()
+        # Interactive mode for jupyter notebook; preserves zoom/pan across frames
+        _saved_limits = []
+        _first_call = [True]
+
         @functools.wraps(func)
         def new_func(*args, **kwargs):
-            # Clear all axes in the current figure.
-            axes = plt.gcf().get_axes()
+            fig = plt.gcf()
+            axes = fig.get_axes()
+            # Save current axis limits so zoom/pan are preserved (skip on first call)
+            if not _first_call[0] and len(_saved_limits) >= len(axes):
+                for i, axis in enumerate(axes):
+                    try:
+                        _saved_limits[i] = (axis.get_xlim(), axis.get_ylim())
+                    except Exception:
+                        pass
+            else:
+                _saved_limits[:] = [(ax.get_xlim(), ax.get_ylim()) for ax in axes]
+
+            # Clear all axes in the current figure
             for axis in axes:
                 axis.cla()
 
             # Call func to plot something
             result = func(*args, **kwargs)
 
-            # Draw the plot
+            # Restore axis limits so user zoom/pan is preserved (skip on first call)
+            if len(_saved_limits) >= len(axes) and not _first_call[0]:
+                for i, axis in enumerate(axes):
+                    if i < len(_saved_limits) and _saved_limits[i] is not None:
+                        xlim, ylim = _saved_limits[i]
+                        axis.set_xlim(xlim)
+                        axis.set_ylim(ylim)
+
             plt.draw()
             plt.pause(0.001)
+            _first_call[0] = False  # after first frame, allow save/restore of limits
 
             return result
 
@@ -180,6 +201,22 @@ class Streamlines:
 
     @plot_live
     def plot_update(self, ax, *args, **kwargs):
+        grid = kwargs.pop('grid', None)
+        if grid is not None and grid.grd is not None:
+            for b in range(grid.nb):
+                ni, nj, nk = grid.ni[b], grid.nj[b], grid.nk[b]
+                k0 = 0
+                x_01 = grid.grd[0:ni, 0, k0, 0, b]
+                y_01 = grid.grd[0:ni, 0, k0, 1, b]
+                x_12 = grid.grd[ni - 1, 0:nj, k0, 0, b]
+                y_12 = grid.grd[ni - 1, 0:nj, k0, 1, b]
+                x_23 = grid.grd[ni - 1::-1, nj - 1, k0, 0, b]
+                y_23 = grid.grd[ni - 1::-1, nj - 1, k0, 1, b]
+                x_34 = grid.grd[0, nj - 1::-1, k0, 0, b]
+                y_34 = grid.grd[0, nj - 1::-1, k0, 1, b]
+                x_b = np.concatenate([x_01, x_12, x_23, x_34])
+                y_b = np.concatenate([y_01, y_12, y_23, y_34])
+                ax.plot(x_b, y_b, 'k-', linewidth=0.8, zorder=0)
         colors = ['b', 'g', 'c', 'm', 'y', 'k']
         for i, (x, y) in enumerate(zip(args[::2], args[1::2])):
             color = colors[i % len(colors)]
@@ -626,7 +663,8 @@ class Streamlines:
                                      [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
                                      [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
                                      title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
-                                           f' density - {self.density} and time-step - {self.time_step}')
+                                           f' density - {self.density} and time-step - {self.time_step}',
+                                     grid=grid)
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
@@ -867,7 +905,8 @@ class Streamlines:
                                      [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
                                      [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
                                      title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
-                                           f' density - {self.density} and time-step - {self.time_step}')
+                                           f' density - {self.density} and time-step - {self.time_step}',
+                                     grid=grid)
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
@@ -919,7 +958,8 @@ class Streamlines:
                                      [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
                                      [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
                                      title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
-                                           f' density - {self.density} and time-step - {self.time_step}')
+                                           f' density - {self.density} and time-step - {self.time_step}',
+                                     grid=grid)
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
