@@ -1,3 +1,6 @@
 [submodule "external/inlet_isolator_pdh"]
 	path = external/inlet_isolator_pdh
 	url = https://github.com/kalagotla/inlet_isolator_pdh.git
+[submodule "external/forebody_articulation"]
+	path = external/forebody_articulation
+	url = https://github.com/kalagotla/forebody_articulation.git
