@@ -85,6 +85,8 @@ class Streamlines:
         self.filepath = filepath
         self.task = task
         self.debug = debug
+        # Live-plot options
+        self.show_velocity_contour = False
         # unsteady parameters
         # Shaped based on the interp class q attribute
         self.flow_old = None
@@ -93,13 +95,13 @@ class Streamlines:
 
     @staticmethod
     def angle_btw(v1, v2):
-        # If vectors are tiny return for handling tiny time steps
-        # A lot of trail and error decided 1e-9 would work fast
-        if np.linalg.norm(v1) <= 1e-9 or np.linalg.norm(v2) <= 1e-9:
+        n1 = np.linalg.norm(v1)
+        n2 = np.linalg.norm(v2)
+        if n1 <= 1e-9 or n2 <= 1e-9:
             return None
 
-        u1 = v1 / np.linalg.norm(v1)
-        u2 = v2 / np.linalg.norm(v2)
+        u1 = v1 / n1
+        u2 = v2 / n2
 
         y = u1 - u2
         x = u1 + u2
@@ -188,6 +190,10 @@ class Streamlines:
                 for i, axis in enumerate(axes):
                     if i < len(_saved_limits) and _saved_limits[i] is not None:
                         xlim, ylim = _saved_limits[i]
+                        # For the first axis (velocity vs x), let both x- and y-limits
+                        # auto-update with data. For other axes, restore both.
+                        if i == 0:
+                            continue
                         axis.set_xlim(xlim)
                         axis.set_ylim(ylim)
 
@@ -200,8 +206,102 @@ class Streamlines:
         return new_func
 
     @plot_live
-    def plot_update(self, ax, *args, **kwargs):
+    def plot_update(self, ax_vel, ax_pos, *args, **kwargs):
         grid = kwargs.pop('grid', None)
+        flow = kwargs.pop('flow', None)
+
+        # Optional velocity-magnitude contour overlay on the path subplot
+        show_contour = getattr(self, 'show_velocity_contour', False)
+
+        # If contour is turned off, remove any existing contour and colorbar once
+        if not show_contour:
+            if hasattr(self, "_vel_cs") and self._vel_cs is not None:
+                try:
+                    for coll in self._vel_cs.collections:
+                        coll.remove()
+                except Exception:
+                    pass
+                self._vel_cs = None
+            if hasattr(self, "_vel_cbar") and self._vel_cbar is not None:
+                try:
+                    self._vel_cbar.remove()
+                except Exception:
+                    pass
+                self._vel_cbar = None
+        elif (flow is not None) and (grid is not None) and hasattr(flow, 'q'):
+            try:
+                # Use first block and a representative k-plane (mid-plane)
+                b = 0
+                ni, nj, nk = grid.ni[b], grid.nj[b], grid.nk[b]
+                k0 = nk // 2
+                # Flow data: q[..., 0:4] = [rho, rho*u, rho*v, rho*w]
+                q_slice = flow.q[0:ni, 0:nj, k0, 0:4, b]
+                # q_slice has shape (ni, nj, 4): [rho, rho*u, rho*v, rho*w]
+                rho = q_slice[..., 0]
+                u = q_slice[..., 1] / rho
+                v = q_slice[..., 2] / rho
+                w = q_slice[..., 3] / rho
+                vel_mag = np.sqrt(u**2 + v**2 + w**2)
+
+                x = grid.grd[0:ni, 0:nj, k0, 0, b]
+                y = grid.grd[0:ni, 0:nj, k0, 1, b]
+
+                fig = ax_pos.figure
+
+                # Remove old pcolormesh if it exists
+                if hasattr(self, "_vel_pmesh") and self._vel_pmesh is not None:
+                    try:
+                        self._vel_pmesh.remove()
+                    except Exception:
+                        pass
+
+                # Cell-centred velocity magnitude for smoother shading
+                vel_cell = 0.25 * (
+                    vel_mag[:-1, :-1]
+                    + vel_mag[1:, :-1]
+                    + vel_mag[:-1, 1:]
+                    + vel_mag[1:, 1:]
+                )
+
+                vmin_data = float(np.nanmin(vel_cell))
+                vmax_data = float(np.nanmax(vel_cell))
+                if not hasattr(self, "_vel_vmin_data") or not hasattr(self, "_vel_vmax_data"):
+                    self._vel_vmin_data = vmin_data
+                    self._vel_vmax_data = vmax_data
+                if not hasattr(self, "_vel_scale"):
+                    self._vel_scale = 1.0
+                mid = 0.5 * (self._vel_vmin_data + self._vel_vmax_data)
+                half_span = 0.5 * (self._vel_vmax_data - self._vel_vmin_data) / max(self._vel_scale, 1e-6)
+                vmin = mid - half_span
+                vmax = mid + half_span
+
+                import matplotlib.pyplot as plt
+                from matplotlib.colors import Normalize
+
+                self._vel_pmesh = ax_pos.pcolormesh(
+                    x,
+                    y,
+                    vel_cell,
+                    cmap="viridis",
+                    norm=Normalize(vmin=vmin, vmax=vmax),
+                    shading="flat",
+                    rasterized=True,
+                    zorder=0,
+                )
+
+                if not hasattr(self, "_vel_cbar") or self._vel_cbar is None:
+                    cbar = fig.colorbar(self._vel_pmesh, ax=ax_pos)
+                    cbar.set_label("Velocity magnitude")
+                    self._vel_cbar = cbar
+                else:
+                    self._vel_cbar.mappable = self._vel_pmesh
+                    self._vel_cbar.mappable.set_clim(vmin, vmax)
+                    self._vel_cbar.update_normal(self._vel_cbar.mappable)
+            except Exception:
+                # Silently skip contour overlay if anything is inconsistent
+                pass
+
+        # Bottom subplot: grid outline and particle/fluid position on top of any background
         if grid is not None and grid.grd is not None:
             for b in range(grid.nb):
                 ni, nj, nk = grid.ni[b], grid.nj[b], grid.nk[b]
@@ -216,14 +316,40 @@ class Streamlines:
                 y_34 = grid.grd[0, nj - 1::-1, k0, 1, b]
                 x_b = np.concatenate([x_01, x_12, x_23, x_34])
                 y_b = np.concatenate([y_01, y_12, y_23, y_34])
-                ax.plot(x_b, y_b, 'k-', linewidth=0.8, zorder=0)
+                ax_pos.plot(x_b, y_b, 'k-', linewidth=0.8, zorder=1)
+
+        # Particle trajectory over the grid
+        if hasattr(self, 'streamline') and len(self.streamline) > 0:
+            pts = np.asarray(self.streamline)
+            if pts.shape[1] >= 2:
+                xp = pts[:, 0]
+                yp = pts[:, 1]
+                ax_pos.plot(xp, yp, 'b-', zorder=2)
+                ax_pos.plot(xp[-1], yp[-1], 'bo', label='particle', zorder=3)
+                ax_pos.plot(xp[-1], yp[-1], 'rx', label='fluid', zorder=3)
+
+        ax_pos.set_xlabel('x')
+        ax_pos.set_ylabel('y')
+        try:
+            ax_pos.set_aspect('equal', adjustable='box')
+        except Exception:
+            pass
+        # Hint for interactive control
+        ax_pos.text(0.01, 0.99, "c: contour, [: narrow, ]: widen",
+                    transform=ax_pos.transAxes, ha='left', va='top',
+                    fontsize=8, color='0.3')
+
+        # Top subplot: velocity vs x (existing behavior)
         colors = ['b', 'g', 'c', 'm', 'y', 'k']
         for i, (x, y) in enumerate(zip(args[::2], args[1::2])):
             color = colors[i % len(colors)]
-            ax.plot(x, y, color)
-            ax.plot(x[-5:], y[-5:], 'r-')
-            ax.plot(x[-1], y[-1], 'ro')
-        ax.set_title(kwargs.get('title', ''))
+            ax_vel.plot(x, y, color)
+            ax_vel.plot(x[-5:], y[-5:], 'r-')
+            ax_vel.plot(x[-1], y[-1], 'ro')
+
+        ax_vel.set_title(kwargs.get('title', ''))
+        ax_vel.set_xlabel('x')
+        ax_vel.set_ylabel('u_x')
 
         return
 
@@ -263,6 +389,11 @@ class Streamlines:
         interp.adaptive = self.adaptive_interpolation
         idx.compute(method=self.search)
         interp.compute(method=self.interpolation)
+        # If the initial point ended up out-of-domain (e.g. NR search failure),
+        # stop cleanly instead of raising inside Variables.
+        if interp.q is None:
+            self.print_debug(self, 'Initial point is out of domain. Aborting integration.')
+            return
         q_interp = Variables(interp)
         q_interp.compute_velocity()
         uf = q_interp.velocity.reshape(3)
@@ -544,7 +675,24 @@ class Streamlines:
             # t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             # t.start()
             if self.debug:
-                fig, ax = plt.subplots()
+                fig, (ax_vel, ax_pos) = plt.subplots(2, 1, figsize=(6, 8))
+                fig.tight_layout()
+                # Keyboard controls:
+                #   'c'  -> toggle velocity contour on/off
+                #   '['  -> narrow contour value range
+                #   ']'  -> widen contour value range
+                def _on_key(event, sl=self):
+                    if event.key == 'c':
+                        sl.show_velocity_contour = not getattr(sl, 'show_velocity_contour', False)
+                    elif event.key == '[':
+                        if not hasattr(sl, "_vel_scale"):
+                            sl._vel_scale = 1.0
+                        sl._vel_scale *= 1.2  # narrow range (more contrast)
+                    elif event.key == ']':
+                        if not hasattr(sl, "_vel_scale"):
+                            sl._vel_scale = 1.0
+                        sl._vel_scale /= 1.2  # widen range
+                fig.canvas.mpl_connect('key_press_event', _on_key)
             while True:
                 idx = Search(grid, self.point)
                 interp = Interpolation(flow, idx)
@@ -659,12 +807,13 @@ class Streamlines:
                 # add levels to debug; multiple ways of showing plots etc...
                 # This will help when working with varying flow fields
                 if self.debug:
-                    self.plot_update(ax,
+                    self.plot_update(ax_vel, ax_pos,
                                      [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
                                      [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
                                      title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
                                            f' density - {self.density} and time-step - {self.time_step}',
-                                     grid=grid)
+                                     grid=grid,
+                                     flow=flow)
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
@@ -871,7 +1020,24 @@ class Streamlines:
             # _temp is used to keep track of the flow object
             _temp = 0
             if self.debug:
-                fig, ax = plt.subplots()
+                fig, (ax_vel, ax_pos) = plt.subplots(2, 1, figsize=(6, 8))
+                fig.tight_layout()
+                # Keyboard controls:
+                #   'c'  -> toggle velocity contour on/off
+                #   '['  -> narrow contour value range
+                #   ']'  -> widen contour value range
+                def _on_key(event, sl=self):
+                    if event.key == 'c':
+                        sl.show_velocity_contour = not getattr(sl, 'show_velocity_contour', False)
+                    elif event.key == '[':
+                        if not hasattr(sl, "_vel_scale"):
+                            sl._vel_scale = 1.0
+                        sl._vel_scale *= 1.2
+                    elif event.key == ']':
+                        if not hasattr(sl, "_vel_scale"):
+                            sl._vel_scale = 1.0
+                        sl._vel_scale /= 1.2
+                fig.canvas.mpl_connect('key_press_event', _on_key)
             while True:
                 if (flow.unsteady_flow[_temp].time - np.sum(self.time)) < 0:
                     self.flow_old = flow.unsteady_flow[_temp]
@@ -901,12 +1067,13 @@ class Streamlines:
                 # add levels to debug; multiple ways of showing plots etc...
                 # This will help when working with varying flow fields
                 if self.debug:
-                    self.plot_update(ax,
+                    self.plot_update(ax_vel, ax_pos,
                                      [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
                                      [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
                                      title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
                                            f' density - {self.density} and time-step - {self.time_step}',
-                                     grid=grid)
+                                     grid=grid,
+                                     flow=flow)
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
@@ -917,7 +1084,24 @@ class Streamlines:
             # _temp is used to keep track of the flow object
             _temp = 0
             if self.debug:
-                fig, ax = plt.subplots()
+                fig, (ax_vel, ax_pos) = plt.subplots(2, 1, figsize=(6, 8))
+                fig.tight_layout()
+                # Keyboard controls:
+                #   'c'  -> toggle velocity contour on/off
+                #   '['  -> narrow contour value range
+                #   ']'  -> widen contour value range
+                def _on_key(event, sl=self):
+                    if event.key == 'c':
+                        sl.show_velocity_contour = not getattr(sl, 'show_velocity_contour', False)
+                    elif event.key == '[':
+                        if not hasattr(sl, "_vel_scale"):
+                            sl._vel_scale = 1.0
+                        sl._vel_scale *= 1.2
+                    elif event.key == ']':
+                        if not hasattr(sl, "_vel_scale"):
+                            sl._vel_scale = 1.0
+                        sl._vel_scale /= 1.2
+                fig.canvas.mpl_connect('key_press_event', _on_key)
             while True:
                 if (flow.unsteady_flow[_temp].time - np.sum(self.time)) < 0:
                     self.flow_old = flow.unsteady_flow[_temp]
@@ -954,12 +1138,13 @@ class Streamlines:
                 # add levels to debug; multiple ways of showing plots etc...
                 # This will help when working with varying flow fields
                 if self.debug:
-                    self.plot_update(ax,
+                    self.plot_update(ax_vel, ax_pos,
                                      [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
                                      [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
                                      title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
                                            f' density - {self.density} and time-step - {self.time_step}',
-                                     grid=grid)
+                                     grid=grid,
+                                     flow=flow.unsteady_flow[_temp])
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
