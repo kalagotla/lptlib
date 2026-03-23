@@ -823,12 +823,13 @@ class FlowIO:
             u_vel = f3[..., 0, 0]
             v_vel = f3[..., 1, 0]
             w_vel = np.zeros_like(u_vel)  # w is zero (normal to plane)
-            self.q[..., 0, 0] = rho
-            self.q[..., 1, 0] = u_vel * rho  # rho-u
-            self.q[..., 2, 0] = v_vel * rho  # rho-v
+            # TODO: Need to update this to be consistent with the rest of the API. Currently hardcoded values for rho and scaling factors.
+            self.q[..., 0, 0] = rho * 0.284
+            self.q[..., 1, 0] = u_vel * rho * 0.284 * 612  # rho-u
+            self.q[..., 2, 0] = v_vel * rho * 0.284 * 612  # rho-v
             self.q[..., 3, 0] = 0  # rho-w = 0
             # energy = p/(gamma - 1) + 0.5 * rho * (u^2 + v^2)
-            self.q[..., 4, 0] = p / (self.gamma - 1) + 0.5 * rho * (u_vel**2 + v_vel**2)
+            self.q[..., 4, 0] = p * 6895 / (self.gamma - 1) + 0.5 * rho * (u_vel**2 + v_vel**2) * 612**2 * 0.284
 
     def plot_contour(
         self,
