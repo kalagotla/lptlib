@@ -285,21 +285,20 @@ class Search:
 
         # Start Newton-Raphson
         _iter = 0
+        # Track best (closest) iterate in case we stall near convergence
+        best_cpoint = None
+        best_ppoint = None
+        best_residual = None
+        best_tol = None
         # Initial guess
         try:
             _cpoint is not None
         except:
-            _cpoint = np.array([self.grid.ni[self.block], self.grid.nj[self.block], self.grid.nk[self.block]]) / 2 + \
+            # TODO: This is a temporary fix to avoid NR failure
+            _cpoint = np.array([0, self.grid.nj[self.block]/2, self.grid.nk[self.block]/2]) + \
                 np.random.randn(3)
 
         while True:
-            # Check if taking too long
-            if _iter >= 1e3:
-                print('**ERROR** Newton-Raphson did not converge. Try again!\n'
-                      'Possible reason might be the point might be too close to the end of a domain')
-                self.ppoint, self.cpoint = None, None
-                return
-
             # Check for out-of-domain case and reset the point to in-domain
             _eps0, _eps1, _eps2 = _cpoint.astype(int)
             _alpha, _beta, _gamma = np.modf(_cpoint)[0]
@@ -331,12 +330,23 @@ class Search:
             # Difference b/w predicted point to given point
             _delta_ppoint = _ppoint - _pred_ppoint
 
+            # Track best iterate based on residual norm
+            _res_norm = np.linalg.norm(_delta_ppoint)
+
             # End newton-raphson if condition is met
             # TODO: Condition needs to be adapted based on Jacobian
             # TODO: Need to improve by normalizing the data
             _tol = 1e-12 * self.grid.J[self.cell[0, 0], self.cell[0, 1], self.cell[0, 2], self.block]
             if _tol <= 1e-12:
                 _tol = 1e-12
+
+            # Update best iterate bookkeeping
+            if best_residual is None or _res_norm < best_residual:
+                best_residual = _res_norm
+                best_cpoint = _cpoint.copy()
+                best_ppoint = _pred_ppoint.copy()
+                best_tol = _tol
+
             if sum(abs(_delta_ppoint)) <= _tol:
                 _eps0, _eps1, _eps2 = _cpoint.astype(int)
                 # same as self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
@@ -357,7 +367,23 @@ class Search:
             _cpoint[_cpoint < 0] = 0
             _cpoint = abs(_cpoint)
             _iter += 1
+            # Check if taking too long
+            if _iter >= 1e3:
+                # If we have a near-converged iterate, accept it instead of treating the
+                # point as completely out-of-domain. Use a slightly relaxed tolerance.
+                if best_cpoint is not None and best_residual is not None and best_tol is not None:
+                    if best_residual <= 10 * best_tol:
+                        _eps0, _eps1, _eps2 = best_cpoint.astype(int)
+                        self._cell_index(self, _eps0, _eps1, _eps2)
+                        self.cpoint = best_cpoint
+                        self.ppoint = best_ppoint
+                        print('**WARNING** Newton-Raphson did not fully converge within 1000 iterations.\n'
+                              'Using best available in-domain approximation for point location.')
+                        return best_cpoint
 
-            pass
+                print('**ERROR** Newton-Raphson did not converge. Try again!\n'
+                      'Possible reason might be the point might be too close to the end of a domain')
+                self.ppoint, self.cpoint = None, None
+                return
 
 
