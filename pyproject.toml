@@ -20,7 +20,8 @@ dependencies = [
     "tqdm",
     "mpi4py",
     "scikit-learn",
-    ]
+    "h5py>=3.15.1",
+]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -48,3 +49,8 @@ issues = "https://github.com/kalagotla/lptlib/issues"
 
 [tool.uv]
 link-mode = "copy"
+
+[tool.uv.workspace]
+members = [
+    "external/forebody_articulation",
+]

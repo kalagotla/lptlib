@@ -707,7 +707,7 @@ class Streamlines:
                 if new_point is None:
                     self.print_debug(self, 'Checking if the end of the domain is reached...')
                     if self.time_step <= 1e-12:
-                        self.time_step = self.time_step
+                        break
                     else:
                         self.time_step = 1e-2 * self.time_step
                     new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
@@ -748,8 +748,9 @@ class Streamlines:
                         break
                 # Check for strong acceleration and reduce time-step
                 # Increase time step when angle is below 0.05 degrees
-                elif self.angle_btw(new_vel, vel) <= 0.1 * self.adaptivity and self.time_step <= self.max_time_step \
-                        and self._magnitude(self, new_vel, vel) <= 0.1 * self.magnitude_adaptivity:
+                elif self.angle_btw(new_vel, vel) <= 0.1 * self.adaptivity \
+                        and self._magnitude(self, new_vel, vel) <= 0.1 * self.magnitude_adaptivity \
+                        and self.time_step <= self.max_time_step:
                     self.print_debug(self, 'Increasing time step. Low deflection wrt velocity')
                     self.streamline.append(new_point)
                     self.svelocity.append(new_vel)
@@ -760,16 +761,18 @@ class Streamlines:
                     fvel = new_fvel.copy()
                     self.time_step = 2 * self.time_step
                     loop_check = 0  # This check might lead to slower integration for some edge cases
-                # Decrease time step when angle is above 1.4 degrees
+                # Decrease time step when angle OR magnitude change is large
                 # Make sure time step does not go to zero; 1 pico-second
-                elif self.angle_btw(new_vel, vel) >= self.adaptivity and self.time_step >= 1e-12 \
-                        and self._magnitude(self, new_vel, vel) >= self.magnitude_adaptivity:
+                elif (self.angle_btw(new_vel, vel) >= self.adaptivity
+                        or self._magnitude(self, new_vel, vel) >= self.magnitude_adaptivity) \
+                        and self.time_step >= 1e-12:
                     self.print_debug(self, 'Decreasing time step. High deflection wrt velocity')
                     self.time_step = 0.5 * self.time_step
                     step_back = True
                 # check the vector length just before entering an acceleration zone
                 elif step_back:
                     self.print_debug(self, 'Step back to accommodate better dataio Delaunay triangulation')
+                    saved_time_step = self.time_step
                     step_back_count = 0
                     while np.linalg.norm(new_vel - vel) >= 1e-12:
                         self.time_step = 0.5 * self.time_step
@@ -778,6 +781,8 @@ class Streamlines:
                                                                           method='pRK4', time_step=self.time_step,
                                                                           drag_model=self.drag_model)
                         step_back_count += 1
+                        if step_back_count > 70:
+                            break
                     # Save the results
                     self.streamline.append(new_point)
                     self.svelocity.append(new_vel)
@@ -787,8 +792,8 @@ class Streamlines:
                     vel = new_vel.copy()
                     fvel = new_fvel.copy()
                     loop_check = 0
-                    # reset the time-step
-                    self.time_step = self.time_step / (0.5 * step_back_count)
+                    # reset the time-step to the value before step-back
+                    self.time_step = saved_time_step
                     # set step_back to False and continue the loop
                     step_back = False
 
