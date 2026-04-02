@@ -290,13 +290,30 @@ class Search:
         best_ppoint = None
         best_residual = None
         best_tol = None
-        # Initial guess
+        # Initial guess: use nearest node in the block for a robust starting point
+        # The global _cpoint is used as a warm start for successive calls (particle tracking),
+        # but we fall back to the nearest-node guess if it doesn't exist or is too far away
+        _need_fresh_guess = False
         try:
             _cpoint is not None
         except:
-            # TODO: This is a temporary fix to avoid NR failure
-            _cpoint = np.array([0, self.grid.nj[self.block]/2, self.grid.nk[self.block]/2]) + \
-                np.random.randn(3)
+            _need_fresh_guess = True
+        if not _need_fresh_guess:
+            # Check if the global guess is in a reasonable neighborhood
+            # by comparing physical-space distance to the grid spacing
+            _pred = self.c2p(_cpoint)
+            if _pred is None or np.linalg.norm(_pred - _ppoint) > 0.1 * np.linalg.norm(
+                    self.grid.grd_max[self.block] - self.grid.grd_min[self.block]):
+                _need_fresh_guess = True
+        if _need_fresh_guess:
+            # Compute nearest node as the initial guess
+            _i, _j, _k = self.grid.ni[self.block], self.grid.nj[self.block], self.grid.nk[self.block]
+            _dist = np.sqrt(
+                (self.grid.grd[:_i, :_j, :_k, 0, self.block] - _ppoint[0]) ** 2 +
+                (self.grid.grd[:_i, :_j, :_k, 1, self.block] - _ppoint[1]) ** 2 +
+                (self.grid.grd[:_i, :_j, :_k, 2, self.block] - _ppoint[2]) ** 2)
+            _nearest = np.array(np.unravel_index(_dist.argmin(), _dist.shape), dtype='f8')
+            _cpoint = _nearest + 0.5  # offset to cell center
 
         while True:
             # Check for out-of-domain case and reset the point to in-domain

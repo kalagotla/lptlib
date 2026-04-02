@@ -894,7 +894,7 @@ class Streamlines:
                         idx.point = new_point
                         if loop_check > 0:
                             self.print_debug(self, 'Resetting time step')
-                            self.time_step = self.time_step / (0.5 * loop_check)
+                            self.time_step = self.time_step * (2 ** loop_check)
                             loop_check = 0
 
             # Save files for each particle; can be used for multiprocessing large number of particles
@@ -904,10 +904,36 @@ class Streamlines:
         if method == 'adaptive-ppath-c-space':
             # t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             # t.start()
+            if self.debug:
+                fig, (ax_vel, ax_pos) = plt.subplots(2, 1, figsize=(6, 8))
+                fig.tight_layout()
+                # Keyboard controls:
+                #   'c'  -> toggle velocity contour on/off
+                #   '['  -> narrow contour value range
+                #   ']'  -> widen contour value range
+                def _on_key(event, sl=self):
+                    if event.key == 'c':
+                        sl.show_velocity_contour = not getattr(sl, 'show_velocity_contour', False)
+                    elif event.key == '[':
+                        if not hasattr(sl, "_vel_scale"):
+                            sl._vel_scale = 1.0
+                        sl._vel_scale *= 1.2  # narrow range (more contrast)
+                    elif event.key == ']':
+                        if not hasattr(sl, "_vel_scale"):
+                            sl._vel_scale = 1.0
+                        sl._vel_scale /= 1.2  # widen range
+                fig.canvas.mpl_connect('key_press_event', _on_key)
             save_point = self.point
             idx = Search(grid, self.point)
             idx.compute(method='c-space')
+            _resync_counter = 0
+            _resync_interval = 10  # Resync c-space via p-space every N saved steps
             while True:
+                # Periodic p-space resync to correct accumulated Jacobian drift
+                if _resync_counter >= _resync_interval:
+                    idx = Search(grid, save_point)
+                    idx.compute(method='c-space')
+                    _resync_counter = 0
                 interp = Interpolation(flow, idx)
                 interp.adaptive = self.adaptive_interpolation
                 interp.compute(method='c-space')
@@ -921,7 +947,9 @@ class Streamlines:
                 if new_point is None:
                     # Check for large time-step
                     self.print_debug(self, 'Checking if the end of the domain is reached...')
-                    self.time_step = 1e-9 * self.time_step
+                    if self.time_step <= 1e-12:
+                        break
+                    self.time_step = 1e-2 * self.time_step
                     new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
                                                                        density=self.density,
                                                                        velocity=pvel, method='cRK4',
@@ -962,6 +990,7 @@ class Streamlines:
                             fvel = new_fvel.copy()
                             self.point = save_point
                             save_point = new_point
+                            _resync_counter = 0  # just did a p-space search
                 else:
                     self.point = save_point
                     save_point = idx.c2p(new_point)
@@ -981,7 +1010,7 @@ class Streamlines:
                     # Adaptive algorithm starts
                     # Save results and adjust time-step
                     # Details for the algorithm are provided in adaptive-ppath
-                    elif self.angle_btw(new_fvel, fvel) is None:
+                    elif self.angle_btw(new_pvel, pvel) is None:
                         self.print_debug(self, 'Increasing time step. Successive points are same')
                         self.time_step = 2 * self.time_step
                         loop_check += 1
@@ -990,8 +1019,9 @@ class Streamlines:
                                              f'Successive points did not change for too long. Integration ends! for particle '
                                              f'{self.task}')
                             break
-                    elif self.angle_btw(new_fvel,
-                                        fvel) <= 0.1 * self.adaptivity and self.time_step <= self.max_time_step:
+                    elif self.angle_btw(new_pvel, pvel) <= 0.1 * self.adaptivity \
+                            and self._magnitude(self, new_pvel, pvel) <= 0.1 * self.magnitude_adaptivity \
+                            and self.time_step <= self.max_time_step:
                         self.point = save_point
                         save_point = idx.c2p(new_point)
                         self.streamline.append(save_point)
@@ -1003,7 +1033,10 @@ class Streamlines:
                         fvel = new_fvel.copy()
                         self.time_step = 2 * self.time_step
                         loop_check = 0
-                    elif self.angle_btw(new_fvel, fvel) >= self.adaptivity and self.time_step >= 1e-12:
+                        _resync_counter += 1
+                    elif (self.angle_btw(new_pvel, pvel) >= self.adaptivity
+                            or self._magnitude(self, new_pvel, pvel) >= self.magnitude_adaptivity) \
+                            and self.time_step >= 1e-12:
                         self.time_step = 0.5 * self.time_step
                     else:
                         self.point = save_point
@@ -1016,6 +1049,17 @@ class Streamlines:
                         pvel = new_pvel.copy()
                         fvel = new_fvel.copy()
                         loop_check = 0
+                        _resync_counter += 1
+
+                # Plot the streamline for debugging
+                if self.debug:
+                    self.plot_update(ax_vel, ax_pos,
+                                     [i[0] for i in self.streamline], [i[0] for i in self.svelocity],
+                                     [i[0] for i in self.streamline], [i[0] for i in self.fvelocity],
+                                     title=f'Particle number - {self.task} and diameter - {self.diameter},\n'
+                                           f' density - {self.density} and time-step - {self.time_step}',
+                                     grid=grid,
+                                     flow=flow)
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
