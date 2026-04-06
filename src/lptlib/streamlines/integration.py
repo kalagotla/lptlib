@@ -13,6 +13,7 @@ class Integration:
         self.ppoint = None
         self.cpoint = None
         self.rk4_bool = False
+        self.blowup_factor = 10  # Threshold for mid-RK4 blow-up detection
 
     def __str__(self):
         doc = "This instance uses data from " + self.interp.flow.filename + \
@@ -557,11 +558,11 @@ class Integration:
                     # compression-dominated regime
                         if _mach <= 1.45:
                             _cm = 5/3 + 2/3 * np.tanh(3 * np.log(_mach + 0.1))
-                        if _mach > 1.45:
+                        else:
                             _cm = 2.044 + 0.2 * np.exp(-1.8 * (np.log(_mach/1.5))**2)
                         if _mach <= 0.89:
                             _gm = 1 - 1.525 * _mach**4
-                        if _mach > 0.89:
+                        else:
                             _gm = 2e-4 + 8e-4 * np.tanh(12.77 * (_mach - 2.02))
                         _hm = 1 - 0.258 * _cm / (1 + 514 * _gm)
                         _cd = 24/_re * (1 + 0.15 * _re**0.687) * _hm + 0.42 * _cm / (1 + 42000 * _gm / _re**1.16)
@@ -652,8 +653,11 @@ class Integration:
                     mu = _viscosity(q_interp.temperature.reshape(-1))
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(vp - uf) * dp / mu
-                    _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) /\
-                            q_interp.velocity_magnitude.reshape(-1)
+                    _vel_mag = q_interp.velocity_magnitude.reshape(-1)
+                    if np.linalg.norm(_vel_mag) < 1e-30:
+                        _mach = np.zeros_like(_vel_mag)
+                    else:
+                        _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) / _vel_mag
                     _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     try:
@@ -681,6 +685,7 @@ class Integration:
                 # Theory: When zero drag particle is massless, hence fluid velocity
                 if np.linalg.norm(vk0) == 0:
                     v0 = uf0.copy()
+                    xk0 = uf0 * time_step  # Use fluid velocity for position RK4
                 v1 = v0 + 0.5 * vk0
                 x1 = x0 + 0.5 * xk0
 
@@ -690,11 +695,13 @@ class Integration:
                     return None, None, None
                 if np.linalg.norm(vk1) == 0:
                     v0 = uf1.copy()
+                    xk1 = uf1 * time_step
                 v2 = v0 + 0.5 * vk1
                 x2 = x0 + 0.5 * xk1
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if (np.linalg.norm(x2 - x0) >= 10 * np.linalg.norm(x1-x0) and np.linalg.norm(x2 - x0) >= 1e-12)\
-                        or (np.linalg.norm(v2 - v0) >= 10 * np.linalg.norm(v1 - v0) and np.linalg.norm(v2 - v0) >= 1e-12):
+                _bf = self.blowup_factor
+                if (np.linalg.norm(x2 - x0) >= _bf * np.linalg.norm(x1-x0) and np.linalg.norm(x2 - x0) >= 1e-12)\
+                        or (np.linalg.norm(v2 - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v2 - v0) >= 1e-12):
                     self.rk4_bool = True
                     return x0, v0, u0
 
@@ -704,11 +711,12 @@ class Integration:
                     return None, None, None
                 if np.linalg.norm(vk2) == 0:
                     v0 = uf2.copy()
+                    xk2 = uf2 * time_step
                 v3 = v0 + vk2
                 x3 = x0 + xk2
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if (np.linalg.norm(x3 - x0) >= 10 * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= 1e-12)\
-                        or (np.linalg.norm(v3 - v0) >= 10 * np.linalg.norm(v1 - v0) and np.linalg.norm(v3 - v0) >= 1e-12):
+                if (np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= 1e-12)\
+                        or (np.linalg.norm(v3 - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v3 - v0) >= 1e-12):
                     self.rk4_bool = True
                     return x0, v0, u0
 
@@ -718,22 +726,25 @@ class Integration:
                     return None, None, None
                 if np.linalg.norm(vk3) == 0:
                     v0 = uf3.copy()
+                    xk3 = uf3 * time_step
                 v_new = v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
                 x_new = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if (np.linalg.norm(x_new - x0) >= 10 * np.linalg.norm(x1 - x0) and np.linalg.norm(x_new - x0) >= 1e-12)\
-                        or (np.linalg.norm(v_new - v0) >= 10 * np.linalg.norm(v1 - v0) and np.linalg.norm(v_new - v0) >= 1e-12):
+                if (np.linalg.norm(x_new - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x_new - x0) >= 1e-12)\
+                        or (np.linalg.norm(v_new - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v_new - v0) >= 1e-12):
                     self.rk4_bool = True
                     return x0, v0, u0
 
                 vk_new, uf_new, temp = _rk4_step(self, v_new, x_new)
-                # make sure the velocity is going down in a compression case
-                # This is done to remove the oscillations in the post-shock region
+                # Suppress post-shock oscillations: only apply for strong shocks
                 if vk_new is None:
                     return None, None, None
-                if self.interp.method == 'simple_oblique_shock' and np.dot(v_new - v0, uf_new - v_new) < 0:
+                if self.interp.detected_feature == 'strong_shock' and np.dot(v_new - v0, uf_new - v_new) < 0:
                     self.rk4_bool = True
                     return x0, v0, u0
+                # For zero-drag: particle velocity = fluid velocity at final position
+                if vk_new is not None and np.linalg.norm(vk_new) == 0:
+                    v_new = uf_new.copy()
 
                 self.ppoint = x_new
 
@@ -757,8 +768,9 @@ class Integration:
                             interim RK4 variables
 
                     """
-                    if np.any(x < 0):
-                        return None, None, None, None
+                    # Clamp slightly negative c-space coords to 0 (common for
+                    # 2D-extruded grids where a degenerate dimension sits at ~0)
+                    x = np.maximum(x, 0)
                     idx = Search(self.interp.idx.grid, x)
                     idx.block = self.interp.idx.block
                     idx.c2p(x)  # This will change the cell attribute
@@ -787,8 +799,11 @@ class Integration:
                     mu = _viscosity(q_interp.temperature.reshape(-1))
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(p_vp - p_uf) * dp / mu
-                    _mach = np.linalg.norm(p_vp - p_uf) * q_interp.mach.reshape(-1) /\
-                            q_interp.velocity_magnitude.reshape(-1)
+                    _vel_mag = q_interp.velocity_magnitude.reshape(-1)
+                    if np.linalg.norm(_vel_mag) < 1e-30:
+                        _mach = np.zeros_like(_vel_mag)
+                    else:
+                        _mach = np.linalg.norm(p_vp - p_uf) * q_interp.mach.reshape(-1) / _vel_mag
                     _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     p_vk = _cd * _k * (p_vp - p_uf) * np.linalg.norm(p_vp - p_uf) * time_step
@@ -829,7 +844,8 @@ class Integration:
                 xk1 = c_v1 * time_step
                 x2 = x0 + 0.5 * xk1
                 # Check for mid-RK4 blow up due to residuals
-                if np.linalg.norm(x2 - x0) >= 10 * np.linalg.norm(x1-x0):
+                _bf = self.blowup_factor
+                if np.linalg.norm(x2 - x0) >= _bf * np.linalg.norm(x1-x0):
                     self.rk4_bool = True
                     return x0, p_v0, p_u0
 
@@ -842,7 +858,7 @@ class Integration:
                 c_v3 = c_v0 + vk2
                 xk2 = c_v2 * time_step
                 x3 = x0 + xk2
-                if np.linalg.norm(x3 - x0) >= 10 * np.linalg.norm(x1-x0):
+                if np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1-x0):
                     self.rk4_bool = True
                     return x0, p_v0, p_u0
 
@@ -854,7 +870,7 @@ class Integration:
                 c_v_new = c_v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
                 xk3 = c_v3 * time_step
                 x_new = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
-                if np.linalg.norm(x_new - x0) >= 10 * np.linalg.norm(x1-x0):
+                if np.linalg.norm(x_new - x0) >= _bf * np.linalg.norm(x1-x0):
                     self.rk4_bool = True
                     return x0, p_v0, p_u0
 
@@ -899,8 +915,11 @@ class Integration:
                     mu = _viscosity(q_interp.temperature.reshape(-1), law='sutherland')
                     # Relative Reynolds Number
                     re = _rhof * np.linalg.norm(vp - uf) * dp / mu
-                    _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) / \
-                            q_interp.velocity_magnitude.reshape(-1)
+                    _vel_mag = q_interp.velocity_magnitude.reshape(-1)
+                    if np.linalg.norm(_vel_mag) < 1e-30:
+                        _mach = np.zeros_like(_vel_mag)
+                    else:
+                        _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) / _vel_mag
                     _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     try:
@@ -940,7 +959,8 @@ class Integration:
                 v2 = v0 + 0.5 * vk1
                 x2 = x0 + 0.5 * xk1
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if np.linalg.norm(x2 - x0) >= 10 * np.linalg.norm(x1 - x0) and np.linalg.norm(x2 - x0) >= 1e-12:
+                _bf = self.blowup_factor
+                if np.linalg.norm(x2 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x2 - x0) >= 1e-12:
                     self.rk4_bool = True
                     return x0, v0, u0
 
@@ -953,7 +973,7 @@ class Integration:
                 v3 = v0 + vk2
                 x3 = x0 + xk2
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if np.linalg.norm(x3 - x0) >= 10 * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= 1e-12:
+                if np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= 1e-12:
                     self.rk4_bool = True
                     return x0, v0, u0
 
@@ -966,17 +986,16 @@ class Integration:
                 v_new = v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
                 x_new = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if np.linalg.norm(x_new - x0) >= 10 * np.linalg.norm(x1 - x0) and np.linalg.norm(
+                if np.linalg.norm(x_new - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(
                         x_new - x0) >= 1e-12:
                     self.rk4_bool = True
                     return x0, v0, u0
 
                 vk_new, uf_new, temp = _rk4_step(self, v_new, x_new)
-                # make sure the velocity is going down in a compression case
-                # This is done to remove the oscillations in the post-shock region
+                # Suppress post-shock oscillations: only apply for strong shocks
                 if vk_new is None:
                     return None, None, None
-                if self.interp.method == 'simple_oblique_shock' and np.dot(v_new - v0, uf_new - v_new) < 0:
+                if self.interp.detected_feature == 'strong_shock' and np.dot(v_new - v0, uf_new - v_new) < 0:
                     self.rk4_bool = True
                     return x0, v0, u0
 

@@ -60,9 +60,13 @@ class Search:
               "Use method 'compute' to find (attributes) the closest 'index' and the nodes of the 'cell'.\n"
         return doc
 
-    @staticmethod
-    def _cell_nodes(_i, _j, _k):
+    def _cell_nodes(self, _i, _j, _k):
         # _Internal method to get the nodes of a cell
+        # Clamp to valid range to prevent negative indices wrapping
+        # (e.g., 2D-extruded grids where k=0 and point sits at boundary)
+        _i = max(_i, 0)
+        _j = max(_j, 0)
+        _k = max(_k, 0)
         _cell = np.array([[_i, _j, _k],
                           [_i + 1, _j, _k],
                           [_i + 1, _j + 1, _k],

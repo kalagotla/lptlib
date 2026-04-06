@@ -85,6 +85,9 @@ class Streamlines:
         self.filepath = filepath
         self.task = task
         self.debug = debug
+        self.max_loop_check = 70
+        self.max_steps = None
+        self._initial_vel_magnitude = None
         # Live-plot options
         self.show_velocity_contour = False
         # unsteady parameters
@@ -693,6 +696,7 @@ class Streamlines:
                             sl._vel_scale = 1.0
                         sl._vel_scale /= 1.2  # widen range
                 fig.canvas.mpl_connect('key_press_event', _on_key)
+            _domain_exit_count = 0
             while True:
                 idx = Search(grid, self.point)
                 interp = Interpolation(flow, idx)
@@ -706,7 +710,9 @@ class Streamlines:
                                                                   drag_model=self.drag_model)
                 if new_point is None:
                     self.print_debug(self, 'Checking if the end of the domain is reached...')
-                    if self.time_step <= 1e-12:
+                    _domain_exit_count += 1
+                    if self.time_step <= 1e-10 or _domain_exit_count >= 5:
+                        self.print_debug(self, 'Integration complete!')
                         break
                     else:
                         self.time_step = 1e-2 * self.time_step
@@ -730,7 +736,7 @@ class Streamlines:
                     intg.rk4_bool = False
                     self.time_step = 0.5 * self.time_step
                     loop_check += 1
-                    if loop_check == 70:
+                    if loop_check == self.max_loop_check:
                         self.print_debug(self, 'Stuck in the same loop for too long. Integration ends!')
                         break
 
@@ -774,7 +780,9 @@ class Streamlines:
                     self.print_debug(self, 'Step back to accommodate better dataio Delaunay triangulation')
                     saved_time_step = self.time_step
                     step_back_count = 0
-                    while np.linalg.norm(new_vel - vel) >= 1e-12:
+                    _vel_norm = np.linalg.norm(vel)
+                    _step_back_tol = max(1e-6 * _vel_norm, 1e-12)
+                    while np.linalg.norm(new_vel - vel) >= _step_back_tol:
                         self.time_step = 0.5 * self.time_step
                         new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
                                                                           velocity=vel,

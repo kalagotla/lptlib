@@ -62,6 +62,7 @@ class Interpolation:
         self.adaptive = None
         self.rbf_epsilon = 1  # Default for RBF interpolation
         self.method = None
+        self.detected_feature = None  # Set by _discontinuity_check: 'strong_shock', 'weak_discontinuity', 'smooth'
         # for unsteady case
         self.flow_old = None
         self.time = []
@@ -74,28 +75,80 @@ class Interpolation:
     @staticmethod
     def _shock_cell_check(self):
         # Inspect shock cell and assign nearest interpolation
+        # Compute velocity and Mach only at the 2 nodes (not the entire flow field)
         i0, j0, k0 = self.idx.cell[0, 0], self.idx.cell[0, 1], self.idx.cell[0, 2]
         i1, j1, k1 = self.idx.cell[1, 0], self.idx.cell[1, 1], self.idx.cell[1, 2]
-        # compute velocity, mach
-        _var = Variables(self.flow)
-        _var.compute_mach()
+        _gamma = getattr(self.flow, 'gamma', 1.4)
+        _R = getattr(self.flow, 'gas_constant', 287.052874)
+        _q0 = self.flow.q[i0, j0, k0, :, self.idx.block]
+        _q1 = self.flow.q[i1, j1, k1, :, self.idx.block]
+        # velocity at nodes
+        _vel0 = _q0[1:4] / _q0[0]
+        _vel1 = _q1[1:4] / _q1[0]
+        _vel_mag0 = np.linalg.norm(_vel0)
+        _vel_mag1 = np.linalg.norm(_vel1)
+        # temperature and Mach at nodes
+        _T0 = (_q0[4] / _q0[0] - 0.5 * _vel_mag0**2) / (_R / (_gamma - 1))
+        _T1 = (_q1[4] / _q1[0] - 0.5 * _vel_mag1**2) / (_R / (_gamma - 1))
+        _mach_val0 = _vel_mag0 / np.sqrt(_gamma * _R * max(_T0, 1e-30))
+        _mach_val1 = _vel_mag1 / np.sqrt(_gamma * _R * max(_T1, 1e-30))
         # _grad_v = _J_inv * (v1 - v0)
-        _grad_v = self.idx.grid.m2[i0, j0, k0, :, self.idx.block] * (
-                _var.velocity[i1, j1, k1, :, self.idx.block]
-                - _var.velocity[i0, j0, k0, :, self.idx.block]
-        )
+        _grad_v = self.idx.grid.m2[i0, j0, k0, :, self.idx.block] * (_vel1 - _vel0)
         # compute norm to get the unit vector
-        _grad_v = _grad_v / np.linalg.norm(_grad_v)
+        _grad_v_norm = np.linalg.norm(_grad_v)
+        if _grad_v_norm < 1e-30:
+            return 0.0, 0.0
+        _grad_v = _grad_v / _grad_v_norm
         # mach vector -- mach * unit velocity vector
-        _mach0 = (_var.mach[i0, j0, k0] * _var.velocity[i0, j0, k0, :, self.idx.block]
-                  / _var.velocity_magnitude[i0, j0, k0, self.idx.block])
-        _mach1 = (_var.mach[i1, j1, k1] * _var.velocity[i1, j1, k1, :, self.idx.block]
-                  / _var.velocity_magnitude[i1, j1, k1, self.idx.block])
+        _mach0 = _mach_val0 * _vel0 / max(_vel_mag0, 1e-30)
+        _mach1 = _mach_val1 * _vel1 / max(_vel_mag1, 1e-30)
         # normal mach vector
         _mach_n0 = np.linalg.norm(np.dot(_mach0, _grad_v))
         _mach_n1 = np.linalg.norm(np.dot(_mach1, _grad_v))
 
         return _mach_n0, _mach_n1
+
+    @staticmethod
+    def _discontinuity_check(self):
+        """Classify the flow feature in the current cell using all 8 nodes.
+
+        Computes Mach number at all cell vertices and examines the maximum
+        Mach difference across opposing face-pairs. Returns a classification:
+            'strong_shock'       — supersonic-to-subsonic crossing with large gradient
+            'weak_discontinuity' — significant Mach gradient without crossing Mach 1
+            'smooth'             — small gradients, normal interpolation is fine
+
+        Also sets self.detected_feature for use by Integration.
+        """
+        # Compute Mach only at the 8 cell nodes (not the entire flow field)
+        _gamma = getattr(self.flow, 'gamma', 1.4)
+        _R = getattr(self.flow, 'gas_constant', 287.052874)
+        _cell_q = self.flow.q[self.idx.cell[:, 0], self.idx.cell[:, 1],
+                               self.idx.cell[:, 2], :, self.idx.block]
+        _rho = _cell_q[:, 0]
+        _u = _cell_q[:, 1] / _rho
+        _v = _cell_q[:, 2] / _rho
+        _w = _cell_q[:, 3] / _rho
+        _vel_mag = np.sqrt(_u**2 + _v**2 + _w**2)
+        _T = (_cell_q[:, 4] / _rho - 0.5 * _vel_mag**2) / (_R / (_gamma - 1))
+        _T = np.maximum(_T, 1e-30)  # Guard against negative temperature
+        _a = np.sqrt(_gamma * _R * _T)
+        _mach = _vel_mag / _a
+
+        _mach_min = np.min(_mach)
+        _mach_max = np.max(_mach)
+        _mach_diff = _mach_max - _mach_min
+
+        # Strong shock: Mach crosses 1 (one node supersonic, another subsonic)
+        # and the gradient is significant
+        if _mach_min < 1.0 < _mach_max and _mach_diff > 0.2:
+            self.detected_feature = 'strong_shock'
+        elif _mach_diff > 0.5:
+            self.detected_feature = 'weak_discontinuity'
+        else:
+            self.detected_feature = 'smooth'
+
+        return self.detected_feature
 
     def compute(self, method='p-space'):
         """
@@ -112,6 +165,7 @@ class Interpolation:
         """
         # this object is used for integration without changing much of the code
         self.method = method
+        self.detected_feature = 'smooth'  # Reset each compute; overridden by _discontinuity_check
 
         # Assign data from q file to keep the format for further computations
         self.nb = self.flow.nb
@@ -158,6 +212,14 @@ class Interpolation:
                     if self.adaptive == 'shock':
                         _mach_n0, _mach_n1 = self._shock_cell_check(self)
                         if _mach_n0 > 1 > _mach_n1:
+                            _distance = np.sqrt(np.sum((_cell_grd - self.idx.ppoint) ** 2, axis=1))
+                            _nn = np.argmin(_distance)
+                            self.q = _cell_q[_nn]
+                            self.q = self.q.reshape((1, 1, 1, -1, 1))
+                            return
+                    elif self.adaptive == 'auto':
+                        _feature = self._discontinuity_check(self)
+                        if _feature == 'strong_shock':
                             _distance = np.sqrt(np.sum((_cell_grd - self.idx.ppoint) ** 2, axis=1))
                             _nn = np.argmin(_distance)
                             self.q = _cell_q[_nn]
@@ -255,6 +317,16 @@ class Interpolation:
                             return
                         else:
                             pass
+                    elif self.adaptive == "auto":
+                        _feature = self._discontinuity_check(self)
+                        if _feature == 'strong_shock':
+                            _distance = np.sqrt(np.sum((self.idx.cell - self.idx.cpoint) ** 2, axis=1))
+                            _nn = np.argmin(_distance)
+                            self.q = _cell_q[_nn]
+                            self.J = _cell_J[_nn]
+                            self.J_inv = _cell_J_inv[_nn]
+                            self.q = self.q.reshape((1, 1, 1, -1, 1))
+                            return
 
                 def _eqn(_alpha, _beta, _gamma, _var):
                     _fun = (1 - _alpha) * (1 - _beta) * (1 - _gamma) * _var[0] + \

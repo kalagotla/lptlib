@@ -32,3 +32,18 @@ MANIFEST
 
 .DS_Store
 .env
+
+# Virtual environment
+.venv/
+
+# Particle tracking output
+*.npy
+debug.log
+
+# External case data (large binary files)
+external/*/Baseline_files/
+external/*/particle_tracks*/
+external/*/data/
+
+# Test artifacts
+test_results/

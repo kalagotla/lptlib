@@ -680,6 +680,9 @@ class FlowIO:
         self,
         precision: str = "single",
         plane: str = "i",
+        rho_ref: float = 1.0,
+        vel_ref: float = 1.0,
+        p_ref: float = 1.0,
     ) -> None:
         """Read a 2D Fortran-record RANS flow plane and populate attributes.
 
@@ -800,36 +803,136 @@ class FlowIO:
             v_vel = f3[..., 0, 0]
             w_vel = f3[..., 1, 0]
             u_vel = np.zeros_like(v_vel)  # u is zero (normal to plane)
-            self.q[..., 0, 0] = rho
+            self.q[..., 0, 0] = rho * rho_ref
             self.q[..., 1, 0] = 0  # rho-u = 0
-            self.q[..., 2, 0] = v_vel * rho  # rho-v
-            self.q[..., 3, 0] = w_vel * rho  # rho-w
+            self.q[..., 2, 0] = v_vel * rho * rho_ref * vel_ref  # rho-v
+            self.q[..., 3, 0] = w_vel * rho * rho_ref * vel_ref  # rho-w
             # energy = p/(gamma - 1) + 0.5 * rho * (v^2 + w^2)
-            self.q[..., 4, 0] = p / (self.gamma - 1) + 0.5 * rho * (v_vel**2 + w_vel**2)
+            self.q[..., 4, 0] = p * p_ref / (self.gamma - 1) + 0.5 * rho * (v_vel**2 + w_vel**2) * vel_ref**2 * rho_ref
         elif _plane == "j":
             # j-plane: f3[..., 0, 0] = u, f3[..., 1, 0] = w (in-plane velocities)
             u_vel = f3[..., 0, 0]
             w_vel = f3[..., 1, 0]
             v_vel = np.zeros_like(u_vel)  # v is zero (normal to plane)
-            self.q[..., 0, 0] = rho
-            self.q[..., 1, 0] = u_vel * rho  # rho-u
+            self.q[..., 0, 0] = rho * rho_ref
+            self.q[..., 1, 0] = u_vel * rho * rho_ref * vel_ref  # rho-u
             self.q[..., 2, 0] = 0  # rho-v = 0
-            self.q[..., 3, 0] = w_vel * rho  # rho-w
+            self.q[..., 3, 0] = w_vel * rho * rho_ref * vel_ref  # rho-w
             # energy = p/(gamma - 1) + 0.5 * rho * (u^2 + w^2)
-            self.q[..., 4, 0] = p / (self.gamma - 1) + 0.5 * rho * (u_vel**2 + w_vel**2)
+            self.q[..., 4, 0] = p * p_ref / (self.gamma - 1) + 0.5 * rho * (u_vel**2 + w_vel**2) * vel_ref**2 * rho_ref
         else:  # _plane == "k"
             # k-plane: f3[..., 0, 0] = u, f3[..., 1, 0] = v (in-plane velocities)
             # Updated from original: f3[..., 1, 0] = u, f3[..., 2, 0] = v to use consistent indexing
             u_vel = f3[..., 0, 0]
             v_vel = f3[..., 1, 0]
             w_vel = np.zeros_like(u_vel)  # w is zero (normal to plane)
-            # TODO: Need to update this to be consistent with the rest of the API. Currently hardcoded values for rho and scaling factors.
-            self.q[..., 0, 0] = rho * 0.284
-            self.q[..., 1, 0] = u_vel * rho * 0.284 * 612  # rho-u
-            self.q[..., 2, 0] = v_vel * rho * 0.284 * 612  # rho-v
+            self.q[..., 0, 0] = rho * rho_ref
+            self.q[..., 1, 0] = u_vel * rho * rho_ref * vel_ref  # rho-u
+            self.q[..., 2, 0] = v_vel * rho * rho_ref * vel_ref  # rho-v
             self.q[..., 3, 0] = 0  # rho-w = 0
             # energy = p/(gamma - 1) + 0.5 * rho * (u^2 + v^2)
-            self.q[..., 4, 0] = p * 6895 / (self.gamma - 1) + 0.5 * rho * (u_vel**2 + v_vel**2) * 612**2 * 0.284
+            self.q[..., 4, 0] = p * p_ref / (self.gamma - 1) + 0.5 * rho * (u_vel**2 + v_vel**2) * vel_ref**2 * rho_ref
+
+    def read_flow_piv_fortran_2d(
+        self,
+        precision: str = "double",
+        plane: str = "k",
+        vel_ref: float = 1.0,
+    ) -> None:
+        """Read a 2D Fortran-record PIV flow file with only velocity components.
+
+        PIV data typically contains only two in-plane velocity components
+        (normalized by a reference velocity), with NaN for out-of-domain
+        points.  The file layout is the same as :meth:`read_flow_fortran_2d`
+        (big-endian Fortran unformatted records) but with ``nfun = 2``.
+
+        The velocities are stored *as-is* in :attr:`q` with shape
+        ``(ni, nj, nk, 2, nb)`` — no conversion to conservative variables.
+        To recover dimensional velocities, multiply by *vel_ref*.
+
+        Parameters
+        ----------
+        precision:
+            ``'single'`` (32-bit) or ``'double'`` (64-bit).
+        plane:
+            ``'i'``, ``'j'``, or ``'k'``.
+        vel_ref:
+            Reference velocity used to normalize the PIV data.
+        """
+        _plane = plane.lower()
+        if _plane not in {"i", "j", "k"}:
+            raise ValueError("plane must be one of 'i', 'j', or 'k'")
+
+        _prec = precision.lower()
+        if _prec == "single":
+            float_dtype = ">f4"
+        elif _prec == "double":
+            float_dtype = ">f8"
+        else:
+            raise ValueError("precision must be 'single' or 'double'")
+
+        int_dtype = ">i4"
+
+        with open(self.filename, "rb") as f:
+            hdr = np.fromfile(f, dtype=int_dtype, count=1)
+            if hdr.size != 1:
+                raise IOError("Failed to read record header from PIV flow file.")
+
+            ng = np.fromfile(f, dtype=int_dtype, count=hdr[0] // 4)
+            _ = np.fromfile(f, dtype=int_dtype, count=1)  # trailing marker
+
+            _ = np.fromfile(f, dtype=int_dtype, count=1)  # data leading marker
+
+            if _plane == "k":
+                imax, jmax, nfun = int(ng[0]), int(ng[1]), int(ng[2])
+                ni, nj, nk = imax, jmax, 1
+                count = imax * jmax * nfun
+            elif _plane == "j":
+                imax, kmax, nfun = int(ng[0]), int(ng[1]), int(ng[2])
+                ni, nj, nk = imax, 1, kmax
+                count = imax * kmax * nfun
+            else:  # "i"
+                jmax, kmax, nfun = int(ng[0]), int(ng[1]), int(ng[2])
+                ni, nj, nk = 1, jmax, kmax
+                count = jmax * kmax * nfun
+
+            raw = np.fromfile(f, dtype=float_dtype, count=count)
+            if raw.size != count:
+                raise IOError("PIV flow data block is incomplete.")
+
+            _ = np.fromfile(f, dtype=int_dtype, count=1)  # trailing marker
+
+        # Reshape: data is stored component-by-component in Fortran order
+        npts = count // nfun
+        components = []
+        for c in range(nfun):
+            if _plane == "k":
+                components.append(
+                    raw[c * npts : (c + 1) * npts].reshape(imax, jmax, order="F")
+                )
+            elif _plane == "j":
+                components.append(
+                    raw[c * npts : (c + 1) * npts].reshape(imax, kmax, order="F")
+                )
+            else:
+                components.append(
+                    raw[c * npts : (c + 1) * npts].reshape(jmax, kmax, order="F")
+                )
+
+        self.nb = 1
+        self.ni = np.array([ni], dtype=int)
+        self.nj = np.array([nj], dtype=int)
+        self.nk = np.array([nk], dtype=int)
+        self.vel_ref = vel_ref
+
+        self.q = np.zeros((ni, nj, nk, nfun, self.nb), dtype=float)
+        for c in range(nfun):
+            if _plane == "k":
+                self.q[:, :, 0, c, 0] = components[c]
+            elif _plane == "j":
+                self.q[:, 0, :, c, 0] = components[c]
+            else:
+                self.q[0, :, :, c, 0] = components[c]
 
     def plot_contour(
         self,

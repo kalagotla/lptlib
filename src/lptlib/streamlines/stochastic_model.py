@@ -61,6 +61,8 @@ class StochasticModel(Streamlines):
         sl.adaptivity = self.adaptivity
         sl.magnitude_adaptivity = self.magnitude_adaptivity
         sl.adaptive_interpolation = self.adaptive_interpolation
+        sl.max_loop_check = self.max_loop_check
+        sl.max_steps = self.max_steps
         sl.debug = self.debug
         sl.compute(method=self.method, grid=self.grid, flow=self.flow)
 

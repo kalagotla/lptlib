@@ -83,6 +83,8 @@ class Variables:
         self.compute_velocity()
         _q4 = self.flow.q[..., 4, :]
         self.temperature = (self.gamma - 1) * (_q4/self.density - self.velocity_magnitude**2/2) / self.gas_constant
+        # Guard against negative temperature from interpolation at cell boundaries
+        self.temperature = np.maximum(self.temperature, 1e-30)
 
         return
 
