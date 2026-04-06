@@ -661,9 +661,20 @@ class Integration:
                     _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     try:
-                        _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
+                        _vk_explicit = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
                     except TypeError:
                         return None, None, None
+                    # Exponential drag: unconditionally stable for any dt/tau_p.
+                    # Uses actual Cd (Loth etc.) to get tau_eff, then applies
+                    # analytical decay.  Identical to explicit when dt << tau_eff.
+                    _slip = vp - uf
+                    _slip_mag = np.linalg.norm(_slip)
+                    _vk_mag = np.linalg.norm(_vk_explicit)
+                    if _slip_mag > 1e-30 and _vk_mag > 1e-30:
+                        _ratio = _vk_mag / _slip_mag  # dt / tau_eff
+                        _vk = -_slip * (1 - np.exp(-_ratio))
+                    else:
+                        _vk = _vk_explicit
                     return _vk, uf, None
 
                 # Start RK4 for p-space
@@ -806,7 +817,16 @@ class Integration:
                         _mach = np.linalg.norm(p_vp - p_uf) * q_interp.mach.reshape(-1) / _vel_mag
                     _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
-                    p_vk = _cd * _k * (p_vp - p_uf) * np.linalg.norm(p_vp - p_uf) * time_step
+                    _p_vk_explicit = _cd * _k * (p_vp - p_uf) * np.linalg.norm(p_vp - p_uf) * time_step
+                    # Exponential drag (same as pRK4)
+                    _slip = p_vp - p_uf
+                    _slip_mag = np.linalg.norm(_slip)
+                    _vk_mag = np.linalg.norm(_p_vk_explicit)
+                    if _slip_mag > 1e-30 and _vk_mag > 1e-30:
+                        _ratio = _vk_mag / _slip_mag
+                        p_vk = -_slip * (1 - np.exp(-_ratio))
+                    else:
+                        p_vk = _p_vk_explicit
                     c_vk = np.matmul(_J_inv, p_vk)
                     return c_vk, p_uf, c_uf, p_vp
 
@@ -923,9 +943,18 @@ class Integration:
                     _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     try:
-                        _vk = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
+                        _vk_explicit = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
                     except TypeError:
                         return None, None, None
+                    # Exponential drag (same as pRK4)
+                    _slip = vp - uf
+                    _slip_mag = np.linalg.norm(_slip)
+                    _vk_mag = np.linalg.norm(_vk_explicit)
+                    if _slip_mag > 1e-30 and _vk_mag > 1e-30:
+                        _ratio = _vk_mag / _slip_mag
+                        _vk = -_slip * (1 - np.exp(-_ratio))
+                    else:
+                        _vk = _vk_explicit
                     return _vk, uf, None
 
                 # Start RK4 for p-space

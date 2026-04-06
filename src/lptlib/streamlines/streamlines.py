@@ -698,6 +698,9 @@ class Streamlines:
                 fig.canvas.mpl_connect('key_press_event', _on_key)
             _domain_exit_count = 0
             while True:
+                if self.max_steps is not None and len(self.streamline) >= self.max_steps:
+                    self.print_debug(self, f'Max steps ({self.max_steps}) reached. Integration ends!')
+                    break
                 idx = Search(grid, self.point)
                 interp = Interpolation(flow, idx)
                 interp.adaptive = self.adaptive_interpolation
