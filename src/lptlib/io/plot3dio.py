@@ -504,19 +504,22 @@ class GridIO:
         self.ni = self.ni[0] if type(self.ni) == np.ndarray else self.ni
         self.nj = self.nj[0] if type(self.nj) == np.ndarray else self.nj
         self.nk = self.nk[0] if type(self.nk) == np.ndarray else self.nk
-        # old code:
-        _a_temp = np.array([self.nb, self.ni, self.nj, steps], dtype='i4')
-        _x_temp = self.grd[..., 0, 0].repeat(steps, axis=2)
-        _y_temp = self.grd[..., 1, 0].repeat(steps, axis=2)
-        _z_temp = np.ones((int(self.ni), int(self.nj), steps)) * np.linspace(0, steps*step_size, steps)
-        _b_temp = np.array([_x_temp.T, _y_temp.T, _z_temp.T], dtype=data_type)
+
+        _nk = int(steps)
+        _a_temp = np.array([self.nb, self.ni, self.nj, _nk], dtype='i4')
+
+        # Build (ni, nj, nk, 3) array and write in Fortran order to match read_grid
+        _grd_3d = np.zeros((int(self.ni), int(self.nj), _nk, 3), dtype=data_type)
+        _grd_3d[..., 0] = self.grd[..., 0, 0].repeat(_nk, axis=2)
+        _grd_3d[..., 1] = self.grd[..., 1, 0].repeat(_nk, axis=2)
+        _grd_3d[..., 2] = np.ones((int(self.ni), int(self.nj), _nk)) * np.linspace(0, _nk*step_size, _nk)
 
         # Build output filename cleanly: "<original_path>_3D<ext>"
         _base, _ext = os.path.splitext(self.filename)
         _temp_filename = _base + '_3D' + _ext
         with open(_temp_filename, 'wb') as f:
             f.write(_a_temp.tobytes())
-            f.write(_b_temp.tobytes())
+            f.write(_grd_3d.tobytes(order='F'))
 
         print(f'\n File is successfully written in the working directory as {_temp_filename}')
 
@@ -1113,26 +1116,25 @@ class FlowIO:
         Returns: None
 
         """
-        # TODO: The code below needs debugging. It's not tested. mgrd_to_p3d might help!
         # check self.ni, self.nj dtype -- This is to keep the old functionality working.
         self.ni = self.ni[0] if type(self.ni) == np.ndarray else self.ni
         self.nj = self.nj[0] if type(self.nj) == np.ndarray else self.nj
         self.nk = self.nk[0] if type(self.nk) == np.ndarray else self.nk
         _a_temp = np.array([self.nb, self.ni, self.nj, int(steps)], dtype='i4')
         _b_temp = np.array([self.mach, self.alpha, self.rey, self.time], dtype=data_type)
-        _q0_temp = self.q[..., 0, 0].repeat(int(steps), axis=2)
-        _q1_temp = self.q[..., 1, 0].repeat(int(steps), axis=2)
-        _q2_temp = self.q[..., 2, 0].repeat(int(steps), axis=2)
-        _q3_temp = self.q[..., 3, 0].repeat(int(steps), axis=2)
-        _q4_temp = self.q[..., 4, 0].repeat(int(steps), axis=2)
-        _q_temp = np.array([_q0_temp, _q1_temp, _q2_temp, _q3_temp, _q4_temp], dtype=data_type)
+
+        # Build (ni, nj, nk, 5) array and write in Fortran order to match read_flow
+        _nk = int(steps)
+        _q_3d = np.zeros((int(self.ni), int(self.nj), _nk, 5), dtype=data_type)
+        for v in range(5):
+            _q_3d[..., v] = self.q[..., v, 0].repeat(_nk, axis=2)
 
         _base, _ext = os.path.splitext(self.filename)
         _temp_filename = _base + '_3D' + _ext
         with open(_temp_filename, 'wb') as f:
             f.write(_a_temp.tobytes())
             f.write(_b_temp.tobytes())
-            f.write(_q_temp.tobytes())
+            f.write(_q_3d.tobytes(order='F'))
 
         return
 

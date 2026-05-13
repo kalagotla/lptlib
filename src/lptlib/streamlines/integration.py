@@ -238,6 +238,7 @@ class Integration:
                 if k3 is None: return None, None
                 x_new = x0 + 1/6 * (k0 + 2*k1 + 2*k2 + k3)
                 u_new, _ = _rk4_step(self, x_new)
+                if u_new is None: return None, None
 
                 self.ppoint = x_new
 
@@ -315,7 +316,8 @@ class Integration:
                 if k3 is None:
                     return None, None, None
                 x_new = x0 + 1/6 * (k0 + 2*k1 + 2*k2 + k3)
-                _, pv_new, cv_new = _rk4_step(self, x_new)
+                _k_final, pv_new, cv_new = _rk4_step(self, x_new)
+                if _k_final is None: return None, None, None
 
                 self.cpoint = x_new
 
@@ -379,6 +381,7 @@ class Integration:
                 if k3 is None: return None, None
                 x_new = x0 + 1 / 6 * (k0 + 2 * k1 + 2 * k2 + k3)
                 u_new, _ = _rk4_step(self, x_new)
+                if u_new is None: return None, None
 
                 self.ppoint = x_new
 
@@ -691,6 +694,8 @@ class Integration:
                 else:
                     v0 = velocity.copy()
                 vk0, uf0, temp = _rk4_step(self, v0, x0)
+                if vk0 is None:
+                    return None, None, None
                 xk0 = v0 * time_step
                 # Assign fluid velocity when vk is zero
                 # Theory: When zero drag particle is massless, hence fluid velocity
@@ -710,9 +715,13 @@ class Integration:
                 v2 = v0 + 0.5 * vk1
                 x2 = x0 + 0.5 * xk1
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
+                # Use scale-relative thresholds to avoid false positives when
+                # the particle starts at near-zero slip (|v1-v0| ≈ 0).
                 _bf = self.blowup_factor
-                if (np.linalg.norm(x2 - x0) >= _bf * np.linalg.norm(x1-x0) and np.linalg.norm(x2 - x0) >= 1e-12)\
-                        or (np.linalg.norm(v2 - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v2 - v0) >= 1e-12):
+                _x_tol = max(1e-8 * np.linalg.norm(xk0), 1e-12)
+                _v_tol = max(1e-8 * np.linalg.norm(v0), 1e-12)
+                if (np.linalg.norm(x2 - x0) >= _bf * np.linalg.norm(x1-x0) and np.linalg.norm(x2 - x0) >= _x_tol)\
+                        or (np.linalg.norm(v2 - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v2 - v0) >= _v_tol):
                     self.rk4_bool = True
                     return x0, v0, u0
 
@@ -726,8 +735,8 @@ class Integration:
                 v3 = v0 + vk2
                 x3 = x0 + xk2
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if (np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= 1e-12)\
-                        or (np.linalg.norm(v3 - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v3 - v0) >= 1e-12):
+                if (np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= _x_tol)\
+                        or (np.linalg.norm(v3 - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v3 - v0) >= _v_tol):
                     self.rk4_bool = True
                     return x0, v0, u0
 
@@ -741,8 +750,8 @@ class Integration:
                 v_new = v0 + 1 / 6 * (vk0 + 2 * vk1 + 2 * vk2 + vk3)
                 x_new = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if (np.linalg.norm(x_new - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x_new - x0) >= 1e-12)\
-                        or (np.linalg.norm(v_new - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v_new - v0) >= 1e-12):
+                if (np.linalg.norm(x_new - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x_new - x0) >= _x_tol)\
+                        or (np.linalg.norm(v_new - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v_new - v0) >= _v_tol):
                     self.rk4_bool = True
                     return x0, v0, u0
 
@@ -844,6 +853,8 @@ class Integration:
                 else:
                     c_v0 = np.matmul(self.interp.J_inv, velocity)
                 vk0, p_u0, c_u0, p_v0 = _rk4_step(self, c_v0, x0)
+                if vk0 is None:
+                    return None, None, None
                 # Assign fluid velocity when vk is zero
                 # Theory: When zero drag particle is massless, hence fluid velocity
                 if np.linalg.norm(vk0) == 0:
@@ -894,7 +905,9 @@ class Integration:
                     self.rk4_bool = True
                     return x0, p_v0, p_u0
 
-                _, p_u_new, c_u_new, p_v_new = _rk4_step(self, c_v_new, x_new)
+                _vk_final, p_u_new, c_u_new, p_v_new = _rk4_step(self, c_v_new, x_new)
+                if _vk_final is None:
+                    return None, None, None
 
                 self.cpoint = x_new
 
@@ -971,6 +984,8 @@ class Integration:
                 else:
                     v0 = velocity.copy()
                 vk0, uf0, temp = _rk4_step(self, v0, x0)
+                if vk0 is None:
+                    return None, None, None
                 xk0 = v0 * time_step
                 # Assign fluid velocity when vk is zero
                 # Theory: When zero drag particle is massless, hence fluid velocity
@@ -989,7 +1004,8 @@ class Integration:
                 x2 = x0 + 0.5 * xk1
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
                 _bf = self.blowup_factor
-                if np.linalg.norm(x2 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x2 - x0) >= 1e-12:
+                _x_tol = max(1e-8 * np.linalg.norm(xk0), 1e-12)
+                if np.linalg.norm(x2 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x2 - x0) >= _x_tol:
                     self.rk4_bool = True
                     return x0, v0, u0
 
@@ -1002,7 +1018,7 @@ class Integration:
                 v3 = v0 + vk2
                 x3 = x0 + xk2
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
-                if np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= 1e-12:
+                if np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= _x_tol:
                     self.rk4_bool = True
                     return x0, v0, u0
 
@@ -1016,7 +1032,7 @@ class Integration:
                 x_new = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
                 if np.linalg.norm(x_new - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(
-                        x_new - x0) >= 1e-12:
+                        x_new - x0) >= _x_tol:
                     self.rk4_bool = True
                     return x0, v0, u0
 

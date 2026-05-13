@@ -409,6 +409,7 @@ class Streamlines:
         loop_check = 0
         # Check for step back to accommodate better dataio interpolation
         step_back = False
+        pre_stepback_time_step = self.time_step
 
         if method == 'p-space':
             # t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
@@ -697,7 +698,9 @@ class Streamlines:
                         sl._vel_scale /= 1.2  # widen range
                 fig.canvas.mpl_connect('key_press_event', _on_key)
             _domain_exit_count = 0
+            _vel_max = np.linalg.norm(vel) if vel is not None else 1.0  # Track max velocity for near-zero guard
             while True:
+                _vel_max = max(_vel_max, np.linalg.norm(vel)) if vel is not None else _vel_max
                 if self.max_steps is not None and len(self.streamline) >= self.max_steps:
                     self.print_debug(self, f'Max steps ({self.max_steps}) reached. Integration ends!')
                     break
@@ -772,9 +775,12 @@ class Streamlines:
                     loop_check = 0  # This check might lead to slower integration for some edge cases
                 # Decrease time step when angle OR magnitude change is large
                 # Make sure time step does not go to zero; 1 pico-second
+                # Guard: skip decrease when velocity is near zero (e.g. separation zones)
+                # because angle and magnitude ratio are ill-conditioned there.
                 elif (self.angle_btw(new_vel, vel) >= self.adaptivity
                         or self._magnitude(self, new_vel, vel) >= self.magnitude_adaptivity) \
-                        and self.time_step >= 1e-12:
+                        and self.time_step >= 1e-12 \
+                        and min(np.linalg.norm(vel), np.linalg.norm(new_vel)) > 1e-3 * _vel_max:
                     self.print_debug(self, 'Decreasing time step. High deflection wrt velocity')
                     self.time_step = 0.5 * self.time_step
                     step_back = True
@@ -784,7 +790,7 @@ class Streamlines:
                     saved_time_step = self.time_step
                     step_back_count = 0
                     _vel_norm = np.linalg.norm(vel)
-                    _step_back_tol = max(1e-6 * _vel_norm, 1e-12)
+                    _step_back_tol = max(1e-6 * _vel_norm, 1e-6 * _vel_max, 1e-12)
                     while np.linalg.norm(new_vel - vel) >= _step_back_tol:
                         self.time_step = 0.5 * self.time_step
                         new_point, new_vel, new_fvel = intg.compute_ppath(diameter=self.diameter, density=self.density,
