@@ -4,3 +4,6 @@
 [submodule "external/forebody_articulation"]
 	path = external/forebody_articulation
 	url = https://github.com/kalagotla/forebody_articulation.git
+[submodule "external/hemisphere_pdh"]
+	path = external/hemisphere_pdh
+	url = https://github.com/kalagotla/hemisphere_pdh.git

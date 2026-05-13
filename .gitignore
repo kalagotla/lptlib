@@ -47,3 +47,50 @@ external/*/data/
 
 # Test artifacts
 test_results/
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tif
+*.tiff
+*.svg
+*.eps
+*.ps
+
+# Documents
+*.pdf
+*.txt
+
+# Videos / animations
+*.mp4
+*.avi
+*.mov
+*.webm
+*.mkv
+
+# Data / binary outputs
+*.csv
+*.dat
+*.bin
+*.h5
+*.hdf5
+*.nc
+*.vtk
+*.vtu
+*.vtp
+*.plt
+*.tec
+*.cgns
+*.pkl
+*.pickle
+*.mat
+*.npz
+*.parquet
+*.feather
+
+# PLOT3D grid/solution files (tracked test fixtures under test/ are unaffected)
+*.xyz
+*.p3d
