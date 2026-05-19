@@ -126,7 +126,7 @@ class Variables:
                 # All temperatures must be in kelvin
                 # Formula from cfd-online
                 _c1 = 1.716e-5 * (273.15 + 110.4) / 273.15**1.5
-                self.viscosity = _c1 * self.temperature**1.5 * 0.4 / (self.temperature + 110.4)
+                self.viscosity = _c1 * self.temperature**1.5 / (self.temperature + 110.4)
             case 'keyes':
                 # New formula from keyes et al.
                 a0, a, a1 = 1.488, 122.1, 5.0
