@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lptlib"
-version = "0.0.5a12"
+version = "0.0.6"
 authors = [
     {name="Dilip Kalagotla", email="dilipkalagotla@gmail.com"},
     ]
@@ -34,6 +34,14 @@ classifiers = [
 ]
 license = {text = "MIT AND (Apache-2.0 OR BSD-2-Clause)"}
 
+[project.optional-dependencies]
+# GPU build of PyTorch (CUDA 12.8, Blackwell-compatible). Install with
+#     uv sync --extra gpu
+# Without this extra, gpytorch pulls the CPU build of torch from PyPI.
+gpu = [
+    "torch",
+]
+
 [tool.ruff]
 exclude = [
     ".git",
@@ -54,3 +62,15 @@ link-mode = "copy"
 members = [
     "external/forebody_articulation",
 ]
+
+# When --extra gpu is active, resolve torch from the official PyTorch CUDA 12.8
+# index (Blackwell-compatible) instead of the CPU build on PyPI.
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu128", marker = "extra == 'gpu'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
