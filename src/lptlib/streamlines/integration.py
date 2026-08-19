@@ -7,6 +7,34 @@ from scipy.optimize import fsolve
 
 
 class Integration:
+    """Advance a point through the flow field to build streamlines and particle paths.
+
+    An Integration instance wraps a computed Interpolation object and steps the
+    current location forward in time. Fluid streamlines are integrated with
+    second- and fourth-order Runge-Kutta schemes in physical space (``pRK2``,
+    ``pRK4``) or computational space (``cRK2``, ``cRK4``), with unsteady variants
+    available for time-resolved flow sequences. Inertial particle trajectories are
+    integrated with :meth:`compute_ppath`, which advances the particle momentum
+    equation under a selectable drag model and supports adaptive time stepping for
+    the stiff dynamics near shocks.
+
+    Parameters
+    ----------
+    interp : Interpolation
+        A computed Interpolation instance that provides the flow state, the host
+        grid, and the current point in both physical and computational space.
+
+    Attributes
+    ----------
+    ppoint : numpy.ndarray or None
+        Updated point in physical space after a step.
+    cpoint : numpy.ndarray or None
+        Updated point in computational space after a step.
+    rk4_bool : bool
+        Internal flag used to signal a blow-up detected mid-RK4 step.
+    blowup_factor : float
+        Threshold used to detect divergence during an RK4 sub-step.
+    """
 
     def __init__(self, interp):
         self.interp = interp
