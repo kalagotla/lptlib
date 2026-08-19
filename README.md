@@ -6,7 +6,7 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/lptlib.svg)](https://pypi.org/project/lptlib/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/kalagotla/lptlib/actions/workflows/ci.yml/badge.svg)](https://github.com/kalagotla/lptlib/actions/workflows/ci.yml)
-<!-- DOI-BADGE-PLACEHOLDER -->
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22006302.svg)](https://doi.org/10.5281/zenodo.22006302)
 
 lptlib reads structured, multi-block, curvilinear PLOT3D grid and flow fields, locates arbitrary points inside the curvilinear domain, interpolates the flow state to those points, and integrates fluid streamlines and inertial particle trajectories through the field. Particle motion is advanced with a spherical-particle drag law chosen from a broad set of compressible and rarefied closures, so a single particle definition can be tracked under different drag models and the results compared directly. Large ensembles of particles run in parallel through multiprocessing, thread pools, or MPI, with adaptive time stepping for the stiff dynamics near shocks.
 
@@ -153,7 +153,7 @@ If lptlib supports your research, please cite both the software archive and the 
 
 The versioned software archive is deposited on Zenodo.
 
-> Kalagotla, D. (2026). *lptlib: A parallel Lagrangian particle tracking library for compressible CFD data and tracer-response analysis in optical velocimetry* [Software]. Zenodo. DOI-CITATION-PLACEHOLDER
+> Kalagotla, D. (2026). *lptlib: A parallel Lagrangian particle tracking library for compressible CFD data and tracer-response analysis in optical velocimetry* [Software]. Zenodo. https://doi.org/10.5281/zenodo.22006302
 
 A companion paper has been prepared for the Journal of Open Source Software. Citation details will be added once the review is complete. See `paper.md` for the current draft.
 
