@@ -1,0 +1,5 @@
+# Generated benchmark artifacts that should not be committed
+results/synthetic_grid.x
+plot3d_read_fortran
+*.o
+*.mod
