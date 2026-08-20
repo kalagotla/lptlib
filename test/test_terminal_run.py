@@ -7,11 +7,16 @@ path = '/Users/kal/Library/CloudStorage/OneDrive-UniversityofCincinnati' \
        '/Desktop/University of Cincinnati/DoctoralWork/Codes/project-arrakis'
 sys.path.append(path)
 import matplotlib.pyplot as plt
-from src.lptlib.streamlines import StochasticModel, Particle, SpawnLocations
-from src.lptlib.io import GridIO, FlowIO
+from lptlib.streamlines import StochasticModel, Particle, SpawnLocations
+from lptlib.io import GridIO, FlowIO
 
 
 def test_stochastic_model():
+    import os
+    import pytest
+    if not os.path.isdir(path):
+        pytest.skip(f"external project-arrakis data not available in checkout: {path}")
+
     # Test particle class
     p = Particle()
     p.min_dia = 177e-9
