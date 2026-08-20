@@ -5,12 +5,13 @@ import unittest
 
 class TestInterpolation(unittest.TestCase):
     def test_interpolation(self):
-        from src.lptlib.io import GridIO, FlowIO
-        from src.lptlib.streamlines import Search, Interpolation
+        from lptlib.io import GridIO, FlowIO
+        from lptlib.streamlines import Search, Interpolation
+        from testdata import require_data
 
         # Read the grid data
-        grid = GridIO('../data/plate_data/plate.sp.x')
-        flow = FlowIO('../data/plate_data/sol-0000010.q')
+        grid = GridIO(require_data('plate_data', 'plate.sp.x'))
+        flow = FlowIO(require_data('plate_data', 'sol-0000010.q'))
         idx = Search(grid, [8.5, 0.5, 0.01])
         point_data = Interpolation(flow, idx)
 
@@ -28,7 +29,7 @@ class TestInterpolation(unittest.TestCase):
 
 
         # Test if the point is a node interpolation
-        from src.lptlib.test_cases import ObliqueShock, ObliqueShockData
+        from lptlib.test_cases import ObliqueShock, ObliqueShockData
 
         # Create oblique shock
         os = ObliqueShock()
