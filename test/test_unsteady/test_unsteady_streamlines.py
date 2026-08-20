@@ -1,13 +1,14 @@
 import unittest
-from src.lptlib import GridIO, FlowIO
-from src.lptlib import Streamlines
+from pathlib import Path
+from lptlib import GridIO, FlowIO
+from lptlib import Streamlines
 import numpy as np
 import matplotlib.pyplot as plt
 
 
 class TestUnsteadyStreamlines(unittest.TestCase):
     def test_unsteady_streamlines(self):
-        path = './test_unsteady/cylinder_data/'
+        path = str(Path(__file__).resolve().parent / 'cylinder_data') + '/'
         grid_file, flow_file = path + "cylinder.sp.x", path + "sol-0000010.q"
         grid = GridIO(grid_file)
         grid.read_grid(data_type="f4")
