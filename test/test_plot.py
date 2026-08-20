@@ -5,9 +5,8 @@ import matplotlib.pyplot as plt
 
 class TestPlot(unittest.TestCase):
     def test_plot(self):
-        # filepath = '../data/shocks/particle_data/random_seed_7/raw_data/'
-        # filepath = '../data/shocks/particle_data/random_seed_7_time_step_adaptive/'
-        filepath = '../data/shock_interaction/final_grid/particle_data/'
+        from testdata import require_data
+        filepath = require_data('shock_interaction', 'final_grid', 'particle_data') + '/'
         fig, ax = plt.subplots(2, 2)
         fig1, ax1 = plt.subplots(2, 2)
         fig2 = plt.figure()
