@@ -1,8 +1,8 @@
 import unittest
 import numpy as np
 import matplotlib.pyplot as plt
-from src.lptlib.streamlines import StochasticModel, Particle, SpawnLocations
-from src.lptlib.io import GridIO, FlowIO
+from lptlib.streamlines import StochasticModel, Particle, SpawnLocations
+from lptlib.io import GridIO, FlowIO
 
 
 class TestStochasticModel(unittest.TestCase):
@@ -25,7 +25,9 @@ class TestStochasticModel(unittest.TestCase):
         l.compute()
 
         # Run the model in parallel
-        grid_file, flow_file = '../data/shocks/shock_test.sb.sp.x', '../data/shocks/shock_test.sb.sp.q'
+        from testdata import require_data
+        grid_file = require_data('shocks', 'shock_test.sb.sp.x')
+        flow_file = require_data('shocks', 'shock_test.sb.sp.q')
         grid = GridIO(grid_file)
         grid.read_grid()
         grid.compute_metrics()
