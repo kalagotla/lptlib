@@ -1,0 +1,5 @@
+reader,reps,mean_s,min_s,stdev_s
+lptlib strided read (fromfile + F-order reshape),15,0.069660,0.067619,0.001938
+naive Python nested-loop reconstruct,7,0.503877,0.493807,0.006694
+Fortran stream read (gfortran -O2),15,0.056525,0.049344,0.007269
+lptlib GridIO.read_grid (full: read + reshape + metric bounds),15,0.159027,0.151337,0.006515
