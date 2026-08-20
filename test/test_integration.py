@@ -1,36 +1,40 @@
 import unittest
 from parameterized import parameterized
-from src.lptlib.function import Timer
+from lptlib.function import Timer
 
 
 class TestIntegration(unittest.TestCase):
     @parameterized.expand([
-        ('sb_sp_p_space', '../data/plate_data/plate.sp.x', '../data/plate_data/sol-0000010.q',
+        ('sb_sp_p_space', 'plate_data/plate.sp.x', 'plate_data/sol-0000010.q',
          'f4', [8.5, 0.5, 0.01], 'block_distance', 'p-space', 'p-space'),
-        ('sb_sp_c_space', '../data/plate_data/plate.sp.x', '../data/plate_data/sol-0000010.q',
+        ('sb_sp_c_space', 'plate_data/plate.sp.x', 'plate_data/sol-0000010.q',
          'f4', [8.5, 0.5, 0.01], 'c-space', 'c-space', 'c-space'),
-        ('sb_sp_p_space', '../data/plate_data/plate.sp.x', '../data/plate_data/sol-0000010.q',
+        ('sb_sp_p_space', 'plate_data/plate.sp.x', 'plate_data/sol-0000010.q',
          'f4', [8.5, 0.5, 0.01], 'block_distance', 'p-space', 'RK4'),
-        ('sb_sp_c_space', '../data/plate_data/plate.sp.x', '../data/plate_data/sol-0000010.q',
+        ('sb_sp_c_space', 'plate_data/plate.sp.x', 'plate_data/sol-0000010.q',
          'f4', [8.5, 0.5, 0.01], 'c-space', 'c-space', 'cRK4'),
-        ('mb_sp_p_space', '../data/multi_block/plate/plate.mb.sp.x', '../data/multi_block/plate/plate.mb.sp.q',
+        ('mb_sp_p_space', 'multi_block/plate/plate.mb.sp.x', 'multi_block/plate/plate.mb.sp.q',
          'f4', [8.5, 0.5, 0.01], 'block_distance', 'p-space', 'RK4'),
-        ('mb_sp_c_space', '../data/multi_block/plate/plate.mb.sp.x', '../data/multi_block/plate/plate.mb.sp.q',
+        ('mb_sp_c_space', 'multi_block/plate/plate.mb.sp.x', 'multi_block/plate/plate.mb.sp.q',
          'f4', [8.5, 0.5, 0.01], 'c-space', 'c-space', 'cRK4')
 
     ])
     @Timer()
-    def test_integration(self, name, gridfile='../data/plate_data/plate.sp.x',
-                         flowfile='../data/plate_data/sol-0000010.q', data_type='f4', point=None,
+    def test_integration(self, name, gridfile='plate_data/plate.sp.x',
+                         flowfile='plate_data/sol-0000010.q', data_type='f4', point=None,
                          search_method='block_distance', interpolation_method='p-space', integration_method='RK4'):
 
-        from src import GridIO, FlowIO
-        from src import Search
-        from src import Interpolation
-        from src import Integration
+        from lptlib import GridIO, FlowIO
+        from lptlib import Search
+        from lptlib import Interpolation
+        from lptlib import Integration
+        from testdata import require_data
 
         if point is None:
             point = [8.5, 0.5, 0.01]
+
+        gridfile = require_data(gridfile)
+        flowfile = require_data(flowfile)
 
         # Read the grid data
         grid = GridIO(gridfile)
