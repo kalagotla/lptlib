@@ -4,14 +4,15 @@
 import unittest
 import doctest
 import numpy as np
-from src.lptlib.io import GridIO, FlowIO
+from lptlib.io import GridIO, FlowIO
+from testdata import require_data
 
 
 class TestIO(unittest.TestCase):
     def test_grid_io(self):
 
         # Test with the plate data
-        grid = GridIO('../data/plate_data/plate.sp.x')
+        grid = GridIO(require_data('plate_data', 'plate.sp.x'))
         # Print the doc string
         print(grid)
         grid.read_grid()
@@ -24,7 +25,7 @@ class TestIO(unittest.TestCase):
     def test_flow_io(self):
 
         # Test with the plate data
-        flow = FlowIO('../data/plate_data/sol-0000010.q')
+        flow = FlowIO(require_data('plate_data', 'sol-0000010.q'))
         # Print the doc string
         print(flow)
         flow.read_flow()
@@ -40,7 +41,7 @@ class TestIO(unittest.TestCase):
         """
 
         # Testing with an 8-block 2x2x2 grid
-        grid = GridIO('../data/multi_block/cube/cube.mb.x')
+        grid = GridIO(require_data('multi_block', 'cube', 'cube.mb.x'))
         # Print the doc string
         print(grid)
         grid.read_grid()
@@ -56,7 +57,7 @@ class TestIO(unittest.TestCase):
         """
 
         # Testing with a multi-block plate grid
-        grid = GridIO('../data/multi_block/plate/plate.mb.sp.x')
+        grid = GridIO(require_data('multi_block', 'plate', 'plate.mb.sp.x'))
         # Print the doc string
         print(grid)
         grid.read_grid(data_type='f4')
@@ -78,11 +79,11 @@ class TestIO(unittest.TestCase):
         """
 
         # Import the shock interaction case
-        grid = GridIO('../data/shock_interaction/shock_interaction_coarse.x')
+        grid = GridIO(require_data('shock_interaction', 'shock_interaction_coarse.x'))
         grid.read_grid()
         grid.two_to_three()
 
-        test_grid = GridIO('../data/shock_interaction/shock_interaction_coarse_3D.x')
+        test_grid = GridIO(require_data('shock_interaction', 'shock_interaction_coarse_3D.x'))
         test_grid.read_grid()
 
     def test_read_formatted_txt(self):
@@ -91,7 +92,7 @@ class TestIO(unittest.TestCase):
         Returns:
 
         """
-        path = '../data/shock_interaction/fine/'
+        path = require_data('shock_interaction', 'fine') + '/'
         grid = GridIO(path + 'fine_python.x')
         grid.read_grid()
 
