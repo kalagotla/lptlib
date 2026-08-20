@@ -2,7 +2,7 @@
 
 import unittest
 from parameterized import parameterized
-from src.lptlib.function import Timer
+from lptlib.function import Timer
 
 
 # This setup only works with the plate data
@@ -13,18 +13,21 @@ class TestSearch(unittest.TestCase):
     # sp: single precision; dp: double precision
     # Add more cases as a tuple below
     @parameterized.expand([
-        # ('sb_sp_distance', '../data/plate_data/plate.sp.x', 'f4', 'distance'),
-        # ('sb_sp_block_distance', '../data/plate_data/plate.sp.x', 'f4', 'block_distance'),
-        # ('mb_dp_distance', '../data/multi_block/plate/plate.mb.dp.x', 'f8', 'distance'),
-        # ('mb_dp_block_distance', '../data/multi_block/plate/plate.mb.dp.x', 'f8', 'block_distance'),
-        # ('mb_dp_c_space', '../data/multi_block/plate/plate.mb.dp.x', 'f8', 'c-space'),
-        ('mb_dp_p_space', '../data/multi_block/plate/plate.mb.dp.x', 'f8', 'p-space')
+        # ('sb_sp_distance', 'plate_data/plate.sp.x', 'f4', 'distance'),
+        # ('sb_sp_block_distance', 'plate_data/plate.sp.x', 'f4', 'block_distance'),
+        # ('mb_dp_distance', 'multi_block/plate/plate.mb.dp.x', 'f8', 'distance'),
+        # ('mb_dp_block_distance', 'multi_block/plate/plate.mb.dp.x', 'f8', 'block_distance'),
+        # ('mb_dp_c_space', 'multi_block/plate/plate.mb.dp.x', 'f8', 'c-space'),
+        ('mb_dp_p_space', 'multi_block/plate/plate.mb.dp.x', 'f8', 'p-space')
 
     ])
     @Timer()
-    def test_search(self, name, filename='../data/plate_data/plate.sp.x', data_type='f4', method='binary'):
-        from src import GridIO
-        from src import Search
+    def test_search(self, name, filename='plate_data/plate.sp.x', data_type='f4', method='binary'):
+        from lptlib import GridIO
+        from lptlib import Search
+        from testdata import require_data
+
+        filename = require_data(filename)
 
         # Read the grid data
         grid = GridIO(filename)
