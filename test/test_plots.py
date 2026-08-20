@@ -1,12 +1,12 @@
 import unittest
-from src.lptlib.function import Plots
+from lptlib.function import Plots
 import matplotlib.pyplot as plt
 path = ('/Users/kal/Library/CloudStorage/OneDrive-UniversityofCincinnati/Desktop/University of Cincinnati/'
         'DoctoralWork/Codes/project-arrakis/data/shocks/new_start/ragni_data/315e-09/')
 
 
 def get_grid_and_flow():
-    from src.lptlib.test_cases import ObliqueShock, ObliqueShockData
+    from lptlib.test_cases import ObliqueShock, ObliqueShockData
 
     # Create oblique shock
     os = ObliqueShock()
@@ -35,6 +35,10 @@ def get_grid_and_flow():
 class TestPlots(unittest.TestCase):
 
     def test_plots(self):
+        import os
+        if not os.path.isdir(path):
+            self.skipTest(f"particle path data not available in checkout: {path}")
+
         # Create grid and flow files
         grid, flow = get_grid_and_flow()
         p = Plots(file=path + 'loth_weak_dia3.15e-07_ppath_0.npy', grid=grid, flow=flow)
