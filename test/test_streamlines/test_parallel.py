@@ -17,13 +17,16 @@ class TestParallel(unittest.TestCase):
 
         Returns:
         """
+        from testdata import require_data
+        grid_file = require_data('vortex', 'vortex.sb.sp.x')
+        flow_file = require_data('vortex', 'vortex.sb.sp.q')
 
         def test_vortex(start_point):
             """
             Local function to run in parallel
             """
-            from src.lptlib.streamlines import Streamlines
-            sl = Streamlines('../../data/vortex/vortex.sb.sp.x', '../../data/vortex/vortex.sb.sp.q', start_point,
+            from lptlib.streamlines import Streamlines
+            sl = Streamlines(grid_file, flow_file, start_point,
                              time_step=1e-3)
             sl.compute(method='adaptive-p-space')
 
