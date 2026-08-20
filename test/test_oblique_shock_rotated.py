@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from src.lptlib import ObliqueShock, ObliqueShockData, ObliqueShockAlignedData
+from lptlib import ObliqueShock, ObliqueShockData, ObliqueShockAlignedData
 
 # Import your classes from the module where they are defined.
 # For example, if the file is named "oblique_shock.py", you might do:
