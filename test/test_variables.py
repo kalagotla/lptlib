@@ -2,46 +2,47 @@ import unittest
 
 
 class TestVariables(unittest.TestCase):
-    from src.lptlib.io import GridIO, FlowIO
-    from src.lptlib.streamlines import Search
-    from src.lptlib.streamlines import Interpolation
+    @classmethod
+    def setUpClass(cls):
+        from lptlib.io import GridIO, FlowIO
+        from lptlib.streamlines import Search
+        from lptlib.streamlines import Interpolation
+        from testdata import require_data
 
-    # Get the data at a given point
-    grid = GridIO('../data/plate_data/plate.sp.x')
-    flow = FlowIO('../data/plate_data/sol-0000010.q')
-    idx = Search(grid, [8.5, 0.5, 0.01])
-    point_data = Interpolation(flow, idx)
+        # Get the data at a given point
+        cls.grid = GridIO(require_data('plate_data', 'plate.sp.x'))
+        cls.flow = FlowIO(require_data('plate_data', 'sol-0000010.q'))
+        cls.idx = Search(cls.grid, [8.5, 0.5, 0.01])
+        cls.point_data = Interpolation(cls.flow, cls.idx)
 
-    grid.read_grid()
-    flow.read_flow()
-    idx.compute()
-    point_data.compute()
+        cls.grid.read_grid()
+        cls.flow.read_flow()
+        cls.idx.compute()
+        cls.point_data.compute()
 
-    def test_variables(self, flow=flow):
+    def test_variables(self):
         """
         To test variables class for the whole domain
         Test each function separately
-        :param flow: FlowIO object
         :return: None
         """
-        from src import Variables
+        from lptlib import Variables
 
-        variables = Variables(flow)
+        variables = Variables(self.flow)
         variables.compute_velocity()
         variables.compute_temperature()
 
         self.assertEqual(variables.velocity.shape, (720, 152, 129, 3, 1))
         self.assertEqual(variables.temperature.shape, (720, 152, 129, 1))
 
-    def test_variables_compute(self, flow=flow):
+    def test_variables_compute(self):
         """
         Test "compute" method in variables class
-        :param flow: FlowIO object
         :return: None
         """
-        from src import Variables
+        from lptlib import Variables
 
-        variables = Variables(flow)
+        variables = Variables(self.flow)
         variables.compute()
 
         self.assertEqual(variables.velocity.shape, (720, 152, 129, 3, 1))
@@ -60,29 +61,27 @@ class TestVariables(unittest.TestCase):
             True)
         self.assertEqual(abs(point_variables.temperature.reshape(1) - 0.97452141) <= 1e-6, True)
 
-    def test_point_variables(self, point_data=point_data):
+    def test_point_variables(self):
         """
         Test variables class for a single point
-        :param point_data: Interpolation object
         :return: None
         """
-        from src import Variables
+        from lptlib import Variables
 
-        point_variables = Variables(point_data)
+        point_variables = Variables(self.point_data)
         point_variables.compute_velocity()
         point_variables.compute_temperature()
 
         self._test(point_variables)
 
-    def test_point_variables_compute(self, point_data=point_data):
+    def test_point_variables_compute(self):
         """
         Test "compute" method in variables class for a single point
-        :param point_data: Interpolation object
         :return: None
         """
-        from src import Variables
+        from lptlib import Variables
 
-        point_variables = Variables(point_data)
+        point_variables = Variables(self.point_data)
         point_variables.compute()
 
         self._test(point_variables)
