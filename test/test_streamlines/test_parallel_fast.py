@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from multiprocessing.pool import ThreadPool as Pool
 import multiprocessing as mp
 import random
-from src.lptlib.io import GridIO, FlowIO
+from lptlib.io import GridIO, FlowIO
 
 
 class TestParallelFast(unittest.TestCase):
@@ -15,8 +15,9 @@ class TestParallelFast(unittest.TestCase):
 
         Returns:
         """
-        grid_file = '../../data/vortex/vortex.sb.sp.x'
-        flow_file = '../../data/vortex/vortex.sb.sp.q'
+        from testdata import require_data
+        grid_file = require_data('vortex', 'vortex.sb.sp.x')
+        flow_file = require_data('vortex', 'vortex.sb.sp.q')
         grid = GridIO(grid_file)
         flow = FlowIO(flow_file)
 
@@ -29,7 +30,7 @@ class TestParallelFast(unittest.TestCase):
             """
             Local function to run in parallel
             """
-            from src.lptlib.streamlines import Streamlines
+            from lptlib.streamlines import Streamlines
             sl = Streamlines(None, None, start_point, time_step=1e-3)
             sl.compute(method='adaptive-p-space', grid=grid, flow=flow)
 
