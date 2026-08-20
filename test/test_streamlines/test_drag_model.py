@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from parameterized import parameterized
-from src.lptlib.function import Timer
+from lptlib.function import Timer
 import matplotlib.pyplot as plt
 
 
@@ -15,8 +15,10 @@ class TestDragModel(unittest.TestCase):
         ('tedeschi', 'adaptive-ppath', 1e-8, 'tedeschi'),
     ])
     def test_drag_model(self, name, method='pRK4', time_step=1e-4, drag_model='stokes'):
-        from src.lptlib.streamlines import Streamlines
-        sl = Streamlines('../../data/shocks/shock_test.sb.sp.x', '../../data/shocks/shock_test.sb.sp.q',
+        from lptlib.streamlines import Streamlines
+        from testdata import require_data
+        sl = Streamlines(require_data('shocks', 'shock_test.sb.sp.x'),
+                         require_data('shocks', 'shock_test.sb.sp.q'),
                          [15e-4, 2e-4, 2e-4])
         sl.diameter = 5e-7
         sl.density = 1000
