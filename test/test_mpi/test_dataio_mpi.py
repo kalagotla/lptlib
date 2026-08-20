@@ -3,10 +3,10 @@
 import unittest
 import sys
 import subprocess
-from src.lptlib import DataIO
-from src.lptlib import GridIO, FlowIO
-from src.lptlib import ObliqueShock, ObliqueShockData
-from src.lptlib import StochasticModel, Particle, SpawnLocations
+from lptlib import DataIO
+from lptlib import GridIO, FlowIO
+from lptlib import ObliqueShock, ObliqueShockData
+from lptlib import StochasticModel, Particle, SpawnLocations
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -16,7 +16,8 @@ class TestDataIOMPI(unittest.TestCase):
     def sharp_nozzle(self):
 
         # Run the model
-        path = '../../data/dan_data/jet_flowfield/my_work/sharp_nozzle/'
+        from testdata import require_data
+        path = require_data('dan_data', 'jet_flowfield', 'my_work', 'sharp_nozzle') + '/'
         grid_file, flow_file = path + 'test.x', path + 'npr_4p0_flowdata.txt'
         grid = GridIO(grid_file)
         grid.read_grid(data_type='f4')
@@ -69,8 +70,17 @@ class TestDataIOMPI(unittest.TestCase):
         return
 
     def test_dataio_mpi(self):
+        import os
+        import shutil
+        from testdata import DATA_DIR
+        if not (DATA_DIR / 'dan_data').exists():
+            self.skipTest("dan_data flow field not available in checkout")
+        if shutil.which('mpiexec') is None:
+            self.skipTest("mpiexec not available on PATH")
+
         # Run the test_dataio_mpi.py script
-        command = ['mpiexec', '-np', '8', sys.executable, 'test_dataio_mpi.py', '--mpi']
+        script = os.path.abspath(__file__)
+        command = ['mpiexec', '-np', '8', sys.executable, script, '--mpi']
         result = subprocess.run(command, capture_output=False, text=True)
 
         if result.returncode == 0:
@@ -89,7 +99,9 @@ class TestDataIOMPI(unittest.TestCase):
         # path = ('/Users/kal/Library/CloudStorage/OneDrive-UniversityofCincinnati/Desktop/University of Cincinnati/'
         #         'DoctoralWork/Codes/hpc_data/williams_data/constant_particle_specs/dataio/')
         # path = '../../data/shocks/new_start/williams_data/constant_particle_specs/dataio/'
-        path = '../../data/dan_data/jet_flowfield/my_work/sharp_nozzle_new/dp_1e-06/dataio/'
+        from testdata import require_data
+        path = require_data('dan_data', 'jet_flowfield', 'my_work', 'sharp_nozzle_new',
+                            'dp_1e-06', 'dataio') + '/'
         # load the old data
         p_data = np.load(path + 'new_p_data.npy')
         # load the flow data
