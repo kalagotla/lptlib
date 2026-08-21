@@ -109,19 +109,23 @@ class GridIO:
             # pre-define grd to reduce calling pad and concatenate
             self.grd = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), 3, self.nb))
 
-            # Reshape and assign data to grd
+            # Reshape and assign data to grd, and compute the per-block min/max
+            # coordinate bounds in the same pass. The bounds are taken from the
+            # single-precision block view (_block) rather than from the
+            # double-precision padded self.grd array. Reducing over the raw block
+            # avoids a large min/max over the zero-padded double-precision array,
+            # which is the dominant cost of this method on big grids. The bounds
+            # are identical because min/max only select stored coordinate values,
+            # and they are cast back to float64 to preserve the previous dtype.
             for _i in range(self.nb):
-                self.grd[0:self.ni[_i], 0:self.nj[_i], 0:self.nk[_i], 0:3, _i] = \
-                    _temp[sum(_nt[0:_i]):sum(_nt[0:_i]) + _nt[_i]] \
+                _start = int(sum(_nt[0:_i]))
+                _block = _temp[_start:_start + int(_nt[_i])] \
                     .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 3), order='F')
+                self.grd[0:self.ni[_i], 0:self.nj[_i], 0:self.nk[_i], 0:3, _i] = _block
+                self.grd_min.append(_block.min(axis=(0, 1, 2)).astype(np.float64))
+                self.grd_max.append(_block.max(axis=(0, 1, 2)).astype(np.float64))
 
             print("Grid data reading is successful for " + self.filename + "\n")
-
-            # Setup some parameters for further processing
-            # Find out the min and max of each block
-            for _i, _j, _k, _b in zip(self.ni, self.nj, self.nk, range(self.nb)):
-                self.grd_min.append(np.amin(self.grd[:_i, :_j, :_k, :, _b], axis=(0, 1, 2)))
-                self.grd_max.append(np.amax(self.grd[:_i, :_j, :_k, :, _b], axis=(0, 1, 2)))
 
             # Convert lists to arrays
             self.grd_min = np.array(self.grd_min)
