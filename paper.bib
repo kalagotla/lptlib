@@ -1,3 +1,15 @@
+% ---------------------------------------------------------------------------
+% Bibliography for the JOSS submission of lptlib.
+%
+% Every entry below was checked against a primary source: the Crossref REST API
+% (https://api.crossref.org/works/<doi>), the publisher's landing page, or a
+% library catalogue record for pre-DOI works. Entries without a `doi` field are
+% works that genuinely predate DOI assignment or were never assigned one; full
+% bibliographic detail is given instead. No DOI in this file is invented.
+% ---------------------------------------------------------------------------
+
+% ------------------------------ Scientific Python stack --------------------
+
 @article{harris2020numpy,
   author  = {Harris, Charles R. and Millman, K. Jarrod and van der Walt, St{\'e}fan J. and Gommers, Ralf and Virtanen, Pauli and Cournapeau, David and Wieser, Eric and Taylor, Julian and Berg, Sebastian and Smith, Nathaniel J. and Kern, Robert and Picus, Matti and Hoyer, Stephan and van Kerkwijk, Marten H. and Brett, Matthew and Haldane, Allan and del R{\'i}o, Jaime Fern{\'a}ndez and Wiebe, Mark and Peterson, Pearu and G{\'e}rard-Marchant, Pierre and Sheppard, Kevin and Reddy, Tyler and Weckesser, Warren and Abbasi, Hameer and Gohlke, Christoph and Oliphant, Travis E.},
   title   = {Array programming with {NumPy}},
@@ -10,18 +22,19 @@
 }
 
 @article{virtanen2020scipy,
-  author  = {Virtanen, Pauli and Gommers, Ralf and Oliphant, Travis E. and Haberland, Matt and Reddy, Tyler and Cournapeau, David and Burovski, Evgeni and Peterson, Pearu and Weckesser, Warren and Bright, Jonathan and van der Walt, St{\'e}fan J. and Brett, Matthew and Wilson, Joshua and Millman, K. Jarrod and Mayorov, Nikolay and Nelson, Andrew R. J. and Jones, Eric and Kern, Robert and Larson, Eric and Carey, C J and Polat, {\.I}lhan and Feng, Yu and Moore, Eric W. and VanderPlas, Jake and Laxalde, Denis and Perktold, Josef and Cimrman, Robert and Henriksen, Ian and Quintero, E. A. and Harris, Charles R. and Archibald, Anne M. and Ribeiro, Ant{\^o}nio H. and Pedregosa, Fabian and van Mulbregt, Paul},
+  author  = {Virtanen, Pauli and Gommers, Ralf and Oliphant, Travis E. and Haberland, Matt and Reddy, Tyler and Cournapeau, David and Burovski, Evgeni and Peterson, Pearu and Weckesser, Warren and Bright, Jonathan and van der Walt, St{\'e}fan J. and Brett, Matthew and Wilson, Joshua and Millman, K. Jarrod and Mayorov, Nikolay and Nelson, Andrew R. J. and Jones, Eric and Kern, Robert and Larson, Eric and Carey, C. J. and Polat, {\.I}lhan and Feng, Yu and Moore, Eric W. and VanderPlas, Jake and Laxalde, Denis and Perktold, Josef and Cimrman, Robert and Henriksen, Ian and Quintero, E. A. and Harris, Charles R. and Archibald, Anne M. and Ribeiro, Ant{\^o}nio H. and Pedregosa, Fabian and van Mulbregt, Paul and {SciPy 1.0 Contributors}},
   title   = {{SciPy} 1.0: fundamental algorithms for scientific computing in {Python}},
   journal = {Nature Methods},
   year    = {2020},
   volume  = {17},
+  number  = {3},
   pages   = {261--272},
   doi     = {10.1038/s41592-019-0686-2}
 }
 
 @article{dalcin2021mpi4py,
   author  = {Dalcin, Lisandro and Fang, Yao-Lung L.},
-  title   = {mpi4py: Status Update After 12 Years of Development},
+  title   = {{mpi4py}: Status Update After 12 Years of Development},
   journal = {Computing in Science \& Engineering},
   year    = {2021},
   volume  = {23},
@@ -30,13 +43,16 @@
   doi     = {10.1109/MCSE.2021.3083216}
 }
 
+% ------------------------------ Measurement technique ----------------------
+
 @book{raffel2018piv,
   author    = {Raffel, Markus and Willert, Christian E. and Scarano, Fulvio and K{\"a}hler, Christian J. and Wereley, Steve T. and Kompenhans, J{\"u}rgen},
   title     = {Particle Image Velocimetry: A Practical Guide},
-  edition   = {3rd},
-  publisher = {Springer},
+  publisher = {Springer International Publishing},
   address   = {Cham, Switzerland},
   year      = {2018},
+  edition   = {3rd},
+  isbn      = {978-3-319-68851-0},
   doi       = {10.1007/978-3-319-68852-7}
 }
 
@@ -51,9 +67,47 @@
   doi     = {10.1088/0957-0233/8/12/005}
 }
 
+% ------------------------------ Drag closures ------------------------------
+
+% Oseen's correction to Stokes drag. Pre-DOI monograph; verified against the
+% HathiTrust catalogue record (https://catalog.hathitrust.org/Record/000387767).
+@book{oseen1927hydrodynamik,
+  author    = {Oseen, Carl Wilhelm},
+  title     = {Neuere Methoden und Ergebnisse in der Hydrodynamik},
+  publisher = {Akademische Verlagsgesellschaft},
+  address   = {Leipzig, Germany},
+  year      = {1927},
+  language  = {german}
+}
+
+% No DOI exists for this 1935-era German article. Note that the year is very
+% widely miscited as 1935; the CiNii catalogue record and Google Scholar's
+% indexed record both give 1933. Pagination is cited variously as 318--320
+% (most common in the literature) and 318--321 (CiNii).
+@article{schiller1935drag,
+  author   = {Schiller, L. and Naumann, A.},
+  title    = {{\"U}ber die grundlegenden Berechnungen bei der Schwerkraftaufbereitung},
+  journal  = {Zeitschrift des Vereines Deutscher Ingenieure},
+  year     = {1933},
+  volume   = {77},
+  pages    = {318--320},
+  language = {german}
+}
+
+@article{cunningham1910slip,
+  author  = {Cunningham, Ebenezer},
+  title   = {On the velocity of steady fall of spherical particles through fluid medium},
+  journal = {Proceedings of the Royal Society of London. Series A, Containing Papers of a Mathematical and Physical Character},
+  year    = {1910},
+  volume  = {83},
+  number  = {563},
+  pages   = {357--365},
+  doi     = {10.1098/rspa.1910.0024}
+}
+
 @article{henderson1976drag,
   author  = {Henderson, Charles B.},
-  title   = {Drag coefficients of spheres in continuum and rarefied flows},
+  title   = {Drag Coefficients of Spheres in Continuum and Rarefied Flows},
   journal = {AIAA Journal},
   year    = {1976},
   volume  = {14},
@@ -64,7 +118,7 @@
 
 @article{loth2008compressibility,
   author  = {Loth, Eric},
-  title   = {Compressibility and rarefaction effects on drag of a spherical particle},
+  title   = {Compressibility and Rarefaction Effects on Drag of a Spherical Particle},
   journal = {AIAA Journal},
   year    = {2008},
   volume  = {46},
@@ -73,27 +127,171 @@
   doi     = {10.2514/1.28943}
 }
 
-@article{schiller1935drag,
-  author  = {Schiller, L. and Naumann, A.},
-  title   = {{\"U}ber die grundlegenden Berechnungen bei der Schwerkraftaufbereitung},
-  journal = {Zeitschrift des Vereines Deutscher Ingenieure},
-  year    = {1935},
-  volume  = {77},
-  pages   = {318--320}
+@article{tedeschi1999motion,
+  author  = {Tedeschi, G. and Gouin, H. and Elena, M.},
+  title   = {Motion of tracer particles in supersonic flows},
+  journal = {Experiments in Fluids},
+  year    = {1999},
+  volume  = {26},
+  number  = {4},
+  pages   = {288--296},
+  doi     = {10.1007/s003480050291}
 }
+
+% Source of the piecewise standard-drag correlation used by the
+% 'subramaniam-balachandar' model. Subramaniam and Balachandar are the EDITORS
+% of this volume, not its sole authors; verified on the Elsevier product page.
+% Elsevier lists no DOI for the book, so only the ISBNs are given.
+@book{subramaniam2022particle,
+  editor    = {Subramaniam, Shankar and Balachandar, S.},
+  title     = {Modeling Approaches and Computational Methods for Particle-Laden Turbulent Flows},
+  publisher = {Elsevier},
+  address   = {Amsterdam, The Netherlands},
+  year      = {2022},
+  edition   = {1st},
+  isbn      = {978-0-323-90133-8}
+}
+
+% ------------------------------ Viscosity laws -----------------------------
+
+@article{sutherland1893viscosity,
+  author  = {Sutherland, William},
+  title   = {{LII}. The viscosity of gases and molecular force},
+  journal = {The London, Edinburgh, and Dublin Philosophical Magazine and Journal of Science},
+  year    = {1893},
+  volume  = {36},
+  number  = {223},
+  pages   = {507--531},
+  doi     = {10.1080/14786449308620508}
+}
+
+% UNVERIFIED -- DELIBERATELY COMMENTED OUT, DO NOT UNCOMMENT WITHOUT CHECKING.
+% This is the presumed source of the Keyes viscosity correlation implemented in
+% lptlib (constants a0 = 1.488, a = 122.1, a1 = 5.0). The ASME Digital
+% Collection record for J. Fluids Eng. 73(5):589 (1951) carries this exact
+% title, but the publisher page could not be retrieved to confirm the author's
+% name or obtain a DOI, and no DOI was found through any other source.
+% Confirm the author initials and the DOI against the ASME Digital Collection
+% before citing this. No DOI is given here because none was verified.
+%
+% @article{keyes1951viscosity,
+%   author  = {Keyes, F. G.},
+%   title   = {A Summary of Viscosity and Heat-Conduction Data for {He}, {A}, {H2}, {O2}, {N2}, {CO}, {CO2}, {H2O}, and Air},
+%   journal = {Transactions of the ASME},
+%   year    = {1951},
+%   volume  = {73},
+%   number  = {5},
+%   pages   = {589--596}
+% }
+
+% ------------------------------ Data formats and tooling -------------------
 
 @techreport{walatka1990plot3d,
   author      = {Walatka, Pamela P. and Buning, Pieter G. and Pierce, Larry and Elson, Patricia A.},
   title       = {{PLOT3D} User's Manual},
   institution = {NASA Ames Research Center},
   number      = {NASA-TM-101067},
-  year        = {1990}
+  address     = {Moffett Field, CA, USA},
+  year        = {1990},
+  url         = {https://ntrs.nasa.gov/citations/19900013774}
+}
+
+@incollection{ahrens2005paraview,
+  author    = {Ahrens, James and Geveci, Berk and Law, Charles},
+  title     = {{ParaView}: An End-User Tool for Large-Data Visualization},
+  booktitle = {Visualization Handbook},
+  publisher = {Elsevier},
+  address   = {Burlington, MA, USA},
+  year      = {2005},
+  pages     = {717--731},
+  doi       = {10.1016/B978-012387582-2/50038-1}
+}
+
+@article{weller1998openfoam,
+  author  = {Weller, H. G. and Tabor, G. and Jasak, H. and Fureby, C.},
+  title   = {A tensorial approach to computational continuum mechanics using object-oriented techniques},
+  journal = {Computers in Physics},
+  year    = {1998},
+  volume  = {12},
+  number  = {6},
+  pages   = {620--631},
+  doi     = {10.1063/1.168744}
+}
+
+% ------------------------------ Comparable software ------------------------
+
+@article{zwick2019ppiclf,
+  author  = {Zwick, David},
+  title   = {{ppiclF}: A Parallel Particle-In-Cell Library in {Fortran}},
+  journal = {Journal of Open Source Software},
+  year    = {2019},
+  volume  = {4},
+  number  = {37},
+  pages   = {1400},
+  doi     = {10.21105/joss.01400}
+}
+
+@article{delandmeter2019parcels,
+  author  = {Delandmeter, Philippe and van Sebille, Erik},
+  title   = {The {Parcels} v2.0 {Lagrangian} framework: new field interpolation schemes},
+  journal = {Geoscientific Model Development},
+  year    = {2019},
+  volume  = {12},
+  number  = {8},
+  pages   = {3571--3584},
+  doi     = {10.5194/gmd-12-3571-2019}
+}
+
+@article{dagestad2018opendrift,
+  author  = {Dagestad, Knut-Frode and R{\"o}hrs, Johannes and Breivik, {\O}yvind and {\AA}dlandsvik, Bj{\o}rn},
+  title   = {{OpenDrift} v1.0: a generic framework for trajectory modelling},
+  journal = {Geoscientific Model Development},
+  year    = {2018},
+  volume  = {11},
+  number  = {4},
+  pages   = {1405--1420},
+  doi     = {10.5194/gmd-11-1405-2018}
+}
+
+@article{hoffmann2025mptrac,
+  author  = {Hoffmann, Lars and Clemens, Jan and Griessbach, Sabine and Haghighi Mood, Kaveh and Heng, Yi and Khosrawi, Farahnaz and Liu, Mingzhao and Lu, Yen-Sen and Meyer, Catrin and Nobre Wittwer, Nils and Wu, Xue and Zou, Ling},
+  title   = {{MPTRAC}: A high-performance {Lagrangian} transport model for atmospheric air parcel dispersion},
+  journal = {Journal of Open Source Software},
+  year    = {2025},
+  volume  = {10},
+  number  = {111},
+  pages   = {8177},
+  doi     = {10.21105/joss.08177}
+}
+
+@article{shnapp2022myptv,
+  author  = {Shnapp, Ron},
+  title   = {{MyPTV}: A {Python} Package for {3D} Particle Tracking},
+  journal = {Journal of Open Source Software},
+  year    = {2022},
+  volume  = {7},
+  number  = {75},
+  pages   = {4398},
+  doi     = {10.21105/joss.04398}
+}
+
+% ------------------------------ Work built on lptlib -----------------------
+
+@article{kalagotla2026bicsnet,
+  author  = {Kalagotla, Dilip and Cuppoletti, Daniel R. and Orkwis, Paul D. and Hernandez-Lichtl, Kevin and Gustavsson, Jonas and Kumar, Rajan},
+  title   = {Deep-learning-based particle inertia bias corrector for shock-dominated {PIV} data},
+  journal = {Experiments in Fluids},
+  year    = {2026},
+  volume  = {67},
+  pages   = {57},
+  note    = {Article 57},
+  doi     = {10.1007/s00348-026-04216-z}
 }
 
 @inproceedings{kalagotla2023api,
-  author    = {Kalagotla, Dilip and Orkwis, Paul D.},
+  author    = {Chhabra, Harpreet Singh and Kalagotla, Dilip and Orkwis, Paul D.},
   title     = {Python Based {API} to Post-Process {CFD} Data},
-  booktitle = {AIAA SciTech 2023 Forum},
+  booktitle = {{AIAA} SCITECH 2023 Forum},
   year      = {2023},
   doi       = {10.2514/6.2023-1225}
 }
@@ -101,7 +299,7 @@
 @inproceedings{kalagotla2023oop,
   author    = {Kalagotla, Dilip and Orkwis, Paul D.},
   title     = {An Object-Oriented Approach to Tracking Particles in a Flow},
-  booktitle = {AIAA AVIATION 2023 Forum},
+  booktitle = {{AIAA} AVIATION 2023 Forum},
   year      = {2023},
   doi       = {10.2514/6.2023-3276}
 }
@@ -109,15 +307,15 @@
 @inproceedings{kalagotla2024drag,
   author    = {Kalagotla, Dilip and Orkwis, Paul D.},
   title     = {Numerical Analysis of Drag Models and Particle Size Estimation for {PIV} in Supersonic Flows},
-  booktitle = {AIAA AVIATION 2024 Forum},
+  booktitle = {{AIAA} AVIATION Forum and ASCEND 2024},
   year      = {2024},
   doi       = {10.2514/6.2024-4382}
 }
 
 @inproceedings{kalagotla2025bias,
-  author    = {Kalagotla, Dilip and Orkwis, Paul D.},
+  author    = {Kalagotla, Dilip and Orkwis, Paul D. and Cuppoletti, Daniel R.},
   title     = {Deep Learning Based Particle Inertia Bias Corrector for Particle Image Velocimetry},
-  booktitle = {AIAA SciTech 2025 Forum},
+  booktitle = {{AIAA} SCITECH 2025 Forum},
   year      = {2025},
   doi       = {10.2514/6.2025-0476}
 }
