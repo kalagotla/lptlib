@@ -1,6 +1,9 @@
 # This file searches for the cell in which the given point is present in the grid
 
+import logging
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 # noinspection SpellCheckingInspection
@@ -45,7 +48,7 @@ class Search:
     date: 10-24/2021
         """
 
-    def __init__(self, grid, ppoint):
+    def __init__(self, grid, ppoint, warm_start=None):
         self.grid = grid
         self.ppoint = ppoint
         self.cpoint = None
@@ -53,12 +56,50 @@ class Search:
         self.cell = None
         self.info = None
         self.block = None
+        # Newton-Raphson warm start for p2c. Kept per-instance (not module-global)
+        # so concurrent Search objects -- threads, particles -- never share it.
+        # Callers walking a single trajectory pass the previous step's converged
+        # c-space point as ``warm_start`` to skip the nearest-node scan; a stale
+        # or distant guess is rejected inside p2c.
+        self._cpoint = None if warm_start is None else np.array(warm_start, dtype='f8')
 
     def __str__(self):
         doc = "This instance takes in the grid of shape " + self.grid.grd.shape + \
               "\nand the searches for the point " + self.ppoint + " in the grid.\n" \
               "Use method 'compute' to find (attributes) the closest 'index' and the nodes of the 'cell'.\n"
         return doc
+
+    def _last_cell_origin(self):
+        """Highest valid cell origin along i, j and k for the current block.
+
+        A cell is addressed by its lowest node and spans that node plus one, so
+        with ``n`` nodes along an axis the last cell starts at ``n - 2``.
+        """
+        return (max(int(self.grid.ni[self.block]) - 2, 0),
+                max(int(self.grid.nj[self.block]) - 2, 0),
+                max(int(self.grid.nk[self.block]) - 2, 0))
+
+    def _cell_split(self, _cpoint):
+        """Split a c-space point into its host cell origin and local fractions.
+
+        Returns ``(eps, frac)`` where ``eps`` indexes the lowest node of the
+        cell containing the point and ``frac`` is the point's position within
+        that cell along each axis. A point sitting exactly on the far i/j/k
+        face has an integer part equal to the *last node* index, where no cell
+        starts; it is reported as the last cell with a fraction of 1.0, which
+        is the same physical location. Points strictly beyond the last node
+        keep their out-of-range index so callers can reject them.
+        """
+        _c = np.asarray(_cpoint, dtype='f8')
+        _n = np.array([self.grid.ni[self.block], self.grid.nj[self.block],
+                       self.grid.nk[self.block]], dtype=int)
+        _eps = _c.astype(int)
+        _frac = np.modf(_c)[0]
+        # Exactly on the far face: integer index at the last node, no remainder
+        _far = (_eps == _n - 1) & (_frac == 0.0)
+        _frac = np.where(_far, 1.0, _frac)
+        _eps = np.where(_far, np.maximum(_n - 2, 0), _eps)
+        return _eps, _frac
 
     def _cell_nodes(self, _i, _j, _k):
         # _Internal method to get the nodes of a cell
@@ -67,6 +108,16 @@ class Search:
         _i = max(_i, 0)
         _j = max(_j, 0)
         _k = max(_k, 0)
+        # Clamp the far side as well. A point landing exactly on the maximum
+        # i/j/k index asks for a cell that starts at the last node; that cell
+        # does not exist and looking up its "+1" nodes ran off the end of the
+        # grid with an IndexError. Locate such a point in the adjacent (last)
+        # cell instead -- the same physical location, at a local fraction of 1.
+        if self.block is not None:
+            _i_max, _j_max, _k_max = self._last_cell_origin()
+            _i = min(_i, _i_max)
+            _j = min(_j, _j_max)
+            _k = min(_k, _k_max)
         _cell = np.array([[_i, _j, _k],
                           [_i + 1, _j, _k],
                           [_i + 1, _j + 1, _k],
@@ -90,9 +141,15 @@ class Search:
         # Check if point is a node in the domain
         if np.all(abs(_point_transform) <= 1e-12):
             self.cell = self._cell_nodes(i, j, k)
-            self.info = 'Given point is a node in the domain with a tol of 1e-12.\n' \
-                        'Interpolation will assign node properties for integration.\n' \
-                        'Index of the node will be returned by cell attribute\n'
+            # A node on the far i/j/k face is clamped into the last cell, where
+            # it is no longer that cell's first node. The "node" shortcut reads
+            # cell[0], so only claim it when the node really is the cell origin;
+            # otherwise fall through to the regular cell path, which weights the
+            # node exactly (local fraction 1.0) via tri-linear interpolation.
+            if np.array_equal(self.cell[0], [i, j, k]):
+                self.info = 'Given point is a node in the domain with a tol of 1e-12.\n' \
+                            'Interpolation will assign node properties for integration.\n' \
+                            'Index of the node will be returned by cell attribute\n'
             # print(self.info)
             return
 
@@ -208,7 +265,7 @@ class Search:
                 if max(self.cell[:, 0]) > self.grid.ni[self.block] - 1 or \
                         max(self.cell[:, 1]) > self.grid.nj[self.block] - 1 or \
                         max(self.cell[:, 2]) > self.grid.nk[self.block] - 1 or np.any(self.cell < 0):
-                    print('Block search returned wrong cell! Point position lost.\n')
+                    logger.warning('Block search returned wrong cell! Point position lost.\n')
                     self.cpoint = None
                     self.ppoint = None
                     return
@@ -245,8 +302,10 @@ class Search:
 
         """
         self.cpoint = _cpoint
-        _eps0, _eps1, _eps2 = _cpoint.astype(int)
-        _alpha, _beta, _gamma = np.modf(_cpoint)[0]  # same as eps % 1.0
+        # Cell origin and local fractions. A point exactly on the far i/j/k
+        # face is reported in the last cell at a fraction of 1.0 rather than in
+        # a cell that starts one node past the end of the grid.
+        (_eps0, _eps1, _eps2), (_alpha, _beta, _gamma) = self._cell_split(_cpoint)
 
         # Check if the given point is in the domain
         if _eps0 >= self.grid.ni[self.block]-1 or _eps1 >= self.grid.nj[self.block]-1 or \
@@ -281,7 +340,6 @@ class Search:
         Returns:
             eps: c-space co-ordinates
         """
-        global _cpoint
         self.ppoint = _ppoint
 
         if self.block is None:
@@ -295,13 +353,11 @@ class Search:
         best_residual = None
         best_tol = None
         # Initial guess: use nearest node in the block for a robust starting point
-        # The global _cpoint is used as a warm start for successive calls (particle tracking),
-        # but we fall back to the nearest-node guess if it doesn't exist or is too far away
-        _need_fresh_guess = False
-        try:
-            _cpoint is not None
-        except:
-            _need_fresh_guess = True
+        # self._cpoint is the warm start from this instance's previous call (particle
+        # tracking), but we fall back to the nearest-node guess if it doesn't exist or
+        # is too far away. It is per-instance so threads/particles never share it.
+        _cpoint = getattr(self, '_cpoint', None)
+        _need_fresh_guess = _cpoint is None
         if not _need_fresh_guess:
             # Check if the global guess is in a reasonable neighborhood
             # by comparing physical-space distance to the grid spacing
@@ -318,6 +374,7 @@ class Search:
                 (self.grid.grd[:_i, :_j, :_k, 2, self.block] - _ppoint[2]) ** 2)
             _nearest = np.array(np.unravel_index(_dist.argmin(), _dist.shape), dtype='f8')
             _cpoint = _nearest + 0.5  # offset to cell center
+        self._cpoint = _cpoint
 
         while True:
             # Check for out-of-domain case and reset the point to in-domain
@@ -373,6 +430,7 @@ class Search:
                 # same as self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
                 self._cell_index(self, _eps0, _eps1, _eps2)
                 self.cpoint = _cpoint
+                self._cpoint = _cpoint
                 self.ppoint = _pred_ppoint
                 return _cpoint
 
@@ -387,6 +445,7 @@ class Search:
             # Update the point to zero if less than zero
             _cpoint[_cpoint < 0] = 0
             _cpoint = abs(_cpoint)
+            self._cpoint = _cpoint
             _iter += 1
             # Check if taking too long
             if _iter >= 1e3:
@@ -397,12 +456,13 @@ class Search:
                         _eps0, _eps1, _eps2 = best_cpoint.astype(int)
                         self._cell_index(self, _eps0, _eps1, _eps2)
                         self.cpoint = best_cpoint
+                        self._cpoint = best_cpoint
                         self.ppoint = best_ppoint
-                        print('**WARNING** Newton-Raphson did not fully converge within 1000 iterations.\n'
+                        logger.warning('**WARNING** Newton-Raphson did not fully converge within 1000 iterations.\n'
                               'Using best available in-domain approximation for point location.')
                         return best_cpoint
 
-                print('**ERROR** Newton-Raphson did not converge. Try again!\n'
+                logger.error('**ERROR** Newton-Raphson did not converge. Try again!\n'
                       'Possible reason might be the point might be too close to the end of a domain')
                 self.ppoint, self.cpoint = None, None
                 return

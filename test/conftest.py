@@ -1,7 +1,8 @@
 """pytest configuration and shared fixtures for the lptlib test suite.
 
-Adds the ``test/`` directory to ``sys.path`` so the shared ``testdata`` and
-``synthetic`` helper modules can be imported from test modules in this
+Forces the non-interactive matplotlib backend, adds the ``test/`` directory to
+``sys.path`` so the shared ``testdata`` and ``synthetic`` helper modules can be
+imported from test modules in this
 directory and its subdirectories, and exposes session-scoped synthetic grid
 and flow fixtures so the streamline stack can be exercised without any external
 data files.
@@ -10,29 +11,17 @@ data files.
 import os
 import sys
 
+import matplotlib
 import numpy as np
 import pytest
+
+# Never open a GUI window during the test run: some tests build figures, and a
+# blocking backend would hang CI. Must be set before pyplot is first imported.
+matplotlib.use("Agg")
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from synthetic import make_oblique_shock_case  # noqa: E402
-
-
-@pytest.fixture(autouse=True)
-def _reset_search_warm_start():
-    """Clear the module-global Newton-Raphson warm start before every test.
-
-    ``Search.p2c`` caches the previous computational-space guess in a module
-    global to speed up successive particle-tracking steps. Left in place across
-    tests it makes cell-search results depend on execution order. Clearing it
-    before each test keeps every test deterministic and independent.
-    """
-    import sys
-    from lptlib.streamlines import Search
-    search = sys.modules[Search.__module__]
-    if hasattr(search, "_cpoint"):
-        del search._cpoint
-    yield
 
 
 @pytest.fixture(scope="session")

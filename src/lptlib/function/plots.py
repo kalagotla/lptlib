@@ -1,5 +1,6 @@
 # Create plots for the data saved from streamlines file
 
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
@@ -7,6 +8,8 @@ import re
 import pandas as pd
 from ..streamlines import Search, Interpolation
 from .variables import Variables
+
+logger = logging.getLogger(__name__)
 
 
 class Plots:
@@ -97,7 +100,11 @@ class Plots:
             matches = re.findall(r'([-+]?\d*\.\d*|\d+)e([-+]?\d+)', self.file)
             # Create the diameter from the matches
             diameter = float(matches[-1][0])*10**int(matches[-1][1])
-        except:
+        except (IndexError, ValueError, TypeError):
+            # No exponential-notation diameter in the file name -- fall back to
+            # the diameter recorded in the data itself.
+            logger.debug('Could not parse a diameter from %r; using d_p from the data',
+                         self.file)
             diameter = self.data['d_p'][0]
         self.data['relative_reynolds'] = (self.data['relative_velocity'] * self.data['density'] * diameter
                                           / self.data['viscosity'])

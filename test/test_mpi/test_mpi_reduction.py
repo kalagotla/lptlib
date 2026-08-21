@@ -90,9 +90,11 @@ class TestMPIReduction(unittest.TestCase):
     def test_mpi_reduction_two_ranks(self):
         """Run the parallel reduction on two ranks and check it succeeds."""
         if not os.environ.get("LPTLIB_RUN_MPI"):
-            self.skipTest("set LPTLIB_RUN_MPI=1 to run the MPI reduction test")
+            self.skipTest("MPI reduction test disabled: set the environment variable "
+                          "LPTLIB_RUN_MPI=1 to enable it")
         if shutil.which("mpiexec") is None:
-            self.skipTest("mpiexec not available on PATH")
+            self.skipTest("MPI reduction test requires an mpiexec launcher on PATH "
+                          "(LPTLIB_RUN_MPI=1 is set but mpiexec was not found)")
 
         import tempfile
         location = tempfile.mkdtemp() + "/"

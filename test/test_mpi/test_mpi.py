@@ -2,7 +2,6 @@ import unittest
 import sys
 import subprocess
 from lptlib import StochasticModel, Particle, SpawnLocations, ObliqueShock, ObliqueShockData
-from mpi4py import MPI
 
 
 class TestMPI(unittest.TestCase):
@@ -75,9 +74,11 @@ class TestMPI(unittest.TestCase):
         # and can be enabled by setting LPTLIB_RUN_MPI=1 in an environment with enough
         # memory and an MPI launcher.
         if not os.environ.get('LPTLIB_RUN_MPI'):
-            self.skipTest("set LPTLIB_RUN_MPI=1 to run the MPI integration test")
+            self.skipTest("MPI integration test disabled: set the environment variable "
+                          "LPTLIB_RUN_MPI=1 to enable it")
         if shutil.which('mpiexec') is None:
-            self.skipTest("mpiexec not available on PATH")
+            self.skipTest("MPI integration test requires an mpiexec launcher on PATH "
+                          "(LPTLIB_RUN_MPI=1 is set but mpiexec was not found)")
 
         script = os.path.abspath(__file__)
         command = ['mpiexec', '-np', '2', sys.executable, script, '--mpi']

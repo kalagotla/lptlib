@@ -157,3 +157,64 @@ def test_grid_metrics_shapes_on_synthetic(oblique_case):
     assert grid.J.shape == (ni, nj, nk, nb)
     # The Jacobian determinant is strictly positive for this right-handed mesh.
     assert np.all(grid.J > 0)
+
+
+def _write_formatted_txt(path, q):
+    """Write a q array as whitespace-separated ASCII, Tecplot style.
+
+    ``FlowIO.read_formatted_txt`` reads the values as a flat stream and
+    reshapes to ``(nk, nj, ni, 5, 1)`` before transposing, so the values are
+    written in that order.
+    """
+    flat = q.transpose(2, 1, 0, 3, 4).reshape(-1)
+    with open(path, "w") as handle:
+        handle.write(" ".join(f"{float(v):.17g}" for v in flat))
+        handle.write("\n")
+
+
+def test_read_formatted_txt_round_trip(tmp_path):
+    """The Tecplot ASCII reader recovers the written flow field."""
+    ni, nj, nk = 3, 4, 2
+    rng = np.random.default_rng(5)
+    q = rng.random((ni, nj, nk, 5, 1))
+
+    grid = GridIO("dummy")
+    grid.ni, grid.nj, grid.nk = np.array([ni]), np.array([nj]), np.array([nk])
+
+    txt = str(tmp_path / "flow.txt")
+    _write_formatted_txt(txt, q)
+
+    flow = FlowIO(txt)
+    flow.mach, flow.rey, flow.alpha, flow.time = 2.0, 1e5, 0.0, 1.0
+    flow.read_formatted_txt(grid=grid, data_type="f8")
+
+    assert flow.q.shape == (ni, nj, nk, 5, 1)
+    np.testing.assert_allclose(flow.q, q, rtol=1e-12)
+
+
+def test_read_formatted_txt_raises_instead_of_exiting(tmp_path):
+    """Missing header attributes raise ValueError rather than killing the process.
+
+    This used to call the builtin ``exit()``, which raises SystemExit and takes
+    down any interpreter that imported the library, including a Jupyter kernel.
+    """
+    ni, nj, nk = 3, 4, 2
+    rng = np.random.default_rng(6)
+    q = rng.random((ni, nj, nk, 5, 1))
+
+    grid = GridIO("dummy")
+    grid.ni, grid.nj, grid.nk = np.array([ni]), np.array([nj]), np.array([nk])
+
+    txt = str(tmp_path / "flow_missing_header.txt")
+    _write_formatted_txt(txt, q)
+
+    flow = FlowIO(txt)
+    flow.mach = 2.0  # rey, alpha and time deliberately left unset
+    with pytest.raises(ValueError) as excinfo:
+        flow.read_formatted_txt(grid=grid, data_type="f8")
+
+    message = str(excinfo.value)
+    named = message.split(':', 1)[1].split('.')[0]
+    for name in ("rey", "alpha", "time"):
+        assert name in named
+    assert "mach" not in named  # only the unset ones are listed

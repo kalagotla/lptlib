@@ -60,10 +60,41 @@ class ObliqueShock:
         self.gamma = 1.4
         self.gas_constant = 287.058
 
+    def max_deflection(self):
+        """
+        Maximum flow deflection angle, in degrees, for which an attached oblique
+        shock exists at the current free-stream Mach number.
+
+        Uses the closed form for the shock angle at maximum deflection
+        (see Anderson, Modern Compressible Flow),
+
+            sin^2(beta_max) = 1/(gamma M^2) * [ (gamma+1) M^2 / 4 - 1
+                              + sqrt( (gamma+1) * ( (gamma+1) M^4 / 16
+                                      + (gamma-1) M^2 / 2 + 1 ) ) ]
+
+        followed by the theta-beta-Mach relation evaluated at that angle.
+
+        Returns:
+            float: maximum deflection angle in degrees
+        """
+        _m = self.mach
+        _g = self.gamma
+        _sin2 = (1 / (_g * _m ** 2)) * ((_g + 1) * _m ** 2 / 4 - 1 +
+                                        np.sqrt((_g + 1) * ((_g + 1) * _m ** 4 / 16 +
+                                                            (_g - 1) * _m ** 2 / 2 + 1)))
+        _beta = np.arcsin(np.sqrt(_sin2))
+        _theta = np.arctan(2 / np.tan(_beta) * (_m ** 2 * np.sin(_beta) ** 2 - 1) /
+                           (_m ** 2 * (_g + np.cos(2 * _beta)) + 2))
+        return float(np.degrees(_theta))
+
     def compute(self):
         # Use the cubic equation solver to find the shock angle
         # Compute the shock angle if mach and deflection are given
         if self.mach is not None and self.deflection is not None:
+            if self.mach <= 1:
+                raise ValueError(
+                    f"an oblique shock requires a supersonic free stream; got mach={self.mach}")
+            _deflection_deg = self.deflection
             self.deflection = np.radians(self.deflection)
 
             # calculate coefficients
@@ -72,9 +103,20 @@ class ObliqueShock:
             C = (1 + 0.5 * (self.gamma + 1) * self.mach ** 2) * np.tan(self.deflection)
             coeffs = [1, C, -A, (B - A * C)]
 
-            # roots of a cubic equation, two positive solutions
-            # (disregard the negative)
-            roots = np.array([r for r in np.roots(coeffs) if r > 0])
+            # roots of a cubic equation, two positive real solutions
+            # (disregard the negative one). Beyond the detachment deflection
+            # angle the two physical roots become a complex-conjugate pair and
+            # no attached oblique shock exists.
+            roots = np.roots(coeffs)
+            roots = np.array([r.real for r in roots
+                              if abs(r.imag) <= 1e-9 * max(1.0, abs(r.real)) and r.real > 0])
+            if roots.size < 2:
+                self.deflection = _deflection_deg
+                raise ValueError(
+                    f"no attached oblique shock exists for mach={self.mach} and "
+                    f"deflection={_deflection_deg} deg; the maximum deflection at this "
+                    f"Mach number is {self.max_deflection():.4f} deg (the shock detaches "
+                    f"beyond it)")
 
             thetas = np.arctan(1 / roots)
             self.shock_angle = np.array([np.min(thetas), np.max(thetas)])
@@ -108,22 +150,46 @@ class ObliqueShockData:
     """
     Class to create a grid and flow based on oblique shock properties
     """
-    def __init__(self, oblique_shock=ObliqueShock()):
-        self.oblique_shock = oblique_shock
-        self.nx_max = None
-        self.ny_max = None
-        self.nz_max = None
-        self.xpoints = None
-        self.ypoints = None
-        self.zpoints = None
+    # Domain and free-stream defaults that produce a usable case out of the box.
+    # These are the values used by the shipped example script (main.py).
+    def __init__(self, oblique_shock=None, nx_max=100e-3, ny_max=500e-3, nz_max=1e-4,
+                 xpoints=200, ypoints=500, zpoints=5,
+                 inlet_temperature=48.20, inlet_density=0.07747):
+        # A fresh ObliqueShock per instance: a default argument would be built
+        # once at import and then mutated in place by every compute() call.
+        self.oblique_shock = oblique_shock if oblique_shock is not None else ObliqueShock()
+        self.nx_max = nx_max
+        self.ny_max = ny_max
+        self.nz_max = nz_max
+        self.xpoints = xpoints
+        self.ypoints = ypoints
+        self.zpoints = zpoints
         self.grid = GridIO('dummy')
         self.flow = FlowIO('dummy')
         self.shock_strength = 'weak'
-        self.inlet_temperature = None
-        self.inlet_density = None
+        self.inlet_temperature = inlet_temperature
+        self.inlet_density = inlet_density
         self.inlet_pressure = None
 
+    def _check_grid_inputs(self):
+        """Raise a clear error if a geometry attribute was reset to None."""
+        _missing = [_name for _name in ('nx_max', 'ny_max', 'nz_max',
+                                        'xpoints', 'ypoints', 'zpoints')
+                    if getattr(self, _name) is None]
+        if _missing:
+            raise ValueError(
+                f'{type(self).__name__}.create_grid needs ' + ', '.join(_missing) +
+                ' to be set; they are currently None.')
+
+    def _check_flow_inputs(self):
+        """Raise a clear error if a free-stream attribute was reset to None."""
+        if self.inlet_temperature is None:
+            raise ValueError(
+                f'{type(self).__name__}.create_flow needs inlet_temperature to be set; '
+                'it is currently None.')
+
     def create_grid(self):
+        self._check_grid_inputs()
         # create a structured grid from -nx_max to nx_max, 0 to ny_max, 0 to nz_max
         # spacing is the grid spacing
         _xx, _yy, _zz = np.meshgrid(np.linspace(-self.nx_max, self.nx_max, 2*self.xpoints),
@@ -148,6 +214,7 @@ class ObliqueShockData:
         return
 
     def create_flow(self):
+        self._check_flow_inputs()
         # Create a vector with density, shock-normal, shock-tangential, zero velocities, and energy
         # Have pre-shock before x=0 and post-shock after
         if self.shock_strength == 'weak':
@@ -235,21 +302,29 @@ class ObliqueShockAlignedData:
     The z-direction is handled as a full 3D extension.
     """
 
-    def __init__(self, oblique_shock=ObliqueShock()):
-        self.oblique_shock = oblique_shock
-        self.nx_max = None
-        self.ny_max = None
-        self.nz_max = None
-        self.xpoints = None
-        self.ypoints = None
-        self.zpoints = None
+    # Same working defaults as ObliqueShockData.
+    def __init__(self, oblique_shock=None, nx_max=100e-3, ny_max=500e-3, nz_max=1e-4,
+                 xpoints=200, ypoints=500, zpoints=5,
+                 inlet_temperature=48.20, inlet_density=0.07747):
+        # A fresh ObliqueShock per instance -- see ObliqueShockData.__init__.
+        self.oblique_shock = oblique_shock if oblique_shock is not None else ObliqueShock()
+        self.nx_max = nx_max
+        self.ny_max = ny_max
+        self.nz_max = nz_max
+        self.xpoints = xpoints
+        self.ypoints = ypoints
+        self.zpoints = zpoints
         self.grid = GridIO('dummy')
         self.flow = FlowIO('dummy')
         self.shock_strength = 'weak'
-        self.inlet_temperature = None
-        self.inlet_density = None
+        self.inlet_temperature = inlet_temperature
+        self.inlet_density = inlet_density
+
+    _check_grid_inputs = ObliqueShockData._check_grid_inputs
+    _check_flow_inputs = ObliqueShockData._check_flow_inputs
 
     def create_grid(self):
+        self._check_grid_inputs()
         # Create a structured 3D grid: x in [-nx_max, nx_max], y in [0, ny_max], z in [0, nz_max]
         _xx, _yy, _zz = np.meshgrid(np.linspace(-self.nx_max, self.nx_max, 2 * self.xpoints),
                                     np.linspace(0, self.ny_max, self.ypoints),
@@ -266,6 +341,7 @@ class ObliqueShockAlignedData:
         return
 
     def create_flow(self):
+        self._check_flow_inputs()
         gamma = self.oblique_shock.gamma
         R = self.oblique_shock.gas_constant
         T1 = self.inlet_temperature

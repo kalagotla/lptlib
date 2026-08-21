@@ -85,3 +85,46 @@ def test_read_grid_single_precision_store(tmp_path):
         np.testing.assert_array_equal(
             grid.grd_max[b], ref.max(axis=(0, 1, 2)).astype(np.float64)
         )
+
+
+def test_read_grid_is_idempotent(tmp_path):
+    """Calling read_grid twice on the same object gives identical results.
+
+    ``read_grid`` appends per-block bounds to ``grd_min``/``grd_max`` and then
+    converts them to arrays. Without resetting the accumulators the second call
+    raised ``AttributeError: 'numpy.ndarray' object has no attribute 'append'``.
+    """
+    from lptlib.io import GridIO
+
+    blocks = [(6, 5, 4), (7, 3, 5)]
+    path = tmp_path / "idempotent.x"
+    _write_grid(str(path), blocks, seed=3)
+
+    grid = GridIO(str(path))
+    grid.read_grid()
+    first_grd = grid.grd.copy()
+    first_min = grid.grd_min.copy()
+    first_max = grid.grd_max.copy()
+
+    grid.read_grid()  # must not raise
+
+    assert grid.grd_min.shape == first_min.shape
+    assert grid.grd_max.shape == first_max.shape
+    np.testing.assert_array_equal(grid.grd, first_grd)
+    np.testing.assert_array_equal(grid.grd_min, first_min)
+    np.testing.assert_array_equal(grid.grd_max, first_max)
+
+
+def test_read_grid_uses_binary_mode(tmp_path):
+    """The PLOT3D reader must open the file in binary mode.
+
+    Text mode is a silent corruption on Windows, where the C runtime translates
+    CRLF byte pairs inside what is really binary coordinate data.
+    """
+    import inspect
+
+    from lptlib.io import GridIO
+
+    source = inspect.getsource(GridIO.read_grid)
+    assert "open(self.filename, 'rb')" in source
+    assert "open(self.filename, 'r')" not in source

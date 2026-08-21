@@ -2,8 +2,11 @@
 #  Each output function should be added to respective GridIO/FlowIO classes
 #  Change docstrings for doctest in test_io
 
+import logging
 import numpy as np
 import os
+
+logger = logging.getLogger(__name__)
 
 
 class GridIO:
@@ -105,7 +108,12 @@ class GridIO:
         date: 11-04/2021
         """
         _store_dtype = np.float64 if store_type is None else np.dtype(store_type)
-        with open(self.filename, 'r') as grid:
+        # Reset the bounds accumulators so a second call to read_grid works.
+        # They are appended to below and converted to arrays at the end, so
+        # without this a repeat call raises AttributeError on ndarray.append.
+        self.grd_min, self.grd_max = [], []
+        # PLOT3D grid files are binary; 'rb' keeps Windows from translating bytes
+        with open(self.filename, 'rb') as grid:
             # Read-in number of blocks
             self.nb = np.fromfile(grid, dtype='i4', count=1)[0]
 
@@ -138,7 +146,7 @@ class GridIO:
                 self.grd_min.append(_block.min(axis=(0, 1, 2)).astype(np.float64))
                 self.grd_max.append(_block.max(axis=(0, 1, 2)).astype(np.float64))
 
-            print("Grid data reading is successful for " + self.filename + "\n")
+            logger.info("Grid data reading is successful for " + self.filename + "\n")
 
             # Convert lists to arrays
             self.grd_min = np.array(self.grd_min)
@@ -413,15 +421,15 @@ class GridIO:
         #     self.m1[..., i, :] = np.gradient(self.grd, axis=i)
 
         for b in range(self.nb):
-            print(f"Computing Jacobian for block {b}...")
+            logger.debug(f"Computing Jacobian for block {b}...")
             for i in range(3):
                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], :, i, b] = \
                     np.gradient(self.grd[:self.ni[b], :self.nj[b], :self.nk[b], :, b], axis=i)
-        print("Done computing Jacobian for all the blocks!!\n")
+        logger.info("Done computing Jacobian for all the blocks!!\n")
 
         # compute Jacobian
         for b in range(self.nb):
-            print(f"Computing Jacobian determinant for block {b}...")
+            logger.debug(f"Computing Jacobian determinant for block {b}...")
             self.J[:self.ni[b], :self.nj[b], :self.nk[b], b] = \
                 self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 0, b] * \
                 (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 1, b] *
@@ -438,11 +446,11 @@ class GridIO:
                  self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 2, b] -
                  self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 0, 2, b] *
                  self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 1, b])
-        print("Done computing Jacobian determinant for all the blocks!!")
+        logger.info("Done computing Jacobian determinant for all the blocks!!")
 
         # x derivatives
         for b in range(self.nb):
-            print(f"Computing Inverse Jacobian for block {b}...")
+            logger.debug(f"Computing Inverse Jacobian for block {b}...")
             self.m2[:self.ni[b], :self.nj[b], :self.nk[b], 0, 0, b] = \
                 (self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 1, b] *
                  self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 2, 2, b] -
@@ -502,8 +510,8 @@ class GridIO:
                  self.m1[:self.ni[b], :self.nj[b], :self.nk[b], 1, 0, b]) /\
                 self.J[:self.ni[b], :self.nj[b], :self.nk[b], b]
 
-        print("Done computing Inverse Jacobian for all the blocks!!")
-        print("All Grid metrics computed successfully!")
+        logger.info("Done computing Inverse Jacobian for all the blocks!!")
+        logger.info("All Grid metrics computed successfully!")
 
     def two_to_three(self, steps: int = 5, step_size: float = None, data_type='f4'):
         """
@@ -514,7 +522,7 @@ class GridIO:
 
         """
         if step_size is None:
-            print("Step size is not provided; Using minimum grid size")
+            logger.info("Step size is not provided; Using minimum grid size")
             step_size = abs(min(np.diff(self.grd[:, 0, 0, 0, 0])))
 
         # check self.ni, self.nj dtype -- This is to keep the old functionality working.
@@ -538,7 +546,7 @@ class GridIO:
             f.write(_a_temp.tobytes())
             f.write(_grd_3d.tobytes(order='F'))
 
-        print(f'\n File is successfully written in the working directory as {_temp_filename}')
+        logger.info(f'\n File is successfully written in the working directory as {_temp_filename}')
 
         return
 
@@ -551,7 +559,7 @@ class GridIO:
 
         """
         if step_size is None:
-            print("Step size is not provided; Using minimum grid size")
+            logger.info("Step size is not provided; Using minimum grid size")
             step_size = abs(min(np.diff(self.grd[:, 0, 0, 0, 0])))
 
         # Number of blocks is always 1 for this function
@@ -566,7 +574,7 @@ class GridIO:
             f.write(_nk)
             f.write(_grd.tobytes())
 
-        print(f'\n File is successfully written in the working directory as {out_file}')
+        logger.info(f'\n File is successfully written in the working directory as {out_file}')
 
         return
 
@@ -658,7 +666,8 @@ class FlowIO:
         credit: Paul Orkwis
         date: 10-05/2021
         """
-        with open(self.filename, 'r') as data:
+        # PLOT3D solution files are binary; 'rb' keeps Windows from translating bytes
+        with open(self.filename, 'rb') as data:
             self.nb = np.fromfile(data, dtype='i4', count=1)[0]
 
             # Read in the i, j, k values for blocks
@@ -694,7 +703,7 @@ class FlowIO:
                     .reshape((self.ni[_i], self.nj[_i], self.nk[_i], 5), order='F')
 
             if print_progress:
-                print("Flow data reading is successful for " + self.filename + "\n")
+                logger.info("Flow data reading is successful for " + self.filename + "\n")
 
     def read_flow_fortran_2d(
         self,
@@ -1199,47 +1208,53 @@ class FlowIO:
             None
 
         """
+        # grid.ni/nj/nk are per-block arrays; take the first (this reader is
+        # single block). int() on a size-1 array is an error on numpy >= 2.
+        _ni = int(np.asarray(grid.ni).reshape(-1)[0])
+        _nj = int(np.asarray(grid.nj).reshape(-1)[0])
+        _nk = int(np.asarray(grid.nk).reshape(-1)[0])
         try:
             # load the flow file if available
             self.q = np.load(self.filename + '_temp/flow_data.npy')
-            print('**IMPORTANT** Read data from existing temp flow_data.npy file.\n')
-        except:
+            logger.info('**IMPORTANT** Read data from existing temp flow_data.npy file.\n')
+        except (FileNotFoundError, NotADirectoryError, ValueError):
+            # No cached .npy yet (or it is unreadable) -- parse the text file
             try:
                 # Read the formatted data till the file ends and reshape it to (ni, nj, nk, 5, nb)
-                print('Starting flow read from the formatted text. Please wait...\n')
+                logger.info('Starting flow read from the formatted text. Please wait...\n')
+                # NOTE: this reader consumes ASCII output from Tecplot, not the
+                # binary PLOT3D layout, so text mode is the correct mode here.
                 with open(self.filename, 'r') as flow:
                     self.q = np.fromfile(flow, sep=' ', dtype=data_type, count=-1)\
-                        .reshape((int(grid.nk), int(grid.nj), int(grid.ni), 5, 1)).transpose(2, 1, 0, 3, 4)
-                print('Flow data reading is successful for ' + self.filename + '\n')
+                        .reshape((_nk, _nj, _ni, 5, 1)).transpose(2, 1, 0, 3, 4)
+                logger.info('Flow data reading is successful for ' + self.filename + '\n')
             except ValueError:
                 # check for 2D formatted data
                 # read the formatted data till the file ends and reshape it to (ni, nj, 1, 5, nb)
                 # and expand it to (ni, nj, nk, 5, nb)
                 with open(self.filename, 'r') as flow:
                     self.q = np.fromfile(flow, sep=' ', dtype=data_type, count=-1)\
-                        .reshape((1, int(grid.nj), int(grid.ni), 5, 1)).transpose(2, 1, 0, 3, 4)
-                self.q = self.q.repeat(int(grid.nk), axis=2)
-                print('Flow data reading is successful for ' + self.filename + '\n')
+                        .reshape((1, _nj, _ni, 5, 1)).transpose(2, 1, 0, 3, 4)
+                self.q = self.q.repeat(_nk, axis=2)
+                logger.info('Flow data reading is successful for ' + self.filename + '\n')
 
 
             # Save as numpy file for future computations
-            try:
-                # Try creating the directory; if exists errors out and except
-                print('Trying to save to npy for future use\n')
-                os.mkdir(self.filename + '_temp')
-                np.save(self.filename + '_temp/flow_data', self.q)
-                print('Created _temp folder and saved flow data for future use.\n')
-            except:
-                np.save(self.filename + '_temp/flow_data', self.q)
-                print('Saved file for future use.\n')
+            logger.info('Trying to save to npy for future use\n')
+            os.makedirs(self.filename + '_temp', exist_ok=True)
+            np.save(self.filename + '_temp/flow_data', self.q)
+            logger.info('Saved flow data to ' + self.filename + '_temp/flow_data.npy for future use.\n')
 
         # Fill in other variables
         if self.mach is not None and self.rey is not None and self.alpha is not None and self.time is not None:
-            print('\nYour flow object is ready for further computations!\n')
+            logger.info('\nYour flow object is ready for further computations!\n')
         else:
-            print('\nPlease fill out mach, rey, alpha, and time variables in the object\n')
-            print('\n** ERROR **: Try again; one of the required variables is not filled\n')
-            exit()
+            _missing = [_name for _name in ('mach', 'rey', 'alpha', 'time')
+                        if getattr(self, _name) is None]
+            raise ValueError(
+                'FlowIO is missing required attribute(s): ' + ', '.join(_missing) +
+                '. Set them on the flow object (e.g. flow.mach = 2.0) before calling '
+                'read_formatted_txt.')
 
         return
 
@@ -1258,7 +1273,7 @@ class FlowIO:
         import glob
         try:
             from tqdm import tqdm
-        except Exception:
+        except ImportError:
             tqdm = None
         self.read_flow(data_type=data_type)
 

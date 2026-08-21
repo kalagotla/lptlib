@@ -1,4 +1,5 @@
 # Uses the program API to extract streamlines
+import logging
 import numpy as np
 from ..function.timer import Timer
 from ..io.plot3dio import GridIO
@@ -9,6 +10,8 @@ from ..streamlines.integration import Integration
 from ..function.variables import Variables
 import matplotlib.pyplot as plt
 import functools
+
+logger = logging.getLogger(__name__)
 
 
 class Streamlines:
@@ -86,8 +89,20 @@ class Streamlines:
         self.task = task
         self.debug = debug
         self.max_loop_check = 70
+        # Hard cap on the number of stored trajectory points. Honoured by every
+        # algorithm, so a runaway trajectory is bounded whichever one is used.
+        # None means "no cap"; the trajectory then ends when the point leaves
+        # the domain or an algorithm-specific guard fires.
         self.max_steps = None
         self._initial_vel_magnitude = None
+        # Book-keeping for time-step reductions forced by the mid-RK4 blow-up
+        # guard, so the step can grow back once steps start succeeding again.
+        self._blowup_halvings = 0
+        self._blowup_ceiling = None
+        # Newton-Raphson warm start carried along this particle's trajectory.
+        # Held per Streamlines instance -- one instance per particle -- so it is
+        # never shared between particles or threads.
+        self._last_search = None
         # Live-plot options
         self.show_velocity_contour = False
         # unsteady parameters
@@ -153,6 +168,61 @@ class Streamlines:
             self.time = []
         return
 
+    def _new_search(self, grid, point):
+        """Build a Search seeded with this trajectory's previous c-space guess.
+
+        Every step of a tracking loop creates a fresh Search. Without a warm
+        start each one falls back to a nearest-node scan over the whole block,
+        which dominates the run time on large grids. Seeding from the previous
+        search on *this* instance keeps that optimisation while leaving the
+        guess private to this particle -- the old module-global cache was
+        shared by every thread and every particle.
+        """
+        _warm = self._last_search._cpoint if self._last_search is not None else None
+        _idx = Search(grid, point, warm_start=_warm)
+        self._last_search = _idx
+        return _idx
+
+    def _step_cap_reached(self, location=None):
+        """Report whether ``max_steps`` has been hit, warning once if it has.
+
+        Called at the top of every integration loop. Before this existed only
+        ``adaptive-ppath`` looked at ``max_steps``, so a runaway trajectory
+        under any other algorithm was unbounded.
+        """
+        if self.max_steps is None or len(self.streamline) < self.max_steps:
+            return False
+        _where = self.point if location is None else location
+        logger.warning('Particle %s: maximum step count (%s) reached at %s. '
+                       'Stopping integration.',
+                       self.task, self.max_steps, np.asarray(_where).tolist())
+        return True
+
+    def _reduce_step_after_blowup(self):
+        """Halve the time step after the mid-RK4 blow-up guard rejected a step.
+
+        Remembers the step size in force before the first reduction so that
+        :meth:`_restore_step_after_blowup` can grow it back. Without that a
+        single discontinuity crossing permanently crippled the rest of the
+        trajectory: every later step ran at the reduced size for ever.
+        """
+        if self._blowup_halvings == 0:
+            self._blowup_ceiling = self.time_step
+        self.time_step = 0.5 * self.time_step
+        self._blowup_halvings += 1
+
+    def _restore_step_after_blowup(self):
+        """Grow the time step back toward its pre-blow-up value after a success.
+
+        One doubling per successful step, never past the size in force before
+        the first blow-up reduction, and never a reduction: an algorithm that
+        has already grown the step past that ceiling on its own keeps it.
+        """
+        if self._blowup_halvings > 0:
+            self.time_step = max(self.time_step,
+                                 min(2.0 * self.time_step, self._blowup_ceiling))
+            self._blowup_halvings -= 1
+
     @staticmethod
     def _magnitude(self, v1, v2):
         # return the magnitude of the vector
@@ -176,8 +246,8 @@ class Streamlines:
                 for i, axis in enumerate(axes):
                     try:
                         _saved_limits[i] = (axis.get_xlim(), axis.get_ylim())
-                    except Exception:
-                        pass
+                    except (AttributeError, IndexError, ValueError) as _err:
+                        logger.debug('Could not save axis limits for axis %d: %s', i, _err)
             else:
                 _saved_limits[:] = [(ax.get_xlim(), ax.get_ylim()) for ax in axes]
 
@@ -222,14 +292,14 @@ class Streamlines:
                 try:
                     for coll in self._vel_cs.collections:
                         coll.remove()
-                except Exception:
-                    pass
+                except (AttributeError, ValueError, NotImplementedError) as _err:
+                    logger.debug('Could not remove contour collections: %s', _err)
                 self._vel_cs = None
             if hasattr(self, "_vel_cbar") and self._vel_cbar is not None:
                 try:
                     self._vel_cbar.remove()
-                except Exception:
-                    pass
+                except (AttributeError, ValueError, KeyError) as _err:
+                    logger.debug('Could not remove colorbar: %s', _err)
                 self._vel_cbar = None
         elif (flow is not None) and (grid is not None) and hasattr(flow, 'q'):
             try:
@@ -255,8 +325,8 @@ class Streamlines:
                 if hasattr(self, "_vel_pmesh") and self._vel_pmesh is not None:
                     try:
                         self._vel_pmesh.remove()
-                    except Exception:
-                        pass
+                    except (AttributeError, ValueError, NotImplementedError) as _err:
+                        logger.debug('Could not remove velocity pcolormesh: %s', _err)
 
                 # Cell-centred velocity magnitude for smoother shading
                 vel_cell = 0.25 * (
@@ -300,9 +370,11 @@ class Streamlines:
                     self._vel_cbar.mappable = self._vel_pmesh
                     self._vel_cbar.mappable.set_clim(vmin, vmax)
                     self._vel_cbar.update_normal(self._vel_cbar.mappable)
-            except Exception:
-                # Silently skip contour overlay if anything is inconsistent
-                pass
+            except Exception as _err:
+                # Skip the contour overlay if anything about the data is
+                # inconsistent -- this is a live-plot nicety, never load bearing.
+                logger.debug('Skipping velocity contour overlay: %s: %s',
+                             type(_err).__name__, _err)
 
         # Bottom subplot: grid outline and particle/fluid position on top of any background
         if grid is not None and grid.grd is not None:
@@ -335,8 +407,8 @@ class Streamlines:
         ax_pos.set_ylabel('y')
         try:
             ax_pos.set_aspect('equal', adjustable='box')
-        except Exception:
-            pass
+        except (NotImplementedError, ValueError) as _err:
+            logger.debug('Could not set equal aspect on the position axis: %s', _err)
         # Hint for interactive control
         ax_pos.text(0.01, 0.99, "c: contour, [: narrow, ]: widen",
                     transform=ax_pos.transAxes, ha='left', va='top',
@@ -359,7 +431,7 @@ class Streamlines:
     @staticmethod
     def print_debug(self, statement):
         if self.debug is True:
-            print(statement)
+            logger.debug(statement)
         return
 
     def compute(self, method='p-space', grid=None, flow=None):
@@ -373,6 +445,12 @@ class Streamlines:
         Returns:
 
         """
+        # Start each trajectory from a cold Newton-Raphson guess so a repeated
+        # compute() on the same object is reproducible.
+        self._last_search = None
+        self._blowup_halvings = 0
+        self._blowup_ceiling = None
+
         if grid is None or flow is None:
             grid = GridIO(self.grid_file)
             flow = FlowIO(self.flow_file)
@@ -387,7 +465,7 @@ class Streamlines:
         # Add data to output at the given point
         # This is the assumption where particle velocity is same as the fluid
         self.streamline.append(self.point)
-        idx = Search(grid, self.point)
+        idx = self._new_search(grid, self.point)
         interp = Interpolation(flow, idx)
         interp.adaptive = self.adaptive_interpolation
         idx.compute(method=self.search)
@@ -415,7 +493,9 @@ class Streamlines:
             # t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             # t.start()
             while True:
-                idx = Search(grid, self.point)
+                if self._step_cap_reached():
+                    break
+                idx = self._new_search(grid, self.point)
                 interp = Interpolation(flow, idx)
                 interp.adaptive = self.adaptive_interpolation
                 intg = Integration(interp)
@@ -439,7 +519,9 @@ class Streamlines:
             # t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             # t.start()
             while True:
-                idx = Search(grid, self.point)
+                if self._step_cap_reached():
+                    break
+                idx = self._new_search(grid, self.point)
                 interp = Interpolation(flow, idx)
                 interp.adaptive = self.adaptive_interpolation
                 intg = Integration(interp)
@@ -498,9 +580,11 @@ class Streamlines:
             # t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             # t.start()
             save_point = self.point
-            idx = Search(grid, self.point)
+            idx = self._new_search(grid, self.point)
             idx.compute(method='c-space')
             while True:
+                if self._step_cap_reached(save_point):
+                    break
                 interp = Interpolation(flow, idx)
                 interp.adaptive = self.adaptive_interpolation
                 interp.compute(method='c-space')
@@ -510,7 +594,7 @@ class Streamlines:
                     # For multi-block case if the point is out-of-block
                     # Use previous point and run one-step of p-space algo
                     self.print_debug(self, 'Point exited the block! Searching for new position...')
-                    idx = Search(grid, save_point)
+                    idx = self._new_search(grid, save_point)
                     interp = Interpolation(flow, idx)
                     interp.adaptive = self.adaptive_interpolation
                     intg = Integration(interp)
@@ -524,7 +608,7 @@ class Streamlines:
                         # Update the block in idx
                         # new_point is in p-space for this else block
 
-                        idx = Search(grid, new_point)
+                        idx = self._new_search(grid, new_point)
                         idx.compute(method='c-space')
                         self.streamline.append(new_point)
                         self.fvelocity.append(new_pvel)
@@ -552,9 +636,11 @@ class Streamlines:
             # t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             # t.start()
             save_point = self.point
-            idx = Search(grid, self.point)
+            idx = self._new_search(grid, self.point)
             idx.compute(method='c-space')
             while True:
+                if self._step_cap_reached(save_point):
+                    break
                 interp = Interpolation(flow, idx)
                 interp.compute(method='c-space')
                 interp.adaptive = self.adaptive_interpolation
@@ -575,7 +661,7 @@ class Streamlines:
                         # For multi-block case if the point is out-of-block
                         # Use previous point and run one-step of p-space algo
                         self.print_debug(self, 'Point exited the block! Searching for new position...')
-                        idx = Search(grid, save_point)
+                        idx = self._new_search(grid, save_point)
                         interp = Interpolation(flow, idx)
                         interp.adaptive = self.adaptive_interpolation
                         intg = Integration(interp)
@@ -589,7 +675,7 @@ class Streamlines:
                         # If not none; update to c-space and run
                         else:
                             # Update the block in idx
-                            idx = Search(grid, new_point)
+                            idx = self._new_search(grid, new_point)
                             idx.compute(method='c-space')
                             self.streamline.append(new_point)
                             self.fvelocity.append(new_pvel)
@@ -646,8 +732,11 @@ class Streamlines:
             # t.start()
             vel = None
             fvel = None
+            _blowup_retries = 0
             while True:
-                idx = Search(grid, self.point)
+                if self._step_cap_reached():
+                    break
+                idx = self._new_search(grid, self.point)
                 interp = Interpolation(flow, idx)
                 intg = Integration(interp)
                 interp.adaptive = self.adaptive_interpolation
@@ -662,6 +751,27 @@ class Streamlines:
                     self.print_debug(self, 'Integration complete!')
                     break
 
+                # The blow-up guard fired, so no step was taken: what came back
+                # is the unchanged input state. Appending it and carrying on
+                # stored a duplicate point and spun for ever on any particle
+                # that could not cross a discontinuity. Retry with a halved
+                # time step instead, a bounded number of times.
+                if intg.rk4_bool is True:
+                    intg.rk4_bool = False
+                    _blowup_retries += 1
+                    if _blowup_retries > self.max_loop_check:
+                        logger.warning(
+                            'Particle %s: mid-RK4 blow up at %s could not be resolved '
+                            'after %d time-step reductions (time step now %g). '
+                            'Ending this trajectory.',
+                            self.task, np.asarray(self.point).tolist(),
+                            _blowup_retries - 1, self.time_step)
+                        break
+                    self.print_debug(self, f'**WARNING** Large residual. Mid-RK4 blow up! '
+                                           f'Reducing time-step for particle number - {self.task}')
+                    self._reduce_step_after_blowup()
+                    continue
+
                 # Save results and continue the loop
                 self.streamline.append(new_point)
                 self.svelocity.append(new_vel)
@@ -670,6 +780,8 @@ class Streamlines:
                 self.point = new_point
                 vel = new_vel.copy()
                 fvel = new_fvel.copy()
+                _blowup_retries = 0
+                self._restore_step_after_blowup()
 
             # Save files for each particle; can be used for multiprocessing large number of particles
             self._save_data(self)
@@ -701,10 +813,9 @@ class Streamlines:
             _vel_max = np.linalg.norm(vel) if vel is not None else 1.0  # Track max velocity for near-zero guard
             while True:
                 _vel_max = max(_vel_max, np.linalg.norm(vel)) if vel is not None else _vel_max
-                if self.max_steps is not None and len(self.streamline) >= self.max_steps:
-                    self.print_debug(self, f'Max steps ({self.max_steps}) reached. Integration ends!')
+                if self._step_cap_reached():
                     break
-                idx = Search(grid, self.point)
+                idx = self._new_search(grid, self.point)
                 interp = Interpolation(flow, idx)
                 interp.adaptive = self.adaptive_interpolation
                 intg = Integration(interp)
@@ -740,10 +851,15 @@ class Streamlines:
                                      f'number'
                                      f' - {self.task}')
                     intg.rk4_bool = False
-                    self.time_step = 0.5 * self.time_step
+                    self._reduce_step_after_blowup()
                     loop_check += 1
                     if loop_check == self.max_loop_check:
-                        self.print_debug(self, 'Stuck in the same loop for too long. Integration ends!')
+                        logger.warning(
+                            'Particle %s: mid-RK4 blow up at %s could not be resolved '
+                            'after %d time-step reductions (time step now %g). '
+                            'Ending this trajectory.',
+                            self.task, np.asarray(self.point).tolist(),
+                            loop_check, self.time_step)
                         break
 
                 # Adaptive algorithm starts
@@ -773,6 +889,7 @@ class Streamlines:
                     fvel = new_fvel.copy()
                     self.time_step = 2 * self.time_step
                     loop_check = 0  # This check might lead to slower integration for some edge cases
+                    self._restore_step_after_blowup()
                 # Decrease time step when angle OR magnitude change is large
                 # Make sure time step does not go to zero; 1 pico-second
                 # Guard: skip decrease when velocity is near zero (e.g. separation zones)
@@ -811,6 +928,7 @@ class Streamlines:
                     loop_check = 0
                     # reset the time-step to the value before step-back
                     self.time_step = saved_time_step
+                    self._restore_step_after_blowup()
                     # set step_back to False and continue the loop
                     step_back = False
 
@@ -824,6 +942,7 @@ class Streamlines:
                     vel = new_vel.copy()
                     fvel = new_fvel.copy()
                     loop_check = 0
+                    self._restore_step_after_blowup()
 
                 # Plot the streamline for debugging
                 # add levels to debug; multiple ways of showing plots etc...
@@ -845,14 +964,16 @@ class Streamlines:
             t = Timer(text="Time taken for particle " + str(self.task) + " is {:.2f} seconds")
             t.start()
             save_point = self.point
-            idx = Search(grid, self.point)
+            idx = self._new_search(grid, self.point)
             idx.compute(method='c-space')
             while True:
+                if self._step_cap_reached(save_point):
+                    break
                 interp = Interpolation(flow, idx)
                 interp.adaptive = self.adaptive_interpolation
                 interp.compute(method='c-space')
                 intg = Integration(interp)
-                new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
+                new_point, new_pvel, new_fvel = intg.compute_ppath(diameter=self.diameter,
                                                                    density=self.density,
                                                                    velocity=pvel, method='cRK4',
                                                                    time_step=self.time_step,
@@ -861,13 +982,13 @@ class Streamlines:
                     # For multi-block case if the point is out-of-block
                     # Use previous point and run one-step of p-space algo
                     self.print_debug(self, 'Point exited the block! Searching for new position...')
-                    idx = Search(grid, save_point)
+                    idx = self._new_search(grid, save_point)
                     interp = Interpolation(flow, idx)
                     interp.adaptive = self.adaptive_interpolation
                     intg = Integration(interp)
                     idx.compute(method='p-space')
                     interp.compute(method='p-space')
-                    new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
+                    new_point, new_pvel, new_fvel = intg.compute_ppath(diameter=self.diameter,
                                                                        density=self.density,
                                                                        velocity=pvel, method='pRK4',
                                                                        time_step=self.time_step,
@@ -877,7 +998,7 @@ class Streamlines:
                         break
                     else:
                         # Update the block in idx
-                        idx = Search(grid, new_point)
+                        idx = self._new_search(grid, new_point)
                         idx.compute(method='c-space')
                         self.streamline.append(new_point)
                         self.fvelocity.append(new_fvel)
@@ -941,21 +1062,23 @@ class Streamlines:
                         sl._vel_scale /= 1.2  # widen range
                 fig.canvas.mpl_connect('key_press_event', _on_key)
             save_point = self.point
-            idx = Search(grid, self.point)
+            idx = self._new_search(grid, self.point)
             idx.compute(method='c-space')
             _resync_counter = 0
             _resync_interval = 10  # Resync c-space via p-space every N saved steps
             while True:
+                if self._step_cap_reached(save_point):
+                    break
                 # Periodic p-space resync to correct accumulated Jacobian drift
                 if _resync_counter >= _resync_interval:
-                    idx = Search(grid, save_point)
+                    idx = self._new_search(grid, save_point)
                     idx.compute(method='c-space')
                     _resync_counter = 0
                 interp = Interpolation(flow, idx)
                 interp.adaptive = self.adaptive_interpolation
                 interp.compute(method='c-space')
                 intg = Integration(interp)
-                new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
+                new_point, new_pvel, new_fvel = intg.compute_ppath(diameter=self.diameter,
                                                                    density=self.density,
                                                                    velocity=pvel, method='cRK4',
                                                                    time_step=self.time_step,
@@ -967,7 +1090,7 @@ class Streamlines:
                     if self.time_step <= 1e-12:
                         break
                     self.time_step = 1e-2 * self.time_step
-                    new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
+                    new_point, new_pvel, new_fvel = intg.compute_ppath(diameter=self.diameter,
                                                                        density=self.density,
                                                                        velocity=pvel, method='cRK4',
                                                                        time_step=self.time_step,
@@ -980,13 +1103,13 @@ class Streamlines:
                     # Use previous point and run one-step of p-space algo
                     elif new_point is None:
                         self.print_debug(self, 'Point exited the block! Searching for new position...')
-                        idx = Search(grid, save_point)
+                        idx = self._new_search(grid, save_point)
                         interp = Interpolation(flow, idx)
                         interp.adaptive = self.adaptive_interpolation
                         intg = Integration(interp)
                         idx.compute(method='p-space')
                         interp.compute()
-                        new_point, new_fvel, new_pvel = intg.compute_ppath(diameter=self.diameter,
+                        new_point, new_pvel, new_fvel = intg.compute_ppath(diameter=self.diameter,
                                                                            density=self.density,
                                                                            velocity=pvel, method='pRK4',
                                                                            time_step=self.time_step,
@@ -996,7 +1119,7 @@ class Streamlines:
                             break
                         else:
                             # Update the block in idx
-                            idx = Search(grid, new_point)
+                            idx = self._new_search(grid, new_point)
                             idx.compute(method='c-space')
                             # new_point found is in p-space; so, append
                             self.streamline.append(new_point)
@@ -1018,10 +1141,15 @@ class Streamlines:
                                          f'**WARNING** Large residual. Mid-RK4 blow up! Reducing time-step for particle number'
                                          f' - {self.task}')
                         intg.rk4_bool = False
-                        self.time_step = 0.5 * self.time_step
+                        self._reduce_step_after_blowup()
                         loop_check += 1
                         if loop_check == 70:
-                            self.print_debug(self, 'Stuck in the same loop for too long. Integration ends!')
+                            logger.warning(
+                                'Particle %s: mid-RK4 blow up at %s could not be resolved '
+                                'after %d time-step reductions (time step now %g). '
+                                'Ending this trajectory.',
+                                self.task, np.asarray(save_point).tolist(),
+                                loop_check, self.time_step)
                             break
 
                     # Adaptive algorithm starts
@@ -1051,6 +1179,7 @@ class Streamlines:
                         self.time_step = 2 * self.time_step
                         loop_check = 0
                         _resync_counter += 1
+                        self._restore_step_after_blowup()
                     elif (self.angle_btw(new_pvel, pvel) >= self.adaptivity
                             or self._magnitude(self, new_pvel, pvel) >= self.magnitude_adaptivity) \
                             and self.time_step >= 1e-12:
@@ -1067,6 +1196,7 @@ class Streamlines:
                         fvel = new_fvel.copy()
                         loop_check = 0
                         _resync_counter += 1
+                        self._restore_step_after_blowup()
 
                 # Plot the streamline for debugging
                 if self.debug:
@@ -1105,13 +1235,15 @@ class Streamlines:
                         sl._vel_scale /= 1.2
                 fig.canvas.mpl_connect('key_press_event', _on_key)
             while True:
+                if self._step_cap_reached():
+                    break
                 if (flow.unsteady_flow[_temp].time - np.sum(self.time)) < 0:
                     self.flow_old = flow.unsteady_flow[_temp]
                     _temp += 1
                 if _temp == len(flow.unsteady_flow):
-                    print('Integration complete! for particle ' + str(self.task))
+                    logger.info('Integration complete! for particle ' + str(self.task))
                     break
-                idx = Search(grid, self.point)
+                idx = self._new_search(grid, self.point)
                 # Skip the first object from _flowfiles and change the flow object with every iteration in interp
                 interp = Interpolation(flow.unsteady_flow[_temp], idx)
                 interp.time = self.time
@@ -1121,7 +1253,7 @@ class Streamlines:
                 interp.compute(method=self.interpolation)
                 new_point, new_vel = intg.compute(method='unsteady-pRK4', time_step=self.time_step)
                 if new_point is None:
-                    print('Integration complete!')
+                    logger.info('Integration complete!')
                     break
                 self.streamline.append(new_point)
                 self.fvelocity.append(new_vel)
@@ -1147,6 +1279,7 @@ class Streamlines:
         if method == 'unsteady-ppath':
             vel = None
             fvel = None
+            _blowup_retries = 0
             # _temp is used to keep track of the flow object
             _temp = 0
             if self.debug:
@@ -1169,13 +1302,15 @@ class Streamlines:
                         sl._vel_scale /= 1.2
                 fig.canvas.mpl_connect('key_press_event', _on_key)
             while True:
+                if self._step_cap_reached():
+                    break
                 if (flow.unsteady_flow[_temp].time - np.sum(self.time)) < 0:
                     self.flow_old = flow.unsteady_flow[_temp]
                     _temp += 1
                 if _temp == len(flow.unsteady_flow):
-                    print('Integration complete! for particle ' + str(self.task))
+                    logger.info('Integration complete! for particle ' + str(self.task))
                     break
-                idx = Search(grid, self.point)
+                idx = self._new_search(grid, self.point)
                 interp = Interpolation(flow.unsteady_flow[_temp], idx)
                 interp.time = self.time
                 interp.flow_old = self.flow_old
@@ -1188,8 +1323,25 @@ class Streamlines:
                                                                   time_step=self.time_step,
                                                                   drag_model=self.drag_model)
                 if new_point is None:
-                    print('Integration complete! Out of domain for particle ' + str(self.task))
+                    logger.info('Integration complete! Out of domain for particle ' + str(self.task))
                     break
+
+                # Blow-up guard fired: no step was taken, so retry with a
+                # halved time step rather than appending a duplicate point for
+                # ever (the same defect that made 'ppath' non-terminating).
+                if intg.rk4_bool is True:
+                    intg.rk4_bool = False
+                    _blowup_retries += 1
+                    if _blowup_retries > self.max_loop_check:
+                        logger.warning(
+                            'Particle %s: mid-RK4 blow up at %s could not be resolved '
+                            'after %d time-step reductions (time step now %g). '
+                            'Ending this trajectory.',
+                            self.task, np.asarray(self.point).tolist(),
+                            _blowup_retries - 1, self.time_step)
+                        break
+                    self._reduce_step_after_blowup()
+                    continue
 
                 # Save results and continue the loop
                 self.streamline.append(new_point)
@@ -1199,6 +1351,8 @@ class Streamlines:
                 self.point = new_point
                 vel = new_vel.copy()
                 fvel = new_fvel.copy()
+                _blowup_retries = 0
+                self._restore_step_after_blowup()
 
                 # Plot the streamline for debugging
                 # add levels to debug; multiple ways of showing plots etc...

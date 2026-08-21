@@ -1,7 +1,10 @@
 # Use tri-linear interpolation to get data at the given point
 
+import logging
 import numpy as np
 from ..function.variables import Variables
+
+logger = logging.getLogger(__name__)
 
 
 class Interpolation:
@@ -174,7 +177,7 @@ class Interpolation:
 
         # If out of domain return
         if self.idx.ppoint is None and self.idx.cpoint is None:
-            print('Cannot run interpolation. The given point is out of domain.\n')
+            logger.debug('Cannot run interpolation. The given point is out of domain.\n')
             self.q = None
             return
 
@@ -285,19 +288,24 @@ class Interpolation:
                 Equation can be found in Sadarjoen et al.
                 """
 
-                # if the point is node return node data
-                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
-                                    'Interpolation will assign node properties for integration.\n' \
-                                    'Index of the node will be returned by cell attribute\n':
-                    self.q = _cell_q[0]
-                    self.q = self.q.reshape((1, 1, 1, -1, 1))
-                    return
-
                 # Interpolate m1 and m2 for use in integration; m1 is used in ppath only!
                 # m1 -- indicated as J (determinant of m1 is J)
                 _cell_J = self.idx.grid.m1[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :, self.idx.block]
                 # m2 -- indicated as J_inv (determinant of m2 is J_inv)
                 _cell_J_inv = self.idx.grid.m2[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :, self.idx.block]
+
+                # if the point is node return node data. The metrics have to be
+                # assigned too: cRK2/cRK4 multiply by J_inv on every step, and
+                # leaving it None made an exact grid node raise from np.matmul.
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
+                                    'Interpolation will assign node properties for integration.\n' \
+                                    'Index of the node will be returned by cell attribute\n':
+                    self.q = _cell_q[0]
+                    self.J = _cell_J[0]
+                    self.J_inv = _cell_J_inv[0]
+                    self.q = self.q.reshape((1, 1, 1, -1, 1))
+                    return
+
                 _alpha, _beta, _gamma = self.idx.cpoint - self.idx.cell[0]
 
                 # Do the shock cell check
@@ -426,14 +434,6 @@ class Interpolation:
                 """
                 Raidal basis function interpolation in c-space
                 """
-                # if the point is node return node data
-                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
-                                    'Interpolation will assign node properties for integration.\n' \
-                                    'Index of the node will be returned by cell attribute\n':
-                    self.q = _cell_q[0]
-                    self.q = self.q.reshape((1, 1, 1, -1, 1))
-                    return
-
                 # Interpolate m1 and m2 for use in integration; m1 is used in ppath only!
                 # m1 -- indicated as J (determinant of m1 is J)
                 _cell_J = self.idx.grid.m1[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :,
@@ -441,6 +441,18 @@ class Interpolation:
                 # m2 -- indicated as J_inv (determinant of m2 is J_inv)
                 _cell_J_inv = self.idx.grid.m2[self.idx.cell[:, 0], self.idx.cell[:, 1], self.idx.cell[:, 2], :, :,
                               self.idx.block]
+
+                # if the point is node return node data; the metrics come from
+                # the same node so the c-space integrators have a J_inv to use
+                if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
+                                    'Interpolation will assign node properties for integration.\n' \
+                                    'Index of the node will be returned by cell attribute\n':
+                    self.q = _cell_q[0]
+                    self.J = _cell_J[0]
+                    self.J_inv = _cell_J_inv[0]
+                    self.q = self.q.reshape((1, 1, 1, -1, 1))
+                    return
+
                 # _alpha, _beta, _gamma and reshape for rbf intepolator to work
                 _fractions = (self.idx.cpoint - self.idx.cell[0]).reshape(1, -1)
 
@@ -651,11 +663,16 @@ class Interpolation:
 
             case 'rgi-c-space':
                 # implement rgi interpolation in c-space
-                # if the point is node return node data
+                # if the point is node return node data; the metrics come from
+                # the same node so the c-space integrators have a J_inv to use
                 if self.idx.info == 'Given point is a node in the domain with a tol of 1e-12.\n' \
                                     'Interpolation will assign node properties for integration.\n' \
                                     'Index of the node will be returned by cell attribute\n':
                     self.q = _cell_q[0]
+                    self.J = self.idx.grid.m1[self.idx.cell[0, 0], self.idx.cell[0, 1],
+                                              self.idx.cell[0, 2], :, :, self.idx.block]
+                    self.J_inv = self.idx.grid.m2[self.idx.cell[0, 0], self.idx.cell[0, 1],
+                                                  self.idx.cell[0, 2], :, :, self.idx.block]
                     self.q = self.q.reshape((1, 1, 1, -1, 1))
                     return
 

@@ -1,9 +1,11 @@
 # Integrate from given point to produce streamlines
+import logging
 import numpy as np
 from ..streamlines.interpolation import Interpolation
 from ..streamlines.search import Search
 from ..function.variables import Variables
-from scipy.optimize import fsolve
+
+logger = logging.getLogger(__name__)
 
 
 class Integration:
@@ -31,7 +33,13 @@ class Integration:
     cpoint : numpy.ndarray or None
         Updated point in computational space after a step.
     rk4_bool : bool
-        Internal flag used to signal a blow-up detected mid-RK4 step.
+        Step-failed sentinel. Set by :meth:`compute_ppath` when a blow-up is
+        detected mid-RK4 and the step therefore could **not** be taken. When it
+        is set the returned state is the *unchanged* input state, not a new
+        point, so a caller that appends it and carries on stores a duplicate
+        point and never advances. Callers must test it after every
+        :meth:`compute_ppath` call and either retry with a smaller time step or
+        end the trajectory; see :meth:`_step_failed`.
     blowup_factor : float
         Threshold used to detect divergence during an RK4 sub-step.
     """
@@ -42,6 +50,19 @@ class Integration:
         self.cpoint = None
         self.rk4_bool = False
         self.blowup_factor = 10  # Threshold for mid-RK4 blow-up detection
+
+    def _step_failed(self, x0, v0, u0):
+        """Signal that this particle-path step could not be taken.
+
+        Sets the :attr:`rk4_bool` step-failed sentinel and hands back the
+        *unchanged* input state ``(point, particle velocity, fluid velocity)``.
+        The blow-up guard that calls this exists because the RK4 residuals
+        diverge when a particle crosses a discontinuity with a time step that
+        is too large for the local drag time scale; the only safe answer is
+        "no step", never a fabricated one.
+        """
+        self.rk4_bool = True
+        return x0, v0, u0
 
     def __str__(self):
         doc = "This instance uses data from " + self.interp.flow.filename + \
@@ -106,7 +127,8 @@ class Integration:
                             interim RK4 variables
 
                     """
-                    idx = Search(self.interp.idx.grid, x)
+                    idx = Search(self.interp.idx.grid, x,
+                                 warm_start=self.interp.idx._cpoint)
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
                     if idx.ppoint is None: return None, None
@@ -167,7 +189,8 @@ class Integration:
                             interim RK2 variables
 
                     """
-                    idx = Search(self.interp.idx.grid, x)
+                    idx = Search(self.interp.idx.grid, x,
+                                 warm_start=self.interp.idx._cpoint)
                     idx.block = self.interp.idx.block
                     idx.c2p(x)  # This will change the cell attribute
                     # In-domain check is done in search
@@ -230,7 +253,8 @@ class Integration:
                             interim RK4 variables
 
                     """
-                    idx = Search(self.interp.idx.grid, x)
+                    idx = Search(self.interp.idx.grid, x,
+                                 warm_start=self.interp.idx._cpoint)
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
                     if idx.ppoint is None: return None, None
@@ -298,7 +322,8 @@ class Integration:
                             interim RK4 variables
 
                     """
-                    idx = Search(self.interp.idx.grid, x)
+                    idx = Search(self.interp.idx.grid, x,
+                                 warm_start=self.interp.idx._cpoint)
                     idx.block = self.interp.idx.block
                     idx.c2p(x)  # This will change the cell attribute
                     # In-domain check is done in search
@@ -371,7 +396,8 @@ class Integration:
                             interim RK4 variables
 
                     """
-                    idx = Search(self.interp.idx.grid, x)
+                    idx = Search(self.interp.idx.grid, x,
+                                 warm_start=self.interp.idx._cpoint)
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
                     if idx.ppoint is None: return None, None
@@ -417,213 +443,24 @@ class Integration:
 
     def compute_ppath(self, diameter=1e-6, density=1000, velocity=None,
                       method='pRK4', time_step=1e-4, drag_model='stokes'):
+        """Advance an inertial particle by one step.
 
-        def _drag_constant(_re, _q_interp=None, _mach=None, _mu=None, _model=drag_model):
-            """
-            Coefficient of drag for a spherical particle
+        Returns
+        -------
+        tuple
+            ``(new_point, particle_velocity, fluid_velocity)`` for every
+            ``method``. ``pRK4`` and ``unsteady-pRK4`` return the point in
+            physical space, ``cRK4`` in computational space; both velocities
+            are always in physical space.
 
-            Args:
-                _re : Relative Reynolds Number
-                _mach : Relative Mach Number
-                _model : Drag Model Name
-                    Available models are 'sphere', 'stokes', 'oseen', 'schiller_nauman',
-                    'cunningham'
+            ``(None, None, None)`` means the point left the domain (or the
+            block, for ``cRK4``) and the trajectory is finished.
 
-            Returns:
-                coefficient of drag based on local flow/particle properties
-
-            """
-            _gamma = q_interp.gamma
-            match _model:
-                case 'zero-drag':
-                    # zero drag model to simulate fluid
-                    return 0
-
-                case 'sphere':
-                    # ref: Fluid Mechanics, Frank M. White
-                    # This was decided by trail-and-error from VISUAL3 code
-                    if _re <= 1e-9:
-                        return 0
-                    if _re < 1e-3:
-                        return 24 / _re
-                    if 1e-3 <= _re < 0.45:
-                        return 24 / _re * (1 + 3 * _re / 16)
-                    if 0.45 <= _re < 1:
-                        # Same as above due to lack of data
-                        return 24 / _re * (1 + 3 * _re / 16)
-                    if 1 <= _re < 800:
-                        return 24 / _re * (1 + _re ** (2 / 3) / 6)
-                    if 800 <= _re < 3e5:
-                        return 0.44
-                    if 3e5 <= _re < 4e5:
-                        # Same as above due to lack of data
-                        return 0.44
-                    if _re >= 4e5:
-                        return 0.07
-
-                case 'stokes':
-                    # Stokes Drag; for creeping flow regime; Re << 1
-                    if _re <= 1e-9:
-                        return 0
-                    else:
-                        return 24/_re
-
-                case 'melling':
-                    # The popular melling correction
-                    if _re <= 1e-9:
-                        return 0
-                    else:
-                        knd = _mach / _re * np.sqrt(np.pi*_gamma/2)
-                        return 24/_re * (1 + knd)**-1
-
-                case 'melling-2':
-                    # The popular melling correction
-                    if _re <= 1e-9:
-                        return 0
-                    else:
-                        knd = _mach / _re * np.sqrt(np.pi*_gamma/2)
-                        return 24/_re * (1 + 2.7*knd)**-1
-
-                case 'oseen':
-                    # Oseen's model; for creeping flow regime; Re < 1
-                    if _re <= 1e-9:
-                        return 0
-                    else:
-                        return 24/_re * (1 + 3/16 * _re)
-
-                case 'schiller-nauman':
-                    # Schiller and Nauman's model; for Re <~ 200 & M <~ 0.25
-                    if _re <= 1e-9:
-                        return 0
-                    else:
-                        return 24/_re * (1 + 0.15 * _re**0.687)
-
-                case 'cunningham':
-                    # Cunningham model; for Re << 1; M << 1; Kn <~ 0.1
-                    # Knudsen number
-                    # _r = _q_interp.density * _q_interp.velocity_magnitude * diameter / _mu
-                    if _re <= 1e-9:
-                        return 0
-                    if _re <= 1:
-                        _kn = _mach / _re * np.sqrt(_q_interp.gamma * np.pi/2)
-                        return 24/_re * (1 + 4.5*_kn)**-1
-                    if _re > 1:
-                        _kn = _mach / np.sqrt(_re)
-                        return 24/_re * (1 + 4.5*_kn)**-1
-
-                case 'henderson':
-                    # Henderson model; for all flow regimes
-                    # Simplified by ignoring sphere temperature
-                    if _re < 1e-9:
-                        return 0
-
-                    # For Mach < 1
-                    _s = _mach * np.sqrt(_gamma/2)
-                    _f1 = 24 * (_re + _s * (5.89688 * np.exp(-0.247 * _re/_s)))**-1
-                    _f2 = np.exp(-0.5*_mach/np.sqrt(_re)) * \
-                                ((4.5 + 0.38*(0.03*_re + 0.48*np.sqrt(_re))) / (1 + 0.03*_re + 0.48*np.sqrt(_re)) +
-                                 0.1*_mach**2 + 0.2*_mach**8)
-                    _f3 = (1 - np.exp(-_mach/_re))*0.6*_s
-                    _cd1 = _f1 + _f2 + _f3
-                    if _mach < 1:
-                        return _cd1
-
-                    # For Mach >= 1.75
-                    _mach_inf = _mach
-                    _re_inf = _re
-                    _s_inf = _mach_inf * np.sqrt(_gamma/2)
-                    _g1 = 0.9 + 0.34/_mach_inf**2
-                    _g2 = 1.86 * np.sqrt(_mach_inf/_re_inf) * (2 + 2/_s_inf**2 + 1.058/_s_inf - 1/_s_inf**4)
-                    _g3 = 1 + 1.86 * np.sqrt(_mach_inf/_re_inf)
-                    _cd2 = (_g1 + _g2) / _g3
-                    if _mach >= 1.75:
-                        return _cd2
-
-                    # For 1 <= Mach < 1.75; linear interpolation
-                    if 1 <= _mach < 1.75:
-                        return _cd1 + 4/3 * (_mach_inf - 1) * (_cd2 - _cd1)
-
-                case 'subramaniam-balachandar':
-                    # Model from their new book
-                    if _re < 1e-9:
-                        return 0
-
-                    if _re < 0.5:
-                        # Stokes
-                        return 24/_re
-
-                    if _re < 20:
-                        # Clift
-                        return 24/_re * (1 + 0.1315 * _re**(0.82-0.05*np.log10(_re)))
-
-                    if _re < 800:
-                        # Schiller-Naumann
-                        return 24/_re * (1 + 0.15 * _re**0.687)
-
-                    if _re < 3e5:
-                        # Clift-Gauvin
-                        return 24/_re * (1 + 0.15 * _re**0.687 + 0.42/24 * _re * (1 + 4.25e4 * _re**(-1.16))**-1)
-
-                case 'loth':
-                    # Loth's model; for all flow regimes
-                    if _re < 1e-9:
-                        return 0
-
-                    if _re < 45:
-                    # Rarefraction dominated domain
-                        from scipy.special import erf
-                        _s = _mach * np.sqrt(_gamma/2)
-                        _cd_fm = (1 + 2 * _s**2) * np.exp(-_s**2) / (_s**3 * np.pi**0.5) + \
-                                 (4*_s**4 + 4*_s**2 - 1) * erf(_s) / (2*_s**4) + 2 * np.pi**0.5 / (3 * _s)
-                        _cd_fm_re = _cd_fm / (1 + (_cd_fm/1.63 - 1) * (_re/45)**0.5)
-                        _kn = (np.pi * _gamma / 2)**0.5 * _mach / _re
-                        _f_kn = (1 + _kn * (2.514 + 0.8 * np.exp(-0.55/_kn)))**-1
-                        _cd_kn_re = 24/_re * (1 + 0.15 * _re**0.687) * _f_kn
-                        _cd = (_cd_kn_re + _mach**4 * _cd_fm_re) / (1 + _mach**4)
-                        return _cd
-
-                    if _re == 45:
-                        return 1.63
-
-                    if _re > 45:
-                    # compression-dominated regime
-                        if _mach <= 1.45:
-                            _cm = 5/3 + 2/3 * np.tanh(3 * np.log(_mach + 0.1))
-                        else:
-                            _cm = 2.044 + 0.2 * np.exp(-1.8 * (np.log(_mach/1.5))**2)
-                        if _mach <= 0.89:
-                            _gm = 1 - 1.525 * _mach**4
-                        else:
-                            _gm = 2e-4 + 8e-4 * np.tanh(12.77 * (_mach - 2.02))
-                        _hm = 1 - 0.258 * _cm / (1 + 514 * _gm)
-                        _cd = 24/_re * (1 + 0.15 * _re**0.687) * _hm + 0.42 * _cm / (1 + 42000 * _gm / _re**1.16)
-                        return _cd
-
-                case 'tedeschi':
-                    # Tedeschi's model; for all flow regimes
-                    if _re < 1e-9:
-                        return 0
-                    if _re <= 1:
-                        _kn = _mach / _re * np.sqrt(_q_interp.gamma * np.pi/2)
-                    else:
-                        _kn = _mach / np.sqrt(_re)
-
-                    s = _mach * np.sqrt(_gamma/2)
-
-                    def _solve_k(_k):
-                        s_prime = (1 - _k) * s
-                        epsilon_prime = 3/8 * (np.pi**2 / s_prime) * (1 + s_prime**2) * s_prime + np.exp(-s_prime**2) /4
-                        a1 = 9/4 * 0.15 * 2 * _kn / epsilon_prime * (s * np.pi**0.5 / _kn)**0.687
-                        a2 = 1 + 9/4 * 2 * _kn / epsilon_prime
-                        return a1 * _k**1.687 + a2 * _k - 1
-
-                    # solve the equation
-                    k = fsolve(_solve_k, np.array([0.5]))
-
-                    c = 1 + _re**2 / (_re**2 + 100) * np.e**(-0.225/_mach**2.5)
-                    _epsilon_kn = 1.177 + 0.177 * (0.851 * _kn**1.16 - 1) / (0.851 * _kn**1.16 + 1)
-
-                    return 24/_re * k * (1 + 0.15 * (k*_re)**0.687) * c * _epsilon_kn
+            If :attr:`rk4_bool` is set on return, the blow-up guard fired: the
+            step could **not** be taken and the returned triple is the
+            unchanged input state. Callers must check it -- see
+            :meth:`_step_failed`.
+        """
 
         def _viscosity(_temperature, law='sutherland'):
             """
@@ -664,7 +501,8 @@ class Integration:
                             interim RK4 variables
 
                     """
-                    idx = Search(self.interp.idx.grid, x)
+                    idx = Search(self.interp.idx.grid, x,
+                                 warm_start=self.interp.idx._cpoint)
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
                     if idx.ppoint is None:
@@ -689,7 +527,7 @@ class Integration:
                         _mach = np.zeros_like(_vel_mag)
                     else:
                         _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) / _vel_mag
-                    _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
+                    _cd = q_interp.compute_drag_coefficient(_re=re, _mach=_mach, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     try:
                         _vk_explicit = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
@@ -750,8 +588,7 @@ class Integration:
                 _v_tol = max(1e-8 * np.linalg.norm(v0), 1e-12)
                 if (np.linalg.norm(x2 - x0) >= _bf * np.linalg.norm(x1-x0) and np.linalg.norm(x2 - x0) >= _x_tol)\
                         or (np.linalg.norm(v2 - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v2 - v0) >= _v_tol):
-                    self.rk4_bool = True
-                    return x0, v0, u0
+                    return self._step_failed(x0, v0, u0)
 
                 vk2, uf2, temp = _rk4_step(self, v2, x2)
                 xk2 = v2 * time_step
@@ -765,8 +602,7 @@ class Integration:
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
                 if (np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= _x_tol)\
                         or (np.linalg.norm(v3 - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v3 - v0) >= _v_tol):
-                    self.rk4_bool = True
-                    return x0, v0, u0
+                    return self._step_failed(x0, v0, u0)
 
                 vk3, uf3, temp = _rk4_step(self, v3, x3)
                 xk3 = v3 * time_step
@@ -780,16 +616,14 @@ class Integration:
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
                 if (np.linalg.norm(x_new - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x_new - x0) >= _x_tol)\
                         or (np.linalg.norm(v_new - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v_new - v0) >= _v_tol):
-                    self.rk4_bool = True
-                    return x0, v0, u0
+                    return self._step_failed(x0, v0, u0)
 
                 vk_new, uf_new, temp = _rk4_step(self, v_new, x_new)
                 # Suppress post-shock oscillations: only apply for strong shocks
                 if vk_new is None:
                     return None, None, None
                 if self.interp.detected_feature == 'strong_shock' and np.dot(v_new - v0, uf_new - v_new) < 0:
-                    self.rk4_bool = True
-                    return x0, v0, u0
+                    return self._step_failed(x0, v0, u0)
                 # For zero-drag: particle velocity = fluid velocity at final position
                 if vk_new is not None and np.linalg.norm(vk_new) == 0:
                     v_new = uf_new.copy()
@@ -819,7 +653,8 @@ class Integration:
                     # Clamp slightly negative c-space coords to 0 (common for
                     # 2D-extruded grids where a degenerate dimension sits at ~0)
                     x = np.maximum(x, 0)
-                    idx = Search(self.interp.idx.grid, x)
+                    idx = Search(self.interp.idx.grid, x,
+                                 warm_start=self.interp.idx._cpoint)
                     idx.block = self.interp.idx.block
                     idx.c2p(x)  # This will change the cell attribute
                     # In-domain check is done in search
@@ -852,7 +687,7 @@ class Integration:
                         _mach = np.zeros_like(_vel_mag)
                     else:
                         _mach = np.linalg.norm(p_vp - p_uf) * q_interp.mach.reshape(-1) / _vel_mag
-                    _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
+                    _cd = q_interp.compute_drag_coefficient(_re=re, _mach=_mach, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     _p_vk_explicit = _cd * _k * (p_vp - p_uf) * np.linalg.norm(p_vp - p_uf) * time_step
                     # Exponential drag (same as pRK4)
@@ -905,8 +740,7 @@ class Integration:
                 # Check for mid-RK4 blow up due to residuals
                 _bf = self.blowup_factor
                 if np.linalg.norm(x2 - x0) >= _bf * np.linalg.norm(x1-x0):
-                    self.rk4_bool = True
-                    return x0, p_v0, p_u0
+                    return self._step_failed(x0, p_v0, p_u0)
 
                 # Repeat three more times; RK4
                 vk2, p_u2, c_u2, p_v2 = _rk4_step(self, c_v2, x2)
@@ -918,8 +752,7 @@ class Integration:
                 xk2 = c_v2 * time_step
                 x3 = x0 + xk2
                 if np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1-x0):
-                    self.rk4_bool = True
-                    return x0, p_v0, p_u0
+                    return self._step_failed(x0, p_v0, p_u0)
 
                 vk3, p_u3, c_u3, p_v3 = _rk4_step(self, c_v3, x3)
                 if vk3 is None:
@@ -930,8 +763,7 @@ class Integration:
                 xk3 = c_v3 * time_step
                 x_new = x0 + 1 / 6 * (xk0 + 2 * xk1 + 2 * xk2 + xk3)
                 if np.linalg.norm(x_new - x0) >= _bf * np.linalg.norm(x1-x0):
-                    self.rk4_bool = True
-                    return x0, p_v0, p_u0
+                    return self._step_failed(x0, p_v0, p_u0)
 
                 _vk_final, p_u_new, c_u_new, p_v_new = _rk4_step(self, c_v_new, x_new)
                 if _vk_final is None:
@@ -939,7 +771,9 @@ class Integration:
 
                 self.cpoint = x_new
 
-                return x_new, p_u_new, p_v_new
+                # (point, particle velocity, fluid velocity) -- the same order
+                # as pRK4 and unsteady-pRK4, and as the blow-up returns above.
+                return x_new, p_v_new, p_u_new
 
             case 'unsteady-pRK4':
 
@@ -954,7 +788,8 @@ class Integration:
                             interim RK4 variables
 
                     """
-                    idx = Search(self.interp.idx.grid, x)
+                    idx = Search(self.interp.idx.grid, x,
+                                 warm_start=self.interp.idx._cpoint)
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
                     if idx.ppoint is None:
@@ -981,7 +816,7 @@ class Integration:
                         _mach = np.zeros_like(_vel_mag)
                     else:
                         _mach = np.linalg.norm(vp - uf) * q_interp.mach.reshape(-1) / _vel_mag
-                    _cd = _drag_constant(re, _q_interp=q_interp, _mach=_mach, _mu=mu, _model=drag_model)
+                    _cd = q_interp.compute_drag_coefficient(_re=re, _mach=_mach, _model=drag_model)
                     _k = -0.75 * _rhof / (rhop * dp)
                     try:
                         _vk_explicit = _cd * _k * (vp - uf) * np.linalg.norm(vp - uf) * time_step
@@ -1034,8 +869,7 @@ class Integration:
                 _bf = self.blowup_factor
                 _x_tol = max(1e-8 * np.linalg.norm(xk0), 1e-12)
                 if np.linalg.norm(x2 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x2 - x0) >= _x_tol:
-                    self.rk4_bool = True
-                    return x0, v0, u0
+                    return self._step_failed(x0, v0, u0)
 
                 vk2, uf2, temp = _rk4_step(self, v2, x2)
                 xk2 = v2 * time_step
@@ -1047,8 +881,7 @@ class Integration:
                 x3 = x0 + xk2
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
                 if np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= _x_tol:
-                    self.rk4_bool = True
-                    return x0, v0, u0
+                    return self._step_failed(x0, v0, u0)
 
                 vk3, uf3, temp = _rk4_step(self, v3, x3)
                 xk3 = v3 * time_step
@@ -1061,16 +894,14 @@ class Integration:
                 # Check for mid-RK4 blow-up issue. Happens when Cd and time-step are high
                 if np.linalg.norm(x_new - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(
                         x_new - x0) >= _x_tol:
-                    self.rk4_bool = True
-                    return x0, v0, u0
+                    return self._step_failed(x0, v0, u0)
 
                 vk_new, uf_new, temp = _rk4_step(self, v_new, x_new)
                 # Suppress post-shock oscillations: only apply for strong shocks
                 if vk_new is None:
                     return None, None, None
                 if self.interp.detected_feature == 'strong_shock' and np.dot(v_new - v0, uf_new - v_new) < 0:
-                    self.rk4_bool = True
-                    return x0, v0, u0
+                    return self._step_failed(x0, v0, u0)
 
                 self.ppoint = x_new
 

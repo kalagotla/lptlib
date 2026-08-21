@@ -1,5 +1,6 @@
 # This file contains DataIO class to read and write particle data
 
+import logging
 import numpy as np
 from ..streamlines.search import Search
 from ..streamlines.interpolation import Interpolation
@@ -7,9 +8,32 @@ from scipy.interpolate import griddata, LinearNDInterpolator, RBFInterpolator
 import os
 import re
 from tqdm import tqdm
-from mpi4py import MPI
 import matplotlib.pyplot as plt
-rng = np.random.default_rng(7)
+
+try:  # mpi4py needs a system MPI runtime; keep it optional at import time
+    from mpi4py import MPI
+except (ImportError, RuntimeError):  # pragma: no cover - depends on the host
+    MPI = None
+
+logger = logging.getLogger(__name__)
+
+
+def _require_mpi():
+    """
+    Raise a clear, actionable error when mpi4py/MPI is unavailable.
+
+    Returns:
+        The imported ``mpi4py.MPI`` module.
+    """
+    if MPI is None:
+        raise ImportError(
+            "This feature requires mpi4py and a working MPI runtime, which could not "
+            "be imported. Install a system MPI implementation (e.g. "
+            "'sudo apt-get install libopenmpi-dev openmpi-bin' on Debian/Ubuntu or "
+            "'brew install open-mpi' on macOS) and then reinstall mpi4py with "
+            "'pip install --no-binary mpi4py --force-reinstall mpi4py'."
+        )
+    return MPI
 
 
 class DataIO:
@@ -42,8 +66,34 @@ class DataIO:
             Refinement of grid in horizontal direction
         y_refinement: int
             Refinement of grid in vertical direction
+        seed : None, int or numpy.random.Generator, optional
+            Controls the random draw in the stratified sampling that runs when
+            ``percent_data < 100``. ``None`` (the default) seeds from OS
+            entropy, so every run samples a different subset. Pass an integer
+            for a reproducible subset, or an existing
+            ``numpy.random.Generator`` to draw from a stream you own.
     Output:
         None
+
+    Attributes
+    ----------
+    rng : numpy.random.Generator
+        The generator used by the stratified sampler.
+
+    Notes
+    -----
+    Reproducibility: sampling is only reached when ``percent_data < 100``; at
+    the default of 100 no random number is drawn at all and this class is fully
+    deterministic. When sampling does run, every draw comes from ``self.rng``,
+    so an integer ``seed`` gives the same sampled subset for the same inputs.
+
+    Earlier versions were reproducible in neither direction. A module-level
+    ``numpy.random.Generator`` with a hardcoded seed of 7 sat at the top of
+    this module but was never actually referenced, while the sampler itself
+    drew from the unseeded legacy ``numpy.random`` global. The hardcoded seed
+    therefore bought no determinism, and the sampled subset could not be
+    reproduced or controlled by a caller. The dead generator has been removed
+    and the draws now go through ``self.rng``.
 
     Methods
     -------
@@ -59,7 +109,7 @@ class DataIO:
     """
 
     def __init__(self, grid, flow, percent_data=100, read_file=None, location='.',
-                 x_refinement: int = 50, y_refinement: int = 40):
+                 x_refinement: int = 50, y_refinement: int = 40, seed=None):
         self.grid = grid
         self.flow = flow
         self.percent_data = percent_data
@@ -68,6 +118,10 @@ class DataIO:
         self.y_refinement = y_refinement
         self.file_number_split = 10
         self.oblique_shock = False
+        # Sampling is nondeterministic unless the caller asks for a seed; see
+        # the class docstring for the reproducibility contract.
+        self.seed = seed
+        self.rng = np.random.default_rng(seed)
 
     @staticmethod
     def _natural_sort(_l: list):
@@ -94,14 +148,27 @@ class DataIO:
             Interpolated data at each scattered point location given
 
         """
+        _sentinel = np.array([1], dtype=int)
         try:
             _idx = Search(self.grid, _point)
             _idx.compute(method='distance')
+            if _idx.cell is None or _idx.ppoint is None:
+                # Point sits outside the grid -- Search already flagged it.
+                logger.debug('Point %s is outside the domain; flagging for removal', _point)
+                return _sentinel
             _interp = Interpolation(self.flow, _idx)
             _interp.compute(method='p-space')
+            if _interp.q is None:
+                logger.debug('Interpolation returned no data at %s; flagging for removal',
+                             _point)
+                return _sentinel
             return _interp.q.reshape(-1)
-        except:
-            return np.array([1], dtype=int)
+        except (AttributeError, IndexError, TypeError, ValueError) as _err:
+            # These are the failure modes of a point that falls outside the grid
+            # or lands on a degenerate cell: the search returns None attributes,
+            # or the cell indices run off the end of a block.
+            logger.debug('Discarding point %s: %s: %s', _point, type(_err).__name__, _err)
+            return _sentinel
 
     # Function to loop through the scattered data
     @staticmethod
@@ -135,10 +202,15 @@ class DataIO:
         percent (float): The percentage of data to sample (0 < percent <= 100).
         n_bins (int): The number of bins to divide the XY plane into along each axis.
 
+        All random draws below come from ``self.rng``, which is built from the
+        ``seed`` passed to ``DataIO``. With ``seed=None`` (the default) the
+        sampled subset differs on every run; pass an integer seed to reproduce
+        one. See the class docstring.
+
         Returns:
         numpy.ndarray: The uniformly sampled subset of the data with shape (m, 15), where m is the sampled number of rows.
         """
-        print('Sampling data using stratified sampling in x and y...\n')
+        logger.info('Sampling data using stratified sampling in x and y...\n')
         # Ensure percent is between 0 and 100
         if _percent <= 0 or _percent > 100:
             raise ValueError("Percent must be between 0 and 100")
@@ -171,7 +243,7 @@ class DataIO:
             for cell_key, indices in cell_indices.items():
                 if len(indices) >= 2:
                     # Dense region: Randomly select 2 indices
-                    sampled = np.random.choice(indices, 2, replace=False)
+                    sampled = self.rng.choice(indices, 2, replace=False)
                 else:
                     # Sparse region: Keep all indices
                     sampled = indices
@@ -197,7 +269,7 @@ class DataIO:
                     # Sample from this bin if there are points in it
                     if len(bin_points) > 0:
                         n_bin_samples = max(1, int(len(bin_points) * _percent / 100))
-                        sampled_indices.extend(np.random.choice(bin_points, n_bin_samples, replace=False))
+                        sampled_indices.extend(self.rng.choice(bin_points, n_bin_samples, replace=False))
 
             sampled_indices = np.array(sampled_indices)
 
@@ -219,7 +291,7 @@ class DataIO:
             pass
         plt.savefig(self.location + 'dataio/sampled_data.png', dpi=300)
         plt.close()
-        print(f'Sampled data saved to {self.location}dataio/sampled_data.png\n')
+        logger.info(f'Sampled data saved to {self.location}dataio/sampled_data.png\n')
 
         # Return the sampled data (all 15 columns)
         return _data[sampled_indices, :]
@@ -247,9 +319,9 @@ class DataIO:
             # Load the file
             data = np.load(self.location + _file)
             if data.shape[0] == 0:
-                print(f'File {_file} is empty. Skipping...')
+                logger.debug(f'File {_file} is empty. Skipping...')
                 continue
-            print(f'Rank {rank} reading file {_file}')
+            logger.debug(f'Rank {rank} reading file {_file}')
             local_data_list.append(data)
 
         # Stack local arrays (assumes all arrays have the same number of columns)
@@ -302,6 +374,7 @@ class DataIO:
         Returns:
         """
         # MPI
+        _require_mpi()
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
         size = comm.Get_size()
@@ -329,7 +402,7 @@ class DataIO:
 
         # pause until all processes are done
         comm.Barrier()
-        print('Read from the group of files!!')
+        logger.info('Read from the group of files!!')
 
         # p-data has the following columns
         # x, y, z, vx, vy, vz, ux, uy, uz, time, integrated (ux, uy, uz), diameter, density
@@ -360,7 +433,7 @@ class DataIO:
             _locations = np.load(self.location + 'dataio/locations.npy', allow_pickle=False)
             _q_list = np.load(self.location + 'dataio/interpolated_q_data.npy', allow_pickle=False)
             _p_data = np.load(self.location + 'dataio/new_p_data.npy', allow_pickle=False)
-            print('Read the available interpolated data to continue with the griddata algorithm')
+            logger.info('Read the available interpolated data to continue with the griddata algorithm')
         except FileNotFoundError:
             # Run through the process of creating interpolation files
             # check first if the old interpolated data is available
@@ -369,11 +442,11 @@ class DataIO:
                 _locations = np.load(self.location + 'dataio/_old_locations.npy', allow_pickle=True)
                 _q_list = np.load(self.location + 'dataio/_old_interpolated_q_data.npy', allow_pickle=True)
                 _p_data = np.load(self.location + 'dataio/_old_p_data.npy', allow_pickle=True)
-                print('Read the available old interpolated data to continue with the outliers algorithm')
+                logger.info('Read the available old interpolated data to continue with the outliers algorithm')
             except FileNotFoundError:
                 # Run the interpolation process on all the scattered points
                 if rank == 0:
-                    print('Interpolated data file is unavailable. Continuing with interpolation to scattered data!\n'
+                    logger.info('Interpolated data file is unavailable. Continuing with interpolation to scattered data!\n'
                           'This is going to take sometime. Sit back and relax!\n'
                           'Your PC will take off because of multi-process. Let it breathe...\n')
                 else:
@@ -457,18 +530,18 @@ class DataIO:
                         np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
                         np.save(self.location + 'dataio/_old_p_data', _p_data)
                         np.save(self.location + 'dataio/_old_locations', _locations)
-                        print('Created dataio folder and saved old interpolated flow data to scattered points.\n')
+                        logger.info('Created dataio folder and saved old interpolated flow data to scattered points.\n')
                     except FileExistsError:
                         np.save(self.location + 'dataio/_old_interpolated_q_data', _q_list)
                         np.save(self.location + 'dataio/_old_p_data', _p_data)
                         np.save(self.location + 'dataio/_old_locations', _locations)
-                        print('Saved old interpolated flow data to scattered points.\n')
+                        logger.info('Saved old interpolated flow data to scattered points.\n')
                 else:
                     pass
 
             # Run the outlier removal process and save the data
             if rank == 0:
-                print('Removing outliers from the data using one process...\n')
+                logger.info('Removing outliers from the data using one process...\n')
                 # Fluid data at scattered points/particle locations
                 # Some searches return None. This helps remove those locations!
                 _remove_index = [j for j in range(len(_q_list)) if np.all(_q_list[j] == 1)]
@@ -506,13 +579,13 @@ class DataIO:
             # Read to see if data is available
             _qf = np.load(self.location + 'dataio/flow_data.npy')
             _qp = np.load(self.location + 'dataio/particle_data.npy')
-            print('Loaded available flow/particle data from numpy residual files\n')
+            logger.info('Loaded available flow/particle data from numpy residual files\n')
             # save to plot3d format
             self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d_fluid.q')
             self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d_particle.q')
         except FileNotFoundError:
 
-            print('&&&&&&&Interpolating data to the grid using MPI...&&&&&&&\n')
+            logger.info('&&&&&&&Interpolating data to the grid using MPI...&&&&&&&\n')
             def distribute_grid(grid, rank, size, overlap_fraction=0.1):
                 # Determine the number of chunks in x and y directions
                 num_x_chunks = int(np.ceil(np.sqrt(size)))
@@ -623,7 +696,7 @@ class DataIO:
             # Perform RBF interpolation on each process
             _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0.0, 0.0, 0.0, 2 * np.nanmax(self.flow.q[..., -1, :])]
             if _qf_chunk.shape[0] <= 2:
-                print(f'Less than 2 points to interpolate on Rank {rank}. Skipping interpolation\n')
+                logger.debug(f'Less than 2 points to interpolate on Rank {rank}. Skipping interpolation\n')
                 rho_result_chunk = np.full(grid_chunk.shape[0], _fill_value[0])
                 ux_result_chunk = np.full(grid_chunk.shape[0], _fill_value[1])
                 uy_result_chunk = np.full(grid_chunk.shape[0], _fill_value[2])
@@ -631,22 +704,22 @@ class DataIO:
                 e_result_chunk = np.full(grid_chunk.shape[0], _fill_value[4])
             else:
                 # use griddata for linear interpolation
-                print(f'Rank {rank} is interpolating data using griddata\n')
+                logger.debug(f'Rank {rank} is interpolating data using griddata\n')
                 rho_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 0], grid_chunk[:, 0], grid_chunk[:, 1],
                                                      fill_value=_fill_value[0], method='linear')
-                print(f'    Done interpolating density on Rank {rank} with {rho_result_chunk.shape} shape\n')
+                logger.debug(f'    Done interpolating density on Rank {rank} with {rho_result_chunk.shape} shape\n')
                 ux_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 1], grid_chunk[:, 0], grid_chunk[:, 1],
                                                     fill_value=_fill_value[1], method='linear')
-                print(f'    Done interpolating x-momentum on Rank {rank} with {ux_result_chunk.shape} shape\n')
+                logger.debug(f'    Done interpolating x-momentum on Rank {rank} with {ux_result_chunk.shape} shape\n')
                 uy_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 2], grid_chunk[:, 0], grid_chunk[:, 1],
                                                     fill_value=_fill_value[2], method='linear')
-                print(f'    Done interpolating y-momentum on Rank {rank} with {uy_result_chunk.shape} shape\n')
+                logger.debug(f'    Done interpolating y-momentum on Rank {rank} with {uy_result_chunk.shape} shape\n')
                 uz_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 3], grid_chunk[:, 0], grid_chunk[:, 1],
                                                     fill_value=_fill_value[3], method='linear')
-                print(f'    Done interpolating z-momentum on Rank {rank} with {uz_result_chunk.shape} shape\n')
+                logger.debug(f'    Done interpolating z-momentum on Rank {rank} with {uz_result_chunk.shape} shape\n')
                 e_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 4], grid_chunk[:, 0], grid_chunk[:, 1],
                                                    fill_value=_fill_value[4], method='linear')
-                print(f'    Done interpolating energy on Rank {rank} with {e_result_chunk.shape} shape\n')
+                logger.debug(f'    Done interpolating energy on Rank {rank} with {e_result_chunk.shape} shape\n')
 
                 # print(f'Rank {rank} rho before interp: {_qf_chunk[:, 0].min()}, {_qf_chunk[:, 0].max()}')
                 # print(f'Rank {rank} rho after interp: {rho_result_chunk.min()}, {rho_result_chunk.max()}')
@@ -765,7 +838,7 @@ class DataIO:
                 _qf = np.stack([rho_result_save, ux_result_save, uy_result_save, uz_result_save, e_result_save])
                 np.save(self.location + 'dataio/flow_data', _qf)
                 self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d')
-                print('Saved interpolated flow data to grid\n')
+                logger.info('Saved interpolated flow data to grid\n')
 
             comm.Barrier()
 
@@ -785,21 +858,21 @@ class DataIO:
 
             # Perform interpolation on each process for particle data
             if _qp_chunk.shape[0] <= 2:
-                print(f'Less than 2 points to interpolate on Rank {rank}. Skipping interpolation\n')
+                logger.debug(f'Less than 2 points to interpolate on Rank {rank}. Skipping interpolation\n')
                 ux_result_chunk = np.full(grid_chunk.shape[0], _fill_value[1])
                 uy_result_chunk = np.full(grid_chunk.shape[0], _fill_value[2])
                 uz_result_chunk = np.full(grid_chunk.shape[0], _fill_value[3])
             else:
-                print(f'Rank {rank} is interpolating particle data using griddata\n')
+                logger.debug(f'Rank {rank} is interpolating particle data using griddata\n')
                 ux_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 1], grid_chunk[:, 0], grid_chunk[:, 1],
                                                     fill_value=_fill_value[1], method='linear')
-                print(f'Done x-momentum interpolating on Rank {rank} with {ux_result_chunk.shape} shape for particle\n')
+                logger.debug(f'Done x-momentum interpolating on Rank {rank} with {ux_result_chunk.shape} shape for particle\n')
                 uy_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 2], grid_chunk[:, 0], grid_chunk[:, 1],
                                                     fill_value=_fill_value[2], method='linear')
-                print(f'Done y-momentum interpolating on Rank {rank} with {uy_result_chunk.shape} shape for particle\n')
+                logger.debug(f'Done y-momentum interpolating on Rank {rank} with {uy_result_chunk.shape} shape for particle\n')
                 uz_result_chunk = self._grid_interp(_xy_chunk, _qp_chunk[:, 3], grid_chunk[:, 0], grid_chunk[:, 1],
                                                     fill_value=_fill_value[3], method='linear')
-                print(f'Done z-momentum interpolating on Rank {rank} with {uz_result_chunk.shape} shape for particle\n')
+                logger.debug(f'Done z-momentum interpolating on Rank {rank} with {uz_result_chunk.shape} shape for particle\n')
 
             # Gather the results from all processes
             # Gather chunk sizes
@@ -835,7 +908,7 @@ class DataIO:
                 _qp = np.stack([rho_result_save, ux_result_save, uy_result_save, uz_result_save, e_result_save])
                 np.save(self.location + 'dataio/particle_data', _qp)
                 self.flow.mgrd_to_p3d(_qp, mode='particle', out_file=self.location + 'dataio/mgrd_to_p3d')
-                print('Saved interpolated particle data to grid\n')
+                logger.info('Saved interpolated particle data to grid\n')
             else:
                 pass
 

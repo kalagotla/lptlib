@@ -4,6 +4,8 @@
 #  Enthalpies, Vorticity, Entropy, Turbulence Parameters, Gradients, Move metrics here?
 #  Total quantities
 import numpy as np
+from scipy.optimize import fsolve
+from scipy.special import erf
 
 
 class Variables:
@@ -37,8 +39,53 @@ class Variables:
         computes the temperature
     compute_pressure()
         computes the pressure
+    compute_viscosity(law='keyes')
+        computes the dynamic viscosity of air
+    compute_drag_coefficient(_re, _mach, _model='stokes')
+        coefficient of drag for a spherical particle
     compute()
         computes all the variables available
+
+    Viscosity laws
+    --------------
+    Selected by the ``law`` argument of :meth:`compute_viscosity`; that method's
+    docstring carries the regime of validity and the full reference for each.
+
+    ==============  ==========================================================
+    ``law``         Reference
+    ==============  ==========================================================
+    'sutherland'    Sutherland (1893), doi:10.1080/14786449308620508
+    'keyes'         Keyes' correlation for air -- source UNVERIFIED, see
+                    :meth:`compute_viscosity` and paper.bib
+    ==============  ==========================================================
+
+    Drag models
+    -----------
+    Selected by the ``_model`` argument of :meth:`compute_drag_coefficient`;
+    that method's docstring carries the regime of validity in Reynolds and Mach
+    number and the full reference for each.
+
+    ==========================  ==============================================
+    ``_model``                  Reference
+    ==========================  ==============================================
+    'zero-drag'                 none -- passive tracer, Cd = 0
+    'sphere'                    White, "Fluid Mechanics" (+ VISUAL3 tuning)
+    'stokes'                    Stokes (1851), pre-DOI
+    'melling'                   Melling (1997), doi:10.1088/0957-0233/8/12/005
+    'melling-2'                 Melling (1997), doi:10.1088/0957-0233/8/12/005
+    'oseen'                     Oseen (1927), pre-DOI monograph
+    'schiller-nauman'           Schiller and Naumann (1933), no DOI
+    'cunningham'                Cunningham (1910), doi:10.1098/rspa.1910.0024
+    'henderson'                 Henderson (1976), doi:10.2514/3.61409
+    'subramaniam-balachandar'   Subramaniam and Balachandar, eds. (2022),
+                                ISBN 978-0-323-90133-8
+    'loth'                      Loth (2008), doi:10.2514/1.28943
+    'tedeschi'                  Tedeschi, Gouin and Elena (1999),
+                                doi:10.1007/s003480050291
+    ==========================  ==============================================
+
+    Full bibliographic detail for every entry above lives in ``paper.bib`` at
+    the repository root.
 
     ...
 
@@ -111,24 +158,71 @@ class Variables:
 
     def compute_viscosity(self, law='keyes'):
         """
-        Function to compute viscosity
+        Dynamic viscosity of air as a function of temperature.
 
-        Viscosity of air as a function of temperature
+        Temperatures must be in kelvin; ``self.temperature`` is in kelvin by
+        default from :meth:`compute_temperature`. The result is in Pa.s and is
+        written to ``self.viscosity``.
+
         Args:
-            _temperature: in Kelvin provided by default in the integration class
-            law: 'sutherland' or 'keyes' -- defaults to 'keyes'
+            law: name of the correlation to use -- defaults to ``'keyes'``.
         :return: None
+
+        Available laws
+        --------------
+        ``'sutherland'``
+            Sutherland's two-constant law,
+            ``mu = C1 * T**1.5 / (T + S)`` with ``S = 110.4 K`` and ``C1`` fixed
+            by the reference value ``mu = 1.716e-5 Pa.s`` at ``T = 273.15 K``.
+            Regime: air in the continuum regime, roughly 170--1900 K; the error
+            grows below about 100 K and the law is not valid near liquefaction.
+            Reference: Sutherland, W. (1893), "LII. The viscosity of gases and
+            molecular force", The London, Edinburgh, and Dublin Philosophical
+            Magazine and Journal of Science 36(223), 507-531,
+            doi:10.1080/14786449308620508.
+
+        ``'keyes'``
+            Keyes' correlation for air,
+            ``mu = a0 * sqrt(T) * 1e-6 / (1 + (a / T) * 10**(-a1 / T))``
+            with ``a0 = 1.488``, ``a = 122.1``, ``a1 = 5.0``.
+            Regime: air in the continuum regime; this is the library default
+            because it holds up better than Sutherland's law at the low static
+            temperatures reached in supersonic expansions.
+            Provenance: see the in-line note on the ``'keyes'`` case below. The
+            source of the correlation is NOT verified and it is deliberately
+            not cited in ``paper.bib``.
 
         """
         match law:
             case 'sutherland':
-                # Sutherland's viscosity law
-                # All temperatures must be in kelvin
-                # Formula from cfd-online
+                # Sutherland's viscosity law.
+                # ref: Sutherland, W. (1893), "LII. The viscosity of gases and
+                #   molecular force", Phil. Mag. 36(223), 507-531,
+                #   doi:10.1080/14786449308620508.
+                # All temperatures must be in kelvin.
+                # Maintainer's note, kept from the original implementation: the
+                # formula as coded here is the cfd-online form. The two
+                # reference constants below (mu = 1.716e-5 Pa.s at T = 273.15 K
+                # and Sutherland temperature S = 110.4 K) are the standard
+                # tabulated air values reproduced there, not values read out of
+                # Sutherland's 1893 paper.
                 _c1 = 1.716e-5 * (273.15 + 110.4) / 273.15**1.5
                 self.viscosity = _c1 * self.temperature**1.5 / (self.temperature + 110.4)
             case 'keyes':
-                # New formula from keyes et al.
+                # Keyes' viscosity correlation for air, in the form
+                #   mu = a0 * sqrt(T) * 1e-6 / (1 + (a/T) * 10**(-a1/T))   [Pa.s]
+                #
+                # PROVENANCE -- READ BEFORE CITING. The correlation is Keyes',
+                # and the three coefficients below (a0 = 1.488, a = 122.1,
+                # a1 = 5.0) are the air values that circulate with it. The
+                # presumed original is a 1951 ASME summary of viscosity and
+                # heat-conduction data for air and other gases attributed to
+                # F. G. Keyes, but that record could NOT be confirmed against a
+                # primary source and no DOI was found for it. paper.bib
+                # therefore carries the entry commented out and explicitly
+                # marked unverified; do not cite it as though it were checked.
+                # Confirm the author initials and locate a DOI on the ASME
+                # Digital Collection before promoting this to a real citation.
                 a0, a, a1 = 1.488, 122.1, 5.0
                 _tau = 1/self.temperature
                 self.viscosity = a0 * self.temperature**0.5 * 10**-6 / (1 + a * _tau / 10 ** (a1 * _tau))
@@ -141,25 +235,148 @@ class Variables:
         """
         Coefficient of drag for a spherical particle
 
+        This is the single implementation of the drag suite in the library; the
+        particle-path integrator in ``streamlines.integration`` calls straight into
+        it rather than keeping a second copy.
+
         Args:
             _re : Relative Reynolds Number
             _mach : Relative Mach Number
-            _model : Drag Model Name
-                Available models are 'sphere', 'stokes', 'oseen', 'schiller_nauman',
-                'cunningham'
+            _model : Drag Model Name -- one of the strings tabulated below
 
         Returns:
             coefficient of drag based on local flow/particle properties
+
+        Raises:
+            ValueError: if the model name is unknown, or if the Reynolds number
+                lies outside the range the requested model is defined over.
+
+        Available models
+        ----------------
+        Re is the relative Reynolds number, M the relative Mach number and
+        Kn the Knudsen number formed from them as ``Kn = M/Re * sqrt(pi*gamma/2)``.
+        Every model returns 0 for ``Re <= 1e-9`` to keep the creeping-flow limit
+        finite. The stated regimes are the range over which the source
+        correlation was fitted or claimed valid, NOT a range this function
+        enforces: apart from 'subramaniam-balachandar', which raises above
+        Re = 3e5, the closures extrapolate silently outside their regime.
+
+        ``'zero-drag'``
+            Cd = 0. Not a physical closure -- it makes the particle a passive
+            tracer that follows the fluid exactly, and exists to isolate
+            inertia effects in a response study. No reference.
+        ``'sphere'``
+            Piecewise standard drag curve for a rigid sphere, incompressible
+            (no M dependence), covering Re < 1e-3 up to Re >= 4e5.
+            Reference: White, F. M., "Fluid Mechanics" (standard drag curve for
+            a sphere). Not in paper.bib -- no edition or equation number was
+            recorded with the original implementation, and the branch points
+            were tuned by hand (see the in-line note on the case).
+        ``'stokes'``
+            Cd = 24/Re. Regime: creeping flow, Re << 1, M << 1, continuum
+            (Kn << 1). Reference: Stokes, G. G. (1851), Trans. Cambridge Phil.
+            Soc. 9, 8-106. Pre-DOI; not in paper.bib.
+        ``'melling'``
+            Slip-corrected Stokes drag, Cd = 24/Re * (1 + Kn)^-1. Regime:
+            Re << 1, small but non-zero Kn (slip flow, Kn <~ 0.1); intended for
+            PIV seed particles. Reference: Melling, A. (1997), "Tracer particles
+            and seeding for particle image velocimetry", Meas. Sci. Technol.
+            8(12), 1406-1416, doi:10.1088/0957-0233/8/12/005.
+        ``'melling-2'``
+            As ``'melling'`` but with the 2.7 prefactor on the Knudsen term,
+            Cd = 24/Re * (1 + 2.7*Kn)^-1. Same regime and same reference
+            (doi:10.1088/0957-0233/8/12/005).
+        ``'oseen'``
+            Oseen's correction to Stokes drag, Cd = 24/Re * (1 + 3*Re/16).
+            Regime: creeping to low Reynolds flow, Re < 1, M << 1, continuum.
+            Reference: Oseen, C. W. (1927), "Neuere Methoden und Ergebnisse in
+            der Hydrodynamik", Akademische Verlagsgesellschaft, Leipzig. Pre-DOI
+            monograph; no DOI exists.
+        ``'schiller-nauman'``
+            Cd = 24/Re * (1 + 0.15*Re^0.687). Regime: the correlation is
+            classically quoted for Re <= 800; this implementation is used here
+            for Re <~ 200 and M <~ 0.25, where compressibility is negligible.
+            Reference: Schiller, L. and Naumann, A. (1933), Z. Ver. Dtsch. Ing.
+            77, 318-320. No DOI exists. NOTE the year: this work is very widely
+            miscited as 1935, and the paper.bib key ``schiller1935drag`` keeps
+            that mis-citation as its key while carrying the correct 1933 date.
+        ``'cunningham'``
+            Cunningham slip correction on Stokes drag,
+            Cd = 24/Re * (1 + 4.5*Kn)^-1, with Kn switched to ``M/sqrt(Re)``
+            above Re = 1. Regime: Re << 1, M << 1, Kn <~ 0.1.
+            Reference: Cunningham, E. (1910), "On the velocity of steady fall of
+            spherical particles through fluid medium", Proc. R. Soc. Lond. A
+            83(563), 357-365, doi:10.1098/rspa.1910.0024.
+        ``'henderson'``
+            Henderson's correlation, valid across continuum, slip, transitional
+            and free-molecular flow and across subsonic and supersonic speeds.
+            Three branches: M < 1, M >= 1.75, and a linear blend between them.
+            Regime: all Re and all M in the source; the sphere-temperature
+            dependence of the original is dropped here (see the in-line note).
+            Reference: Henderson, C. B. (1976), "Drag Coefficients of Spheres in
+            Continuum and Rarefied Flows", AIAA Journal 14(6), 707-708,
+            doi:10.2514/3.61409.
+        ``'subramaniam-balachandar'``
+            Piecewise standard drag curve assembled from four sub-correlations
+            (Stokes, Clift, Schiller-Naumann, Clift-Gauvin). Regime:
+            incompressible (no M dependence), Re < 3e5; raises ValueError above
+            that rather than extrapolating.
+            Reference: Subramaniam, S. and Balachandar, S. (eds.) (2022),
+            "Modeling Approaches and Computational Methods for Particle-Laden
+            Turbulent Flows", 1st ed., Elsevier, ISBN 978-0-323-90133-8. Note
+            that Subramaniam and Balachandar are the volume's EDITORS, not the
+            sole authors of the chapter this correlation comes from. Elsevier
+            lists no DOI for the book.
+        ``'loth'``
+            Loth's compressibility- and rarefaction-corrected drag, split at
+            Re = 45 into a rarefaction-dominated branch (Re < 45, blending a
+            free-molecular limit with slip-corrected Schiller-Naumann) and a
+            compression-dominated branch (Re > 45). Regime: all Re and all M
+            in the source.
+            Reference: Loth, E. (2008), "Compressibility and Rarefaction Effects
+            on Drag of a Spherical Particle", AIAA Journal 46(9), 2219-2228,
+            doi:10.2514/1.28943. A published Comment on this paper exists --
+            see the in-line note on the case.
+        ``'tedeschi'``
+            Tedeschi's correlation for tracer particles in supersonic flow,
+            which solves implicitly for a velocity-lag factor k. Regime: all Re
+            and all M in the source; developed for PIV tracers in supersonic
+            flow.
+            Reference: Tedeschi, G., Gouin, H. and Elena, M. (1999), "Motion of
+            tracer particles in supersonic flows", Experiments in Fluids 26(4),
+            288-296, doi:10.1007/s003480050291.
+
+        Notes
+        -----
+        Equation numbers are given below only where the equation could actually
+        be located in the source. Most of these papers are paywalled, and an
+        equation number that could not be checked is deliberately omitted
+        rather than guessed.
 
         """
         match _model:
             case 'zero-drag':
                 # zero drag model to simulate fluid
+                # Not a published closure: Cd = 0 makes the particle a massless
+                # tracer that follows the fluid exactly. No reference applies.
                 return 0
 
             case 'sphere':
+                # Piecewise standard drag curve for a rigid sphere; incompressible.
                 # ref: Fluid Mechanics, Frank M. White
                 # This was decided by trail-and-error from VISUAL3 code
+                #   (maintainer's note, kept: the branch points below were tuned
+                #   by hand against the VISUAL3 code, so they are not lifted
+                #   verbatim from White. No edition or equation number was
+                #   recorded, and White is not in paper.bib for that reason.)
+                # The individual arms are recognisable published forms:
+                #   Re < 1e-3        -- Stokes drag, Cd = 24/Re.
+                #   1e-3 <= Re < 1   -- Oseen's correction, Cd = 24/Re (1 + 3Re/16);
+                #                       see Oseen (1927), the 'oseen' case below.
+                #   1 <= Re < 800    -- Cd = 24/Re (1 + Re^(2/3)/6); the source of
+                #                       this particular form is unrecorded here.
+                #   800 <= Re < 4e5  -- Newton regime, Cd = 0.44.
+                #   Re >= 4e5        -- post-drag-crisis value, Cd = 0.07.
                 if _re <= 1e-9:
                     return 0
                 if _re < 1e-3:
@@ -181,6 +398,12 @@ class Variables:
 
             case 'stokes':
                 # Stokes Drag; for creeping flow regime; Re << 1
+                # Cd = 24/Re, the continuum creeping-flow limit (M << 1, Kn << 1).
+                # ref: Stokes, G. G. (1851), "On the effect of the internal
+                #   friction of fluids on the motion of pendulums", Trans.
+                #   Cambridge Phil. Soc. 9, 8-106. Pre-DOI; no DOI exists and the
+                #   work is not in paper.bib. Every other closure in this suite
+                #   reduces to this expression as Re -> 0.
                 if _re <= 1e-9:
                     return 0
                 else:
@@ -188,14 +411,40 @@ class Variables:
 
             case 'melling':
                 # The popular melling correction
+                # Slip-corrected Stokes drag for PIV seed particles,
+                #   Cd = 24/Re * (1 + Kn)^-1,  Kn = M/Re * sqrt(pi*gamma/2).
+                # Regime: Re << 1, slip flow (Kn <~ 0.1).
+                # ref: Melling, A. (1997), "Tracer particles and seeding for
+                #   particle image velocimetry", Measurement Science and
+                #   Technology 8(12), 1406-1416,
+                #   doi:10.1088/0957-0233/8/12/005.
+                #   Equation number not verified -- the article is paywalled.
                 if _re <= 1e-9:
                     return 0
                 else:
                     knd = _mach / _re * np.sqrt(np.pi*self.gamma/2)
                     return 24/_re * (1 + knd)**-1
 
+            case 'melling-2':
+                # The melling correction with the 2.7 pre-factor on the Knudsen term
+                #   Cd = 24/Re * (1 + 2.7*Kn)^-1,  Kn = M/Re * sqrt(pi*gamma/2).
+                # Same regime and same source as the 'melling' case above.
+                # ref: Melling, A. (1997), Measurement Science and Technology
+                #   8(12), 1406-1416, doi:10.1088/0957-0233/8/12/005.
+                #   Equation number not verified -- the article is paywalled.
+                if _re <= 1e-9:
+                    return 0
+                else:
+                    knd = _mach / _re * np.sqrt(np.pi*self.gamma/2)
+                    return 24/_re * (1 + 2.7*knd)**-1
+
             case 'oseen':
                 # Oseen's model; for creeping flow regime; Re < 1
+                # Cd = 24/Re * (1 + 3/16 * Re); incompressible, continuum.
+                # ref: Oseen, C. W. (1927), "Neuere Methoden und Ergebnisse in
+                #   der Hydrodynamik", Akademische Verlagsgesellschaft, Leipzig
+                #   (in German). Pre-DOI monograph; no DOI exists. Equation
+                #   number not verified -- no accessible copy.
                 if _re <= 1e-9:
                     return 0
                 else:
@@ -203,6 +452,16 @@ class Variables:
 
             case 'schiller-nauman':
                 # Schiller and Nauman's model; for Re <~ 200 & M <~ 0.25
+                # Cd = 24/Re * (1 + 0.15 * Re^0.687). Classically quoted as
+                # valid to Re <= 800; the tighter Re <~ 200 above is this
+                # library's working limit. Incompressible, continuum.
+                # ref: Schiller, L. and Naumann, A. (1933), "Ueber die
+                #   grundlegenden Berechnungen bei der Schwerkraftaufbereitung",
+                #   Zeitschrift des Vereines Deutscher Ingenieure 77, 318-320
+                #   (in German). No DOI exists. The year is very widely miscited
+                #   as 1935 -- the paper.bib key is 'schiller1935drag' for that
+                #   historical reason, but the entry itself carries 1933.
+                #   Equation number not verified -- no accessible copy.
                 if _re <= 1e-9:
                     return 0
                 else:
@@ -210,6 +469,19 @@ class Variables:
 
             case 'cunningham':
                 # Cunningham model; for Re << 1; M << 1; Kn <~ 0.1
+                # Cunningham slip correction on Stokes drag,
+                #   Cd = 24/Re * (1 + A*Kn)^-1  with A = 4.5 as coded here.
+                # Kn is formed as M/Re * sqrt(gamma*pi/2) for Re <= 1 and
+                # switched to M/sqrt(Re) above Re = 1.
+                # ref: Cunningham, E. (1910), "On the velocity of steady fall of
+                #   spherical particles through fluid medium", Proceedings of the
+                #   Royal Society of London A 83(563), 357-365,
+                #   doi:10.1098/rspa.1910.0024.
+                #   The reference covers the FORM of the slip correction. The
+                #   particular numerical value A = 4.5 used here was not traced
+                #   back to Cunningham's paper; a reviewer checking this closure
+                #   should verify that constant against the source rather than
+                #   assume it.
                 # Knudsen number
                 if _re <= 1e-9:
                     return 0
@@ -223,12 +495,32 @@ class Variables:
             case 'henderson':
                 # Henderson model; for all flow regimes
                 # Simplified by ignoring sphere temperature
+                #   (maintainer's note, kept: Henderson's correlation carries a
+                #   sphere-to-gas temperature ratio; this implementation drops it,
+                #   i.e. it assumes the sphere is in thermal equilibrium with the
+                #   gas. That is a deliberate simplification of the source.)
+                # Covers continuum through free-molecular flow, subsonic and
+                # supersonic. Three branches, in the order coded below:
+                #   M < 1        -- subsonic correlation, _f1 + _f2 + _f3
+                #   M >= 1.75    -- supersonic correlation, (_g1 + _g2)/_g3
+                #   1 <= M < 1.75-- linear interpolation between the two
+                # ref: Henderson, C. B. (1976), "Drag Coefficients of Spheres in
+                #   Continuum and Rarefied Flows", AIAA Journal 14(6), 707-708,
+                #   doi:10.2514/3.61409.
+                #   Equation numbers not verified -- the article is paywalled and
+                #   could not be retrieved to confirm which numbered equation each
+                #   branch corresponds to.
                 if _re < 1e-9:
                     return 0
 
                 # For Mach < 1
                 _s = _mach * np.sqrt(self.gamma/2)
-                _f1 = 24 * (_re + _s * (5.89688 * np.exp(-0.247 * _re/_s)))**-1
+                if np.all(_s <= 1e-12):
+                    # Incompressible limit: s * exp(-0.247 Re/s) -> 0 as s -> 0.
+                    # Evaluating it directly at M = 0 divides by s = 0.
+                    _f1 = 24 / _re
+                else:
+                    _f1 = 24 * (_re + _s * (5.89688 * np.exp(-0.247 * _re/_s)))**-1
                 _f2 = np.exp(-0.5*_mach/np.sqrt(_re)) * \
                       ((4.5 + 0.38*(0.03*_re + 0.48*np.sqrt(_re))) / (1 + 0.03*_re + 0.48*np.sqrt(_re)) +
                        0.1*_mach**2 + 0.2*_mach**8)
@@ -253,39 +545,81 @@ class Variables:
                     return _cd1 + 4/3 * (_mach_inf - 1) * (_cd2 - _cd1)
 
             case 'subramaniam-balachandar':
-                # Model from their new book
+                # Piecewise standard drag curve; incompressible (no M dependence);
+                # defined for Re < 3e5 and raises above that.
+                # ref: Subramaniam, S. and Balachandar, S. (eds.) (2022),
+                #   "Modeling Approaches and Computational Methods for
+                #   Particle-Laden Turbulent Flows", 1st ed., Elsevier,
+                #   ISBN 978-0-323-90133-8. Elsevier lists no DOI for the book.
+                #   Subramaniam and Balachandar are the volume's EDITORS, not the
+                #   sole authors of the chapter this correlation is taken from;
+                #   the model string keeps their names for backwards
+                #   compatibility. Chapter, page and equation numbers were not
+                #   verified -- no accessible copy.
+                # The four arms are named published correlations; each is
+                # labelled at its branch below.
                 if _re < 1e-9:
                     return 0
 
                 if _re < 0.5:
-                    # Stokes
+                    # Stokes drag -- see the 'stokes' case above for the reference.
                     return 24/_re
 
                 if _re < 20:
-                    # Clift
+                    # Clift's correlation. Attributed in the source volume to
+                    # Clift, R., Grace, J. R. and Weber, M. E. (1978), "Bubbles,
+                    # Drops and Particles", Academic Press. Not in paper.bib and
+                    # not independently verified.
                     return 24/_re * (1 + 0.1315 * _re**(0.82-0.05*np.log10(_re)))
 
                 if _re < 800:
-                    # Schiller-Naumann
+                    # Schiller-Naumann -- see the 'schiller-nauman' case above for
+                    # the reference (Schiller and Naumann, 1933).
                     return 24/_re * (1 + 0.15 * _re**0.687)
 
                 if _re < 3e5:
-                    # Clift-Gauvin
+                    # Clift-Gauvin correlation. Attributed in the source volume to
+                    # Clift, R. and Gauvin, W. H. (1971). Not in paper.bib and not
+                    # independently verified.
                     return 24/_re * (1 + 0.15 * _re**0.687 + 0.42/24 * _re * (1 + 4.25e4 * _re**(-1.16))**-1)
+
+                raise ValueError(
+                    f"drag model 'subramaniam-balachandar' is only defined for "
+                    f"Reynolds numbers below 3e5; got _re={float(np.max(_re)):g}")
 
             case 'loth':
                 # Loth's model; for all flow regimes
+                # Compressibility- and rarefaction-corrected sphere drag, split
+                # at Re = 45 into a rarefaction-dominated branch (Re < 45) and a
+                # compression-dominated branch (Re > 45).
+                # ref: Loth, E. (2008), "Compressibility and Rarefaction Effects
+                #   on Drag of a Spherical Particle", AIAA Journal 46(9),
+                #   2219-2228, doi:10.2514/1.28943.
+                # CAUTION for anyone checking this closure: a Comment on the
+                #   source paper is in print -- Harrison, A. K. (2021), "Comment
+                #   on 'Compressibility and Rarefaction Effects on Drag of a
+                #   Spherical Particle'", AIAA Journal 59(8), 3288-3289,
+                #   doi:10.2514/1.J060681 (verified via Crossref; not yet in
+                #   paper.bib). Its content was NOT checked against this
+                #   implementation, and a reply by the original author is also
+                #   listed. Consult both before treating the coded equations as
+                #   settled.
                 if _re < 1e-9:
                     return 0
 
                 if _re < 45:
                     # Rarefraction dominated domain
-                    import math
                     _s = _mach * np.sqrt(self.gamma/2)
-                    _cd_fm = (1 + 2 * _s**2) * np.exp(-_s**2) / (_s**3 * np.pi**0.5) + \
-                             (4*_s**4 + 4*_s**2 - 1) * math.erf(_s) / (2*_s**4) + 2 * np.pi**0.5 / (3 * _s)
-                    _cd_fm_re = _cd_fm / (1 + (_cd_fm/1.63 - 1) * (_re/45)**0.5)
                     _kn = (np.pi * self.gamma / 2)**0.5 * _mach / _re
+                    if np.all(_mach <= 1e-12):
+                        # Incompressible limit: the free-molecular contribution is
+                        # weighted by mach**4 and vanishes, while f(Kn) -> 1, so the
+                        # expression below reduces analytically to Schiller-Naumann.
+                        # Evaluating it directly at M = 0 divides by _s = 0.
+                        return 24/_re * (1 + 0.15 * _re**0.687)
+                    _cd_fm = (1 + 2 * _s**2) * np.exp(-_s**2) / (_s**3 * np.pi**0.5) + \
+                             (4*_s**4 + 4*_s**2 - 1) * erf(_s) / (2*_s**4) + 2 * np.pi**0.5 / (3 * _s)
+                    _cd_fm_re = _cd_fm / (1 + (_cd_fm/1.63 - 1) * (_re/45)**0.5)
                     _f_kn = (1 + _kn * (2.514 + 0.8 * np.exp(-0.55/_kn)))**-1
                     _cd_kn_re = 24/_re * (1 + 0.15 * _re**0.687) * _f_kn
                     _cd = (_cd_kn_re + _mach**4 * _cd_fm_re) / (1 + _mach**4)
@@ -296,19 +630,60 @@ class Variables:
 
                 if _re > 45:
                     # compression-dominated regime
+                    # C_M = 5/3 + 2/3 tanh(3 ln(M + 0.1)) -- Loth (2008), eq. 12
                     if _mach <= 1.45:
-                        _cm = 5/3 + 2/3 * np.tanh(3 * np.log(_mach - 0.1))
-                    if _mach > 1.45:
+                        _cm = 5/3 + 2/3 * np.tanh(3 * np.log(_mach + 0.1))
+                    else:
                         _cm = 2.044 + 0.2 * np.exp(-1.8 * (np.log(_mach/1.5))**2)
                     if _mach <= 0.89:
                         _gm = 1 - 1.525 * _mach**4
-                    if _mach > 0.89:
+                    else:
                         _gm = 2e-4 + 8e-4 * np.tanh(12.77 * (_mach - 2.02))
                     _hm = 1 - 0.258 * _cm / (1 + 514 * _gm)
                     _cd = 24/_re * (1 + 0.15 * _re**0.687) * _hm + 0.42 * _cm / (1 + 42000 * _gm / _re**1.16)
                     return _cd
 
-                return
+            case 'tedeschi':
+                # Tedeschi's model; for all flow regimes
+                # Correlation for tracer particles in supersonic flow. Solves
+                # implicitly (via fsolve) for the velocity-lag factor k, then
+                # applies a compressibility factor c and a rarefaction factor
+                # epsilon(Kn) to Schiller-Naumann drag.
+                # ref: Tedeschi, G., Gouin, H. and Elena, M. (1999), "Motion of
+                #   tracer particles in supersonic flows", Experiments in Fluids
+                #   26(4), 288-296, doi:10.1007/s003480050291.
+                #   Equation numbers not verified -- the article is paywalled.
+                if _re < 1e-9:
+                    return 0
+                if np.all(_mach <= 1e-12):
+                    # Continuum limit: Kn -> 0 gives k -> 1, c -> 1 and
+                    # epsilon(Kn) -> 1, leaving Schiller-Naumann. Evaluating the
+                    # general expression at M = 0 divides by Kn = 0.
+                    return 24/_re * (1 + 0.15 * _re**0.687)
+                if _re <= 1:
+                    _kn = _mach / _re * np.sqrt(self.gamma * np.pi/2)
+                else:
+                    _kn = _mach / np.sqrt(_re)
+
+                s = _mach * np.sqrt(self.gamma/2)
+
+                def _solve_k(_k):
+                    s_prime = (1 - _k) * s
+                    epsilon_prime = 3/8 * (np.pi**2 / s_prime) * (1 + s_prime**2) * s_prime + np.exp(-s_prime**2) /4
+                    a1 = 9/4 * 0.15 * 2 * _kn / epsilon_prime * (s * np.pi**0.5 / _kn)**0.687
+                    a2 = 1 + 9/4 * 2 * _kn / epsilon_prime
+                    return a1 * _k**1.687 + a2 * _k - 1
+
+                # solve the equation
+                k = fsolve(_solve_k, np.array([0.5]))
+
+                c = 1 + _re**2 / (_re**2 + 100) * np.e**(-0.225/_mach**2.5)
+                _epsilon_kn = 1.177 + 0.177 * (0.851 * _kn**1.16 - 1) / (0.851 * _kn**1.16 + 1)
+
+                return 24/_re * k * (1 + 0.15 * (k*_re)**0.687) * c * _epsilon_kn
+
+            case _:
+                raise ValueError(f"unknown drag model {_model!r}")
 
     def compute(self):
         # implicitly runs compute_velocity() and compute_temperature()
