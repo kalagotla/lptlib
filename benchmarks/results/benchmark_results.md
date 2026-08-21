@@ -1,6 +1,6 @@
 # PLOT3D I/O benchmark results
 
-Generated 2026-08-20 16:20:27 EDT
+Generated 2026-08-21 10:06:55 EDT
 
 ## Environment
 
@@ -9,30 +9,31 @@ Generated 2026-08-20 16:20:27 EDT
 - Python: 3.10.12
 - NumPy: 2.2.6
 - Fortran: GNU Fortran (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
-- Grid: 4 blocks, 2,039,250 points, 24.5 MB (single precision, synthetic)
+- Grid: 4 blocks, 2,039,250 points, 24.5 MB (single precision on disk, synthetic)
 - Block shapes: [(100, 90, 60), (110, 80, 55), (95, 85, 70), (120, 75, 50)]
 - Repetitions: 15 (naive reader 7), warm cache
 - Checksum verified across readers: True
 
-## Read-and-reconstruct task
+## Single precision (read technique)
 
-All readers perform one buffered read of the file and reconstruct the per-block coordinate arrays. The I/O is identical, so the difference isolates the reconstruction strategy.
-
-| Reader | Reps | Mean (s) | Min (s) | Stdev (s) |
-|---|---|---|---|---|
-| lptlib strided read (fromfile + F-order reshape) | 15 | 0.0697 | 0.0676 | 0.0019 |
-| naive Python nested-loop reconstruct | 7 | 0.5039 | 0.4938 | 0.0067 |
-| Fortran stream read (gfortran -O2) | 15 | 0.0565 | 0.0493 | 0.0073 |
-
-## Speedups (mean time)
-
-- lptlib strided reader vs naive Python reader: **7.2x faster**
-- lptlib strided reader vs compiled Fortran reader: **1.23x slower** (ratio 0.81, i.e. the same order of magnitude)
-
-## Full public API (for reference)
-
-`GridIO.read_grid` additionally allocates a double-precision padded array and computes per-block coordinate bounds, which is grid-metric bookkeeping beyond the read technique above.
+The PLOT3D file is single precision. All three readers do one buffered read and reconstruct the per-block float32 coordinate arrays, so the timing difference isolates the reconstruction strategy at matched precision.
 
 | Reader | Reps | Mean (s) | Min (s) | Stdev (s) |
 |---|---|---|---|---|
-| lptlib GridIO.read_grid (full: read + reshape + metric bounds) | 15 | 0.1590 | 0.1513 | 0.0065 |
+| lptlib strided read (float32) | 15 | 0.0687 | 0.0634 | 0.0048 |
+| naive Python nested-loop (float32) | 7 | 0.5266 | 0.5081 | 0.0137 |
+| Fortran stream read (float32, gfortran -O2) | 15 | 0.0534 | 0.0480 | 0.0070 |
+
+- lptlib strided vs naive Python reader: **7.7x faster**
+- lptlib strided vs compiled Fortran reader: **1.28x slower (ratio 0.78)**
+
+## Double precision (library's full read)
+
+`GridIO.read_grid` returns a float64 grd array and per-block coordinate bounds. For a like-for-like comparison the Fortran reader upcasts each block to float64 after reading. This is the cost the library actually pays.
+
+| Reader | Reps | Mean (s) | Min (s) | Stdev (s) |
+|---|---|---|---|---|
+| lptlib GridIO.read_grid (float64, incl. metric bounds) | 15 | 0.0851 | 0.0755 | 0.0070 |
+| Fortran stream read (float64, gfortran -O2) | 15 | 0.0597 | 0.0554 | 0.0065 |
+
+- lptlib read_grid vs compiled Fortran, both float64: **1.43x slower (ratio 0.70)**
