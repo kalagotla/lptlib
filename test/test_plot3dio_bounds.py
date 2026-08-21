@@ -54,3 +54,34 @@ def test_read_grid_bounds(tmp_path):
         np.testing.assert_allclose(
             grid.grd_max[b], ref.max(axis=(0, 1, 2)).astype(np.float64), rtol=0, atol=0
         )
+
+    # The default stores grd as float64.
+    assert grid.grd.dtype == np.float64
+
+
+def test_read_grid_single_precision_store(tmp_path):
+    """store_type='f4' keeps grd single precision with identical coordinates."""
+    from lptlib.io import GridIO
+
+    blocks = [(6, 5, 4), (7, 3, 5), (4, 6, 3)]
+    path = tmp_path / "bounds_store_f4.x"
+    arrays = _write_grid(str(path), blocks, seed=11)
+
+    grid = GridIO(str(path))
+    grid.read_grid(store_type="f4")
+
+    assert grid.grd.dtype == np.float32
+    # Bounds are still returned as float64.
+    assert grid.grd_min.dtype == np.float64
+    assert grid.grd_max.dtype == np.float64
+
+    for b, (ni, nj, nk) in enumerate(blocks):
+        ref = arrays[b]
+        # Coordinates are bit-exact because the file is already single precision.
+        np.testing.assert_array_equal(grid.grd[:ni, :nj, :nk, :, b], ref)
+        np.testing.assert_array_equal(
+            grid.grd_min[b], ref.min(axis=(0, 1, 2)).astype(np.float64)
+        )
+        np.testing.assert_array_equal(
+            grid.grd_max[b], ref.max(axis=(0, 1, 2)).astype(np.float64)
+        )
