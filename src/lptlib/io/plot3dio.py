@@ -75,7 +75,7 @@ class GridIO:
               "grd -- The grid data\n"
         return doc
 
-    def read_grid(self, data_type='f4'):
+    def read_grid(self, data_type='f4', store_type=None):
         """Reads in the grid file and changes the instance attributes
 
         Parameters
@@ -84,6 +84,17 @@ class GridIO:
             Specify the data type of the grid file specified
             Default is 'f4' for single-precision
             For double-precision use 'f8'
+        store_type: str or numpy dtype, optional
+            Data type used to store the reconstructed grid array ``grd``.
+            The default (``None``) stores ``grd`` as float64, matching the
+            historical behaviour and giving ``compute_metrics`` full
+            double-precision headroom for the Jacobian and inverse-metric
+            terms. Passing ``'f4'`` keeps ``grd`` in single precision, which
+            matches the on-disk precision and roughly halves the read time on
+            large grids by avoiding the double-precision upcast copy. Use it
+            for coordinate-only workflows or very large grids where the
+            single-precision metrics are acceptable. ``grd_min`` and
+            ``grd_max`` are always returned as float64.
 
         Returns
         -------
@@ -93,6 +104,7 @@ class GridIO:
         credit: Paul Orkwis
         date: 11-04/2021
         """
+        _store_dtype = np.float64 if store_type is None else np.dtype(store_type)
         with open(self.filename, 'r') as grid:
             # Read-in number of blocks
             self.nb = np.fromfile(grid, dtype='i4', count=1)[0]
@@ -107,7 +119,8 @@ class GridIO:
             _temp = np.fromfile(grid, dtype=data_type, count=sum(_nt))
 
             # pre-define grd to reduce calling pad and concatenate
-            self.grd = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), 3, self.nb))
+            self.grd = np.zeros((self.ni.max(), self.nj.max(), self.nk.max(), 3, self.nb),
+                                dtype=_store_dtype)
 
             # Reshape and assign data to grd, and compute the per-block min/max
             # coordinate bounds in the same pass. The bounds are taken from the
