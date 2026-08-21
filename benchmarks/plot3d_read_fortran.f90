@@ -10,7 +10,14 @@
 !                              Fortran (column-major) order
 !
 ! Usage:
-!     plot3d_read_fortran <gridfile> <nreps>
+!     plot3d_read_fortran <gridfile> <nreps> [precision]
+!
+! precision is 4 (single, default) or 8 (double). The PLOT3D file is always
+! single precision on disk. With precision 4 the reader reconstructs the blocks
+! as single-precision arrays, matching a native Fortran reader. With precision 8
+! it upcasts each block to double precision after reading, matching what
+! lptlib.io.GridIO.read_grid does with its float64 grd array, so the two can be
+! compared at the same precision.
 !
 ! The program performs the same task as the Python readers in this benchmark:
 ! read the file and reconstruct the per-block coordinate arrays in memory. It
@@ -25,26 +32,31 @@ program plot3d_read_fortran
    implicit none
 
    character(len=4096) :: gridfile, arg
-   integer :: nreps, rep, nargs
+   integer :: nreps, rep, nargs, prec
    integer(int64) :: c0, c1, crate
    real(real64) :: checksum, guard
    real(real64) :: secs
 
    nargs = command_argument_count()
    if (nargs < 2) then
-      write(*,*) 'usage: plot3d_read_fortran <gridfile> <nreps>'
+      write(*,*) 'usage: plot3d_read_fortran <gridfile> <nreps> [precision]'
       stop 1
    end if
    call get_command_argument(1, gridfile)
    call get_command_argument(2, arg)
    read(arg, *) nreps
+   prec = 4
+   if (nargs >= 3) then
+      call get_command_argument(3, arg)
+      read(arg, *) prec
+   end if
 
    call system_clock(count_rate=crate)
 
    ! Timed repetitions: read + reconstruct only.
    do rep = 1, nreps
       call system_clock(c0)
-      call read_reconstruct(trim(gridfile), guard)
+      call read_reconstruct(trim(gridfile), prec, guard)
       call system_clock(c1)
       secs = real(c1 - c0, real64) / real(crate, real64)
       write(*, '(A,I0,1X,ES23.15)') 'rep ', rep, secs
@@ -77,27 +89,37 @@ contains
       end do
    end subroutine open_header
 
-   subroutine read_reconstruct(fname, guard_out)
-      ! Read the file and reconstruct each block into an (ni,nj,nk,3) array.
-      ! Accumulate one element per block into guard_out so the reads cannot be
-      ! optimized away. No full-array reduction here, to keep this comparable
-      ! to the Python read+reshape task.
+   subroutine read_reconstruct(fname, prec, guard_out)
+      ! Read the file and reconstruct each block into an (ni,nj,nk,3) array at
+      ! the requested precision. Accumulate one element per block into guard_out
+      ! so the reads cannot be optimized away. No full-array reduction here, to
+      ! keep this comparable to the Python read+reshape task.
       character(len=*), intent(in) :: fname
+      integer, intent(in) :: prec
       real(real64), intent(out) :: guard_out
       integer :: u
       integer(int32) :: lnb, lb
       integer(int32), allocatable :: lni(:), lnj(:), lnk(:)
-      real(real32), allocatable :: dat(:,:,:,:)
+      real(real32), allocatable :: dat4(:,:,:,:)
+      real(real64), allocatable :: dat8(:,:,:,:)
 
       call open_header(fname, u, lnb, lni, lnj, lnk)
       guard_out = 0.0_real64
       do lb = 1, lnb
-         allocate(dat(lni(lb), lnj(lb), lnk(lb), 3))
+         allocate(dat4(lni(lb), lnj(lb), lnk(lb), 3))
          ! Stream read fills the array in Fortran order: i fastest, then j, k, c.
          ! This matches the order='F' reshape used by GridIO.read_grid.
-         read(u) dat
-         guard_out = guard_out + real(dat(1, 1, 1, 1), real64)
-         deallocate(dat)
+         read(u) dat4
+         if (prec == 8) then
+            ! Upcast to double precision, matching the float64 grd in read_grid.
+            allocate(dat8(lni(lb), lnj(lb), lnk(lb), 3))
+            dat8 = real(dat4, real64)
+            guard_out = guard_out + dat8(1, 1, 1, 1)
+            deallocate(dat8)
+         else
+            guard_out = guard_out + real(dat4(1, 1, 1, 1), real64)
+         end if
+         deallocate(dat4)
       end do
       close(u)
       deallocate(lni, lnj, lnk)
