@@ -18,7 +18,7 @@ lptlib is organized into three subpackages plus a set of synthetic test cases.
 
 `lptlib.function` provides supporting computation. `Variables` derives velocity, temperature, pressure, Mach number, and viscosity from the conserved flow state, and `Plots` and `Timer` are plotting and timing helpers.
 
-`lptlib.test_cases` supplies analytic cases such as `ObliqueShock` and `ObliqueShockData` that synthesize a controlled grid and flow for validation and for tracer-response studies.
+`lptlib.test_cases` supplies analytic cases such as `ObliqueShock`, `ObliqueShockData`, and `ObliqueShockAlignedData` that synthesize a controlled grid and flow for validation and for tracer-response studies.
 
 ## Public API reference
 
@@ -26,7 +26,9 @@ Every symbol below is importable directly from the top-level package, for exampl
 
 ### lptlib.io
 
-`GridIO(filename)` reads a PLOT3D grid. Key methods are `read_grid(data_type='f4')` for a multi-block grid, `read_grid_fortran_2d(precision, plane)` for a two-dimensional Fortran-record plane, `compute_metrics()` for grid metrics, and `mgrd_to_p3d(...)` for writing a grid back to PLOT3D.
+`GridIO(filename)` reads a PLOT3D grid. Key methods are `read_grid(data_type='f4', store_type=None)` for a multi-block grid, `read_grid_fortran_2d(precision, plane)` for a two-dimensional Fortran-record plane, `compute_metrics()` for grid metrics, and `mgrd_to_p3d(...)` for writing a grid back to PLOT3D.
+
+`read_grid` takes two independent precision arguments. `data_type` describes the file on disk and is `'f4'` for single precision or `'f8'` for double. `store_type` selects the dtype of the reconstructed `grd` array in memory. The default, `None`, stores `grd` as float64, which matches the historical behaviour and gives `compute_metrics` full double-precision headroom for the Jacobian and inverse-metric terms. Passing `store_type='f4'` keeps `grd` at the on-disk single precision and roughly halves the read time on large grids by avoiding the upcast copy; use it for coordinate-only work, or for very large grids where single-precision metrics are acceptable. The `grd_min` and `grd_max` bounds are always returned as float64.
 
 `FlowIO(filename)` reads a PLOT3D solution. Key methods are `read_flow(data_type='f4')`, `read_unsteady_flow(...)` for a time sequence, `read_formatted_txt(...)`, and `mgrd_to_p3d(...)` for export.
 
@@ -44,6 +46,14 @@ Every symbol below is importable directly from the top-level package, for exampl
 
 `StochasticModel(particles, spawn_locations, method='adaptive-p-space', grid=None, flow=None)` runs many particles in parallel. Execution backends are `serial()`, `multi_thread()`, `multi_process()`, and `mpi_run()`. `Particle()` defines a size distribution through `compute_distribution()`, and `SpawnLocations(particles)` defines seed points through `compute()`.
 
+### lptlib.test_cases
+
+`ObliqueShock(mach=None, deflection=None, shock_angle=None)` solves the oblique-shock relations. Call `compute()` and read `shock_angle`, `pressure_ratio`, `density_ratio`, `temperature_ratio`, and `mach_ratio`; each is a two-element array holding the weak and strong solutions.
+
+`ObliqueShockData(oblique_shock=ObliqueShock())` builds a shock-normal test case. The shock sits on the plane `x = 0`, so the grid runs from `-nx_max` to `+nx_max` and the freestream enters at the shock angle. Set `nx_max`, `ny_max`, `nz_max`, `xpoints`, `ypoints`, `zpoints`, `inlet_temperature`, `inlet_density`, and `shock_strength` (`'weak'` or `'strong'`), then call `create_grid()` and `create_flow()`. The results are a populated `GridIO` in `grid` and `FlowIO` in `flow`, ready to pass to `Streamlines` or `StochasticModel`.
+
+`ObliqueShockAlignedData(oblique_shock=ObliqueShock())` is the shock-aligned counterpart. The incoming flow is horizontal and the shock plane is instead tilted to the computed shock angle, passing through `(0, ny_max/2)` and separating the pre- and post-shock states by the signed distance `s = sin(beta) * x - cos(beta) * (y - ny_max/2)`. It takes the same attributes and the same `create_grid()` and `create_flow()` calls, and it is the right case when a trajectory should approach the shock along the x-axis rather than at an angle.
+
 ### lptlib.function
 
 `Variables(flow, gamma=1.4, gas_constant=287.052874)` derives flow quantities. Methods include `compute_velocity()`, `compute_temperature()`, `compute_pressure()`, `compute_mach()`, and `compute_viscosity()`, with `compute()` running the full set.
@@ -54,10 +64,12 @@ The particle-path integrator selects a spherical-particle drag closure through t
 
 ## Worked examples
 
-`main.py` in the repository root is a complete oblique-shock tracer-response run. It synthesizes a Mach 7.6 oblique shock, seeds a constant-diameter particle distribution, and launches an adaptive parallel simulation with the Loth drag model.
+The [Quickstart in the README](../README.md#quickstart) is the place to start. Every snippet there runs against the synthetic `ObliqueShockData` case, needs no external data, and the whole sequence runs in about fifteen seconds.
 
-`test/test_dataio.py` is a minimal, runnable example of the Lagrangian-to-Eulerian reduction. The other files under `test/` double as focused examples of search, interpolation, integration, streamlines, and the drag models.
+`main.py` in the repository root is a research-scale version of the same case: a Mach 7.6 oblique shock over a 100 mm by 500 mm domain, a thousand particles, and no step cap. It is a worked example rather than a quickstart, and a full run takes a long time and writes output files.
+
+`test/test_dataio_reduction.py` exercises the Lagrangian-to-Eulerian reduction, and the other files under `test/` double as focused examples of search, interpolation, integration, streamlines, and the drag models. Tests that need the large PLOT3D datasets from the original research cases skip when those files are absent, which is the normal state of a fresh clone.
 
 ## Running the tests
 
-Install pytest and run the suite from the repository root with `pytest test -v`. The suite exercises search, interpolation for steady and unsteady flow, integration, the drag models, streamlines, the DataIO reduction, plotting, and the MPI helpers.
+Install the test extra and run the suite from the repository root with `pip install -e ".[test]"` followed by `pytest test -v`. Bare `pytest` is not enough, because several test modules import `parameterized`. The suite exercises search, interpolation for steady and unsteady flow, integration, the drag models, streamlines, the DataIO reduction, plotting, and the MPI helpers. Set `LPTLIB_RUN_MPI=1` to include the tests that launch MPI processes; they also need the `mpi` extra and a system MPI runtime.

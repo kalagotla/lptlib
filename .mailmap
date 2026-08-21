@@ -1,0 +1,20 @@
+# Canonical names and addresses for `git shortlog`, `git log`, and GitHub's
+# contributor statistics. See `git help shortlog` for the file format.
+#
+# The project's history was written from several machines and GitHub accounts,
+# so one person appears under a handful of names. These lines collapse them.
+
+# Dilip Kalagotla, previously committing as kal, kalagotla, kal-gtsl-pc, Dilip,
+# and from the GitHub web UI under a noreply address.
+Dilip Kalagotla <dilipkalagotla@gmail.com>
+Dilip Kalagotla <dilipkalagotla@gmail.com> <dilip.kalagotla@gmail.com>
+Dilip Kalagotla <dilipkalagotla@gmail.com> <41090393+kalagotla@users.noreply.github.com>
+
+# One commit was authored through an AI coding assistant running on Dilip's
+# behalf. Attribution belongs to the person who directed and reviewed it, not to
+# the tool, so it is folded in here rather than listed as a contributor.
+Dilip Kalagotla <dilipkalagotla@gmail.com> <cursoragent@cursor.com>
+
+# Harpreet Chhabra, who contributed an early vortex test case, committing under
+# the machine name "Happs".
+Harpreet Chhabra <chhabrhh@mail.uc.edu>

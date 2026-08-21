@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: "If you use lptlib in your research, please cite it using these metadata."
+title: "lptlib: A parallel Lagrangian particle tracking library for compressible CFD data and tracer-response analysis in optical velocimetry"
+abstract: >-
+  lptlib is a Python library for one-way coupled Lagrangian particle tracking in
+  steady and unsteady compressible CFD data. It reads structured, multi-block,
+  curvilinear PLOT3D grid and flow fields, locates arbitrary points inside the
+  curvilinear domain, interpolates the flow state to those points, and integrates
+  fluid streamlines and inertial particle trajectories through the field under a
+  selectable spherical-particle drag closure. Large ensembles run in parallel
+  through multiprocessing, thread pools, or MPI, with adaptive time stepping for
+  the stiff dynamics near shocks, and scattered tracks can be reduced back onto a
+  structured mesh to produce PIV-like Eulerian fields.
+type: software
+authors:
+  - given-names: Dilip
+    family-names: Kalagotla
+    email: dilipkalagotla@gmail.com
+    orcid: "https://orcid.org/0000-0002-5453-2585"
+    affiliation: "Department of Aerospace Engineering and Engineering Mechanics, University of Cincinnati, Cincinnati, OH, USA"
+  - given-names: Paul D.
+    family-names: Orkwis
+    orcid: "https://orcid.org/0000-0003-4090-4031"
+    affiliation: "Department of Aerospace Engineering and Engineering Mechanics, University of Cincinnati, Cincinnati, OH, USA"
+version: 0.2.0
+doi: 10.5281/zenodo.22006302
+license: MIT
+repository-code: "https://github.com/kalagotla/lptlib"
+url: "https://github.com/kalagotla/lptlib"
+keywords:
+  - Python
+  - computational fluid dynamics
+  - Lagrangian particle tracking
+  - particle image velocimetry
+  - compressible flow
+  - shock waves
+  - uncertainty quantification

@@ -8,10 +8,13 @@ This document describes how to release new versions of lptlib to PyPI.
 
 The easiest way to release is using GitHub Actions:
 
-1. **Set up PyPI API token**:
-   - Go to [https://pypi.org/manage/account/](https://pypi.org/manage/account/)
-   - Create an API token
-   - Add it as a secret named `PYPI_API_TOKEN` in your GitHub repository settings
+1. **Set up PyPI Trusted Publishing** (once):
+   - Go to [https://pypi.org/manage/project/lptlib/settings/publishing/](https://pypi.org/manage/project/lptlib/settings/publishing/)
+   - Add a GitHub publisher with owner `kalagotla`, repository `lptlib`,
+     workflow `publish.yml`, and environment `pypi`
+   - No API token is needed. `.github/workflows/publish.yml` authenticates with
+     a short-lived OIDC token. The header comment in that file explains how to
+     revert to the old `PYPI_API_TOKEN` flow if the publisher is not set up yet
 
 2. **Create a release**:
    - Go to your GitHub repository
@@ -45,8 +48,8 @@ python scripts/release.py patch --prod
 # 1. Bump version
 python scripts/bump_version.py patch
 
-# 2. Build and upload
-python setup.py sdist bdist_wheel
+# 2. Build and upload (requires: pip install build twine)
+python -m build
 twine check dist/*
 twine upload dist/*
 ```
@@ -79,7 +82,7 @@ python scripts/bump_version.py rc
 
 Before releasing:
 
-- [ ] Update `CHANGELOG.md` with new features/fixes
+- [ ] Move the `[Unreleased]` entries in `CHANGELOG.md` under a heading for the new version, with the date and the comparison link
 - [ ] Run tests: `pytest`
 - [ ] Update documentation if needed
 - [ ] Commit all changes
@@ -106,19 +109,21 @@ python scripts/release.py alpha --prod
 
 1. **"Package already exists"**: Increment the version number
 2. **"Invalid metadata"**: Check pyproject.toml format
-3. **"Authentication failed"**: Verify PyPI API token
+3. **"Trusted publishing exchange failure" or "invalid-publisher"**: The PyPI publisher is not configured yet. Add it in the project's publishing settings, or fall back to the token flow documented at the top of `.github/workflows/publish.yml`
+4. **"Authentication failed"** on a manual upload: Verify your PyPI API token
 
 ### Manual Cleanup
 
 If builds get corrupted:
 ```bash
-rm -rf dist/ build/ *.egg-info/
-python setup.py sdist bdist_wheel
+rm -rf dist/ build/ src/*.egg-info/
+python -m build
 ```
 
 ## Environment Variables
 
-For automated releases, set these environment variables:
+Only needed for **manual** uploads from a laptop. The GitHub Actions workflow
+uses Trusted Publishing and needs no secrets.
 
 ```bash
 export TWINE_USERNAME=__token__
@@ -128,12 +133,16 @@ export TWINE_PASSWORD=your_pypi_api_token
 ## File Structure
 
 ```
-project-arrakis/
+lptlib/
 ├── .github/workflows/publish.yml  # GitHub Actions workflow
 ├── scripts/
-│   ├── bump_version.py           # Version bumping script
-│   └── release.py                # Complete release script
-├── setup.py                      # Package setup
-├── pyproject.toml                # Package configuration
-└── RELEASE.md                    # This file
+│   ├── bump_version.py            # Version bumping script
+│   └── release.py                 # Complete release script
+├── pyproject.toml                 # Package configuration and version
+├── CHANGELOG.md                   # Release notes
+└── RELEASE.md                     # This file
 ```
+
+There is no `setup.py`. All package metadata, including the version, lives in
+`pyproject.toml`, and `scripts/bump_version.py` is the supported way to change
+the version.

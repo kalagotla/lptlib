@@ -36,61 +36,43 @@ MANIFEST
 # Virtual environment
 .venv/
 
+# Tooling caches and coverage artifacts
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
 # Particle tracking output
 *.npy
 debug.log
 
-# External case data (large binary files)
-external/*/Baseline_files/
-external/*/particle_tracks*/
-external/*/data/
-
 # Test artifacts
 test_results/
 
-# Images
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-*.tif
-*.tiff
-*.svg
-*.eps
-*.ps
+# Run outputs.
+#
+# These patterns are deliberately scoped to the run-output directories at the
+# repository root instead of being repo-wide globs. Repo-wide '*.png', '*.csv',
+# '*.dat', '*.h5' and friends used to swallow every figure, benchmark result and
+# example dataset a contributor added anywhere in the tree, which is why the
+# tracked benchmark results under benchmarks/results/ had to be force-added.
+# Put generated artifacts in one of these directories and they stay untracked;
+# anything committed on purpose elsewhere stays visible to git.
+/output/
+/outputs/
+/results/
+/figures/
 
-# Documents
-*.pdf
-*.txt
+# The benchmark harness regenerates a multi-hundred-megabyte synthetic PLOT3D
+# grid. benchmarks/.gitignore already covers it; repeated here so the file
+# cannot become committable if that file is ever reorganized.
+benchmarks/results/synthetic_grid.x
 
-# Videos / animations
+# Videos / animations (large, and never a source artifact)
 *.mp4
 *.avi
 *.mov
 *.webm
 *.mkv
-
-# Data / binary outputs
-*.csv
-*.dat
-*.bin
-*.h5
-*.hdf5
-*.nc
-*.vtk
-*.vtu
-*.vtp
-*.plt
-*.tec
-*.cgns
-*.pkl
-*.pickle
-*.mat
-*.npz
-*.parquet
-*.feather
-
-# PLOT3D grid/solution files (tracked test fixtures under test/ are unaffected)
-*.xyz
-*.p3d

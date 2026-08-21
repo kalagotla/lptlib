@@ -86,30 +86,65 @@ def bump_version(current_version, bump_type):
     
     return new_version
 
+# A literal fallback version in the package __init__ looks like a plain PEP 440
+# release, e.g. __version__ = "0.2.0". The sentinel the package currently ships,
+# "0.0.0+unknown", is deliberately not a release number and is left alone.
+_INIT_PATH = Path("src") / "lptlib" / "__init__.py"
+_INIT_VERSION_RE = re.compile(
+    r'(__version__\s*=\s*")(\d+\.\d+\.\d+(?:[a-z]+\d+)?)(")'
+)
+
+
+def update_init_version(new_version):
+    """Update a literal fallback ``__version__`` in src/lptlib/__init__.py.
+
+    The package normally derives ``__version__`` from installed package
+    metadata via ``importlib.metadata``, with a non-release sentinel as the
+    fallback for source-tree use. Nothing needs bumping in that case. If the
+    file is ever changed to carry a literal release version instead, this
+    keeps it in step with pyproject.toml.
+
+    Returns True when the file was rewritten.
+    """
+    if not _INIT_PATH.exists():
+        return False
+
+    with open(_INIT_PATH, 'r') as f:
+        content = f.read()
+
+    new_content, count = _INIT_VERSION_RE.subn(
+        lambda m: f'{m.group(1)}{new_version}{m.group(3)}', content
+    )
+    if not count:
+        return False
+
+    with open(_INIT_PATH, 'w') as f:
+        f.write(new_content)
+    return True
+
+
 def update_version_files(new_version):
-    """Update version in pyproject.toml and setup.py"""
-    # Update pyproject.toml
+    """Update the version in pyproject.toml and, if present, in the package."""
+    # Update pyproject.toml -- the single source of truth for the version.
     pyproject_path = Path("pyproject.toml")
     with open(pyproject_path, 'r') as f:
         content = f.read()
-    
+
     content = re.sub(r'version = "[^"]+"', f'version = "{new_version}"', content)
-    
+
     with open(pyproject_path, 'w') as f:
         f.write(content)
-    
-    # Update setup.py
-    setup_path = Path("setup.py")
-    if setup_path.exists():
-        with open(setup_path, 'r') as f:
-            content = f.read()
-        
-        content = re.sub(r'version="[^"]+"', f'version="{new_version}"', content)
-        
-        with open(setup_path, 'w') as f:
-            f.write(content)
-    
-    print(f"Updated version to {new_version} in pyproject.toml and setup.py")
+
+    updated = ["pyproject.toml"]
+    if update_init_version(new_version):
+        updated.append(str(_INIT_PATH))
+
+    print(f"Updated version to {new_version} in {', '.join(updated)}")
+    if len(updated) == 1:
+        print(
+            f"  ({_INIT_PATH} carries no literal release version; "
+            "__version__ is read from package metadata.)"
+        )
 
 def main():
     if len(sys.argv) != 2:

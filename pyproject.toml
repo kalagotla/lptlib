@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "lptlib"
-version = "0.0.6"
+version = "0.2.0"
 authors = [
     {name="Dilip Kalagotla", email="dilipkalagotla@gmail.com"},
     ]
@@ -16,24 +16,21 @@ dependencies = [
     "scipy",
     "matplotlib",
     "pandas",
-    "seaborn",
     "tqdm",
-    "mpi4py",
-    "scikit-learn",
-    "h5py>=3.15.1",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Education",
     "Topic :: Scientific/Engineering",
 ]
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 
 [project.optional-dependencies]
 # GPU build of PyTorch (CUDA 12.8, Blackwell-compatible). Install with
@@ -50,6 +47,27 @@ test = [
     "parameterized",
     "pytest-cov",
 ]
+
+# MPI-parallel execution backends (StochasticModel.mpi_run and the DataIO
+# Lagrangian-to-Eulerian reduction). mpi4py needs a system MPI runtime, so it is
+# optional; the rest of the library imports and runs without it. Install with:
+#     pip install "lptlib[mpi]"
+mpi = [
+    "mpi4py",
+]
+
+# Extra packages used by the scripts in the repository root (main.py). Not
+# needed by the library itself. Install with:
+#     pip install -e ".[examples]"
+examples = [
+    "seaborn",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 exclude = [
@@ -76,11 +94,6 @@ issues = "https://github.com/kalagotla/lptlib/issues"
 
 [tool.uv]
 link-mode = "copy"
-
-[tool.uv.workspace]
-members = [
-    "external/forebody_articulation",
-]
 
 # When --extra gpu is active, resolve torch from the official PyTorch CUDA 12.8
 # index (Blackwell-compatible) instead of the CPU build on PyPI.
