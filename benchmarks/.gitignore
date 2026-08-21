@@ -3,3 +3,4 @@ results/synthetic_grid.x
 plot3d_read_fortran
 *.o
 *.mod
+__pycache__/

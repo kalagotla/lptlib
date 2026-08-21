@@ -1,6 +1,0 @@
-reader,reps,mean_s,min_s,stdev_s
-lptlib strided read (float32),15,0.068653,0.063396,0.004769
-naive Python nested-loop (float32),7,0.526607,0.508069,0.013652
-Fortran stream read (float32, gfortran -O2),15,0.053438,0.048011,0.007006
-lptlib GridIO.read_grid (float64, incl. metric bounds),15,0.085091,0.075495,0.007009
-Fortran stream read (float64, gfortran -O2),15,0.059673,0.055442,0.006451
