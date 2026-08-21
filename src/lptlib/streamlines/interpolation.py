@@ -6,6 +6,13 @@ from ..function.variables import Variables
 
 logger = logging.getLogger(__name__)
 
+# Slack allowed on the local interpolation weights before they are reported as
+# an extrapolation. ``Search`` derives the cell from the computational
+# coordinate, so ``cpoint - cell[0]`` lands in ``[0, 1]`` exactly; this only
+# absorbs the round-off of a Newton-Raphson iterate that converged onto a cell
+# face from the wrong side by an ulp or two.
+_FRACTION_TOL = 1e-9
+
 
 class Interpolation:
     """
@@ -153,6 +160,31 @@ class Interpolation:
 
         return self.detected_feature
 
+    def _local_fractions(self):
+        """Where the query point sits inside its located cell, per axis.
+
+        Every c-space-flavoured branch below weights the eight cell nodes by
+        ``cpoint - cell[0]``, so those three numbers have to be in ``[0, 1]``
+        for the result to be an interpolation rather than an extrapolation.
+        They now are by construction: ``Search`` derives ``cell`` from the
+        computational coordinate itself (``Search._locate_from_cpoint``).
+
+        They were not before. While the cell came from a Cartesian octant test
+        around the nearest node (``Search._cell_index``), the two disagreed for
+        57 per cent of in-domain points on the curvilinear quarter-annulus
+        fixture and these weights reached 1.996 -- almost a full cell of silent
+        extrapolation on the library's headline use case. Nothing warned. This
+        is where it would now.
+        """
+        _fractions = np.asarray(self.idx.cpoint, dtype='f8') - self.idx.cell[0]
+        if np.any(_fractions < -_FRACTION_TOL) or np.any(_fractions > 1.0 + _FRACTION_TOL):
+            logger.warning(
+                'Interpolation weights %s are outside [0, 1]: the located cell '
+                '%s does not contain c-space point %s, so the flow data is '
+                'being extrapolated rather than interpolated.\n',
+                _fractions, self.idx.cell[0], self.idx.cpoint)
+        return _fractions
+
     def compute(self, method='p-space'):
         """
         Find interpolated plot3d data and grid metrics at a given point
@@ -233,7 +265,7 @@ class Interpolation:
                     # weights (alpha, beta, gamma) from the p2c search result.
                     # More accurate than sequential axis-aligned passes on skewed grids.
                     if self.idx.cpoint is not None:
-                        _alpha, _beta, _gamma = self.idx.cpoint - self.idx.cell[0]
+                        _alpha, _beta, _gamma = self._local_fractions()
                         self.q = ((1 - _alpha) * (1 - _beta) * (1 - _gamma) * _cell_q[0] +
                                   _alpha * (1 - _beta) * (1 - _gamma) * _cell_q[1] +
                                   _alpha * _beta * (1 - _gamma) * _cell_q[2] +
@@ -306,7 +338,7 @@ class Interpolation:
                     self.q = self.q.reshape((1, 1, 1, -1, 1))
                     return
 
-                _alpha, _beta, _gamma = self.idx.cpoint - self.idx.cell[0]
+                _alpha, _beta, _gamma = self._local_fractions()
 
                 # Do the shock cell check
                 if self.idx.cell.shape == (8, 3) and self.idx.info is None:
@@ -454,7 +486,7 @@ class Interpolation:
                     return
 
                 # _alpha, _beta, _gamma and reshape for rbf intepolator to work
-                _fractions = (self.idx.cpoint - self.idx.cell[0]).reshape(1, -1)
+                _fractions = self._local_fractions().reshape(1, -1)
 
                 # Start RBF interpolation
                 from scipy.interpolate import RBFInterpolator as rbf
@@ -678,7 +710,7 @@ class Interpolation:
 
                 # Interpolate m1 and m2 for use in integration; m1 is used in ppath only!
                 # _alpha, _beta, _gamma and reshape for rbf intepolator to work
-                _fractions = (self.idx.cpoint - self.idx.cell[0]).reshape(1, -1)
+                _fractions = self._local_fractions().reshape(1, -1)
 
                 # add adjacent cells to the cell list
                 # TODO: debug for multiblock case -- currently defaults to single block

@@ -188,9 +188,10 @@ class Variables:
             Regime: air in the continuum regime; this is the library default
             because it holds up better than Sutherland's law at the low static
             temperatures reached in supersonic expansions.
-            Provenance: see the in-line note on the ``'keyes'`` case below. The
-            source of the correlation is NOT verified and it is deliberately
-            not cited in ``paper.bib``.
+            Provenance: the three constants were verified against NASA Glenn's
+            Wind-US 3.0 documentation, which states the same correlation in
+            imperial units and names it Keyes' law; see the in-line note on the
+            ``'keyes'`` case below. Cited as ``keyes1951viscosity``.
 
         """
         match law:
@@ -212,17 +213,27 @@ class Variables:
                 # Keyes' viscosity correlation for air, in the form
                 #   mu = a0 * sqrt(T) * 1e-6 / (1 + (a/T) * 10**(-a1/T))   [Pa.s]
                 #
-                # PROVENANCE -- READ BEFORE CITING. The correlation is Keyes',
-                # and the three coefficients below (a0 = 1.488, a = 122.1,
-                # a1 = 5.0) are the air values that circulate with it. The
-                # presumed original is a 1951 ASME summary of viscosity and
-                # heat-conduction data for air and other gases attributed to
-                # F. G. Keyes, but that record could NOT be confirmed against a
-                # primary source and no DOI was found for it. paper.bib
-                # therefore carries the entry commented out and explicitly
-                # marked unverified; do not cite it as though it were checked.
-                # Confirm the author initials and locate a DOI on the ASME
-                # Digital Collection before promoting this to a real citation.
+                # PROVENANCE. The three coefficients below were checked against
+                # NASA Glenn Research Center's Wind-US 3.0 user guide (VISCOSITY
+                # keyword), which gives "Keyes' law" as
+                #   mu = 2.32e-8 * T**0.5 / (1 + (220/T) * 10**(-9/T))
+                # with mu in slug/(ft.s) and T in degrees Rankine:
+                #   https://www.grc.nasa.gov/WWW/winddocs/windus3.0/user/keywords/viscosity.html
+                # Converting that to SI (Pa.s, kelvin) gives a1 = 9 R = 5.0 K
+                # exactly, a = 220 R = 122.22 K against the 122.1 coded here,
+                # and a0 = 1.490e-6 against the 1.488e-6 coded here. So this is
+                # the same correlation, each source carrying its own rounding:
+                # the two forms agree to within 0.13% over 50-1000 K.
+                # The bibliographic record for the underlying paper (F. G.
+                # Keyes, Trans. Am. Soc. Mech. Engrs. 73, 589-596, 1951) was
+                # confirmed from an indexed bibliography; it is now cited in
+                # paper.bib as `keyes1951viscosity`. No DOI exists for it that
+                # could be found, and the ASME Digital Collection page itself
+                # refuses automated retrieval, so the constants are traced to
+                # Keyes only through the NASA source above and NOT read out of
+                # the 1951 paper. Note also that Wind-US applies Keyes' law only
+                # below 160 R (89 K) and blends into Sutherland's law above it,
+                # whereas lptlib uses it at all temperatures.
                 a0, a, a1 = 1.488, 122.1, 5.0
                 _tau = 1/self.temperature
                 self.viscosity = a0 * self.temperature**0.5 * 10**-6 / (1 + a * _tau / 10 ** (a1 * _tau))
@@ -335,8 +346,10 @@ class Variables:
             in the source.
             Reference: Loth, E. (2008), "Compressibility and Rarefaction Effects
             on Drag of a Spherical Particle", AIAA Journal 46(9), 2219-2228,
-            doi:10.2514/1.28943. A published Comment on this paper exists --
-            see the in-line note on the case.
+            doi:10.2514/1.28943, as corrected by Harrison, A. K. (2021),
+            doi:10.2514/1.J060681, which reports two errata in Loth's printed
+            equations. This implementation follows the corrected equations; see
+            the in-line note on the case.
         ``'tedeschi'``
             Tedeschi's correlation for tracer particles in supersonic flow,
             which solves implicitly for a velocity-lag factor k. Regime: all Re
@@ -477,11 +490,38 @@ class Variables:
                 #   spherical particles through fluid medium", Proceedings of the
                 #   Royal Society of London A 83(563), 357-365,
                 #   doi:10.1098/rspa.1910.0024.
-                #   The reference covers the FORM of the slip correction. The
-                #   particular numerical value A = 4.5 used here was not traced
-                #   back to Cunningham's paper; a reviewer checking this closure
-                #   should verify that constant against the source rather than
-                #   assume it.
+                #   The reference covers the FORM of the slip correction only.
+                #
+                # A = 4.5 IS STILL UNSOURCED. A second attempt to trace it
+                # failed. Neither Cunningham (1910) nor Melling (1997) could be
+                # retrieved (both are paywalled and no open copy was found), so
+                # neither was read directly; but no leading Knudsen coefficient
+                # of 4.5 appears in any of the reachable secondary literature on
+                # slip-corrected sphere drag. The nearby published values are
+                # 2.514 (Cunningham-Millikan-Davies, as used by Loth's f(Kn)
+                # below), 1.257 (the standard aerosol form of the same) and 2.7
+                # (Melling, as used by the 'melling-2' case above). 4.5 is not
+                # 2x or 0.5x any of those, so a radius-versus-diameter Knudsen
+                # convention does not explain it either.
+                #
+                # What a maintainer needs to check, concretely:
+                #   1. Whether A = 4.5 was ever meant to be a published constant
+                #      at all, or was tuned. If tuned, say so and drop the
+                #      Cunningham attribution from the constant.
+                #   2. The Re > 1 branch below is the stronger warning sign. It
+                #      silently redefines Kn as M/sqrt(Re), which is neither the
+                #      Kn used in the Re <= 1 branch three lines above nor the
+                #      definition used by any other model in this suite, and it
+                #      is not a Knudsen number in the usual sense. Using two
+                #      different Kn on either side of Re = 1 makes Cd jump
+                #      there: measured, Cd rises by 15% across Re = 1 at M = 0.1
+                #      and by 33% at M = 0.5. That discontinuity is a defect
+                #      regardless of what A turns out to be, and it suggests
+                #      this case is a library-specific construction rather than
+                #      anything taken from Cunningham (1910) -- in which case
+                #      A = 4.5 most likely belongs to that construction too.
+                # Until both are resolved, treat this model as unvalidated and
+                # do not present its output as "the Cunningham correction".
                 # Knudsen number
                 if _re <= 1e-9:
                     return 0
@@ -595,15 +635,36 @@ class Variables:
                 # ref: Loth, E. (2008), "Compressibility and Rarefaction Effects
                 #   on Drag of a Spherical Particle", AIAA Journal 46(9),
                 #   2219-2228, doi:10.2514/1.28943.
-                # CAUTION for anyone checking this closure: a Comment on the
-                #   source paper is in print -- Harrison, A. K. (2021), "Comment
-                #   on 'Compressibility and Rarefaction Effects on Drag of a
-                #   Spherical Particle'", AIAA Journal 59(8), 3288-3289,
-                #   doi:10.2514/1.J060681 (verified via Crossref; not yet in
-                #   paper.bib). Its content was NOT checked against this
-                #   implementation, and a reply by the original author is also
-                #   listed. Consult both before treating the coded equations as
-                #   settled.
+                # ERRATA IN THE SOURCE -- ALREADY ACCOUNTED FOR BELOW.
+                #   Harrison, A. K. (2021), "Comment on 'Compressibility and
+                #   Rarefaction Effects on Drag of a Spherical Particle'", AIAA
+                #   Journal 59(8), 3288-3289, doi:10.2514/1.J060681, identifies
+                #   two errors in Loth (2008). Read from the accepted manuscript
+                #   (LA-UR-21-21429) at https://www.osti.gov/servlets/purl/1812671
+                #   since the AIAA page is not retrievable:
+                #     (i) Loth's eq. (25b), the free-molecular drag at particle-
+                #         gas temperature equilibrium, is printed without the
+                #         2*sqrt(pi)/(3*s) term that eq. (25a) carries. The
+                #         omitted term is positive and large -- dropping it cuts
+                #         C_D,fm by 17-27% over M = 0.5-3.
+                #     (ii) Loth's eq. (26) carries a stray prime: the drag
+                #         coefficient in the denominator should be the same
+                #         (unprimed) C_D,fm as in the numerator, so that the
+                #         correlation passes through the C_D = 1.63 nexus at
+                #         Re_p = 45.
+                #   The code below already matches Harrison's corrected forms on
+                #   both counts: _cd_fm keeps the 2*sqrt(pi)/(3*s) term, and
+                #   _cd_fm_re uses _cd_fm in both numerator and denominator,
+                #   which yields exactly 1.63 at _re = 45 for every Mach number
+                #   (checked numerically) -- consistent with the `_re == 45`
+                #   branch below. So no change is required here; this note
+                #   exists so that a reader comparing the code line-by-line
+                #   against the printed paper does not "fix" it back to the
+                #   erroneous published equations.
+                #   Loth published a reply, doi:10.2514/1.J060850; its content
+                #   has NOT been read (AIAA blocks retrieval and no open copy
+                #   was found), so whether he accepts both corrections is
+                #   unverified here.
                 if _re < 1e-9:
                     return 0
 

@@ -21,7 +21,10 @@ matplotlib.use("Agg")
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from synthetic import make_oblique_shock_case  # noqa: E402
+from synthetic import (make_analytic_flow,  # noqa: E402
+                       make_coordinate_flow,
+                       make_curvilinear_annulus_grid,
+                       make_oblique_shock_case)
 
 
 @pytest.fixture(scope="session")
@@ -57,3 +60,49 @@ def upstream_point(oblique_case):
     """
     grd = oblique_case.grid.grd
     return np.array([grd[3, 5, 2, 0, 0], grd[3, 5, 2, 1, 0], grd[3, 5, 2, 2, 0]])
+
+
+@pytest.fixture(scope="session")
+def curvilinear_grid():
+    """A curvilinear quarter-annulus ``GridIO`` with metrics computed.
+
+    Session scoped for the same reason as ``oblique_case``: building it runs
+    the deterministic grid-metric computation and the search tests only read
+    from it.
+
+    Unlike every Cartesian fixture here, this block does not fill its own
+    bounding box, so points can lie inside the bounding box while being
+    outside the block. That is what ``test_search_curvilinear.py`` exercises.
+    """
+    return make_curvilinear_annulus_grid()
+
+
+@pytest.fixture(scope="session")
+def curvilinear_stretched_grid():
+    """A quarter-annulus with the radial spacing stretched.
+
+    ``curvilinear_grid`` above is curved, but its radial node lines are
+    straight rays along which ``r`` is linear in ``i``, so the mapping is
+    exactly linear in the i direction. That accident hides cell-indexing
+    errors: interpolating along i from the wrong cell, at a local fraction
+    outside ``[0, 1]``, still reproduces a linear field exactly. Stretching the
+    radius removes it, so a wrong cell shows up as a real error in the
+    interpolated value. See ``test_curvilinear_cell_indexing.py``.
+    """
+    return make_curvilinear_annulus_grid(radial_stretch=2.5)
+
+
+@pytest.fixture(scope="session")
+def curvilinear_analytic_flow(curvilinear_stretched_grid):
+    """The closed-form vortex field sampled on the stretched annulus."""
+    return make_analytic_flow(curvilinear_stretched_grid)
+
+
+@pytest.fixture(scope="session")
+def curvilinear_coordinate_flow(curvilinear_stretched_grid):
+    """``q = (x, y, z, 0, 0)`` on the stretched annulus.
+
+    Interpolating it recovers the query point when the cell is right and a
+    displaced point when it is wrong.
+    """
+    return make_coordinate_flow(curvilinear_stretched_grid)

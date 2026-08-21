@@ -29,11 +29,23 @@ the library's own code path.
    cot(beta)) written out here from the standard relations, so agreement to
    machine precision is a genuine cross-check of the library's algebra.
 
-2. ``PUBLISHED`` pins three classic textbook cases to the values tabulated in
-   the standard gas-dynamics references (NACA Report 1135 charts and the
-   worked examples in Anderson, *Modern Compressible Flow*), quoted to the
-   precision those sources give. These catch an error that both formulations
-   might share.
+2. ``PUBLISHED`` pins the library against an externally published oblique-shock
+   table, entry by entry, at the precision that table prints. This catches an
+   error that both formulations above might share, because the numbers come
+   from outside this repository entirely.
+
+   The table used is the "Oblique Shock Wave Table" (gamma = 7/5) from
+   *Aerodynamics for Students*, AMME, University of Sydney (copyright
+   1996-2006), as mirrored by the Cambridge University Engineering Department:
+   https://www-mdp.eng.cam.ac.uk/web/library/enginfo/aerothermal_dvd_only/aero/oblique/obtable.html
+   Its columns are Delta (deflection, deg), M1, Theta (shock angle, deg), M2
+   and P2/P1; shock angle is printed to 2 dp, P2/P1 to 3 dp and M2 to 2 dp.
+
+   Note that NACA Report 1135 (Ames Research Staff, 1953) is *not* usable for
+   this purpose and is deliberately not cited here: it presents oblique-shock
+   results only as charts 2-4, and its one numerical table (table II) is a
+   normal-shock table. An earlier version of this docstring cited it, and the
+   worked examples in Anderson, anyway; neither had been checked.
 """
 
 import numpy as np
@@ -86,15 +98,22 @@ def _reference_solution(mach, deflection_deg, branch="weak", gamma=GAMMA):
             "temperature": temperature, "mach2": mach2, "mach_ratio": mach2 / mach}
 
 
-# Textbook cases. beta, p2/p1 and M2 are the values given by the standard
-# gas-dynamics references (NACA Report 1135 theta-beta-M chart and normal-shock
-# tables; the worked examples in Anderson, Modern Compressible Flow), quoted to
-# the precision those sources carry -- hence the loose tolerances here.
+# Every attached-shock row of the published table named in the module docstring,
+# transcribed exactly as printed (shock angle 2 dp, p2/p1 3 dp, M2 2 dp). The
+# tolerances below are just over half a unit in the last printed digit of each
+# column, which is what agreement with a rounded table can mean.
 PUBLISHED = [
     # (mach, deflection deg, beta deg, p2/p1, M2)
-    (2.0, 10.0, 39.3, 1.707, 1.641),
-    (2.0, 20.0, 53.4, 2.843, 1.210),
-    (3.0, 15.0, 32.2, 2.822, 2.255),
+    (2.0, 5.0, 34.30, 1.315, 1.82),
+    (2.0, 10.0, 39.31, 1.707, 1.64),
+    (2.0, 15.0, 45.34, 2.195, 1.45),
+    (2.0, 20.0, 53.42, 2.843, 1.21),
+    (3.0, 5.0, 23.13, 1.454, 2.75),
+    (3.0, 10.0, 27.38, 2.054, 2.51),
+    (3.0, 15.0, 32.24, 2.822, 2.25),
+    (3.0, 20.0, 37.76, 3.771, 1.99),
+    (3.0, 25.0, 44.14, 4.925, 1.72),
+    (3.0, 30.0, 52.01, 6.356, 1.41),
 ]
 
 CASES = [(2.0, 10.0), (2.0, 20.0), (3.0, 15.0), (2.3, 10.0), (5.0, 25.0)]
@@ -159,16 +178,16 @@ def test_strong_solution_is_the_second_root(mach, deflection):
 @pytest.mark.parametrize("mach, deflection, beta, pressure, mach2", PUBLISHED)
 def test_matches_published_gas_dynamics_tables(mach, deflection, beta, pressure,
                                                mach2):
-    """Three classic cases against tabulated textbook values.
+    """Every attached-shock row of the published table, at its printed precision.
 
-    M1 = 2, theta = 10 deg -> beta = 39.3 deg, p2/p1 = 1.707, M2 = 1.641
-    M1 = 2, theta = 20 deg -> beta = 53.4 deg, p2/p1 = 2.843, M2 = 1.210
-    M1 = 3, theta = 15 deg -> beta = 32.2 deg, p2/p1 = 2.822, M2 = 2.255
+    Source: "Oblique Shock Wave Table" (gamma = 7/5), Aerodynamics for Students,
+    AMME, University of Sydney, mirrored at
+    https://www-mdp.eng.cam.ac.uk/web/library/enginfo/aerothermal_dvd_only/aero/oblique/obtable.html
     """
     shock = _solved(mach, deflection)
-    assert shock.shock_angle[0] == pytest.approx(beta, abs=0.05)
-    assert shock.pressure_ratio[0] == pytest.approx(pressure, rel=2e-3)
-    assert shock.mach_ratio[0] * mach == pytest.approx(mach2, rel=2e-3)
+    assert shock.shock_angle[0] == pytest.approx(beta, abs=0.006)
+    assert shock.pressure_ratio[0] == pytest.approx(pressure, abs=0.0006)
+    assert shock.mach_ratio[0] * mach == pytest.approx(mach2, abs=0.006)
 
 
 @pytest.mark.parametrize("mach, deflection", CASES)

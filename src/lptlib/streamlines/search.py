@@ -5,6 +5,22 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Threshold ``_cell_index`` uses to decide which side of the nearest node a
+# point falls on, expressed as a *fraction of the local cell*. It used to be a
+# hard-coded absolute 1e-6 at every branch of that method, which is meaningless
+# without a length scale: the oblique-shock fixture has ``dz = 2.5e-5``, so
+# 1e-6 was four per cent of a cell there and the octant choice could be off by
+# a whole cell. ``_cell_scale`` supplies the length this multiplies, and
+# ``_point_in_cell`` has to tolerate exactly this much slop, so the value is
+# named here.
+_QUADRANT_REL_TOL = 1e-6
+
+# Fraction of the local cell within which a query point is treated as
+# coinciding with a grid node. Node detection used to ride along inside
+# ``_cell_index`` on an absolute 1e-12, with the same scale-free problem; it is
+# its own test now (``_is_node``) and its own -- relative -- tolerance.
+_NODE_REL_TOL = 1e-9
+
 
 # noinspection SpellCheckingInspection
 class Search:
@@ -101,6 +117,100 @@ class Search:
         _eps = np.where(_far, np.maximum(_n - 2, 0), _eps)
         return _eps, _frac
 
+    def _cell_scale(self, _i, _j, _k):
+        """Length of the shortest grid edge leaving node ``(_i, _j, _k)``.
+
+        Tolerances that are lengths -- "is the point on this node?", "is the
+        point outside this cell?" -- are meaningless as absolute numbers,
+        because the grids this library reads span anything from microns to
+        metres. This is the local length they are expressed as a fraction of.
+        Returns ``0.0`` only for a degenerate block with no edges at all.
+        """
+        _grd = self.grid.grd[..., self.block]
+        _size = (int(self.grid.ni[self.block]), int(self.grid.nj[self.block]),
+                 int(self.grid.nk[self.block]))
+        _here = (int(_i), int(_j), int(_k))
+        _node = _grd[_here]
+        _edges = []
+        for _axis in range(3):
+            for _step in (1, -1):
+                _nbr = list(_here)
+                _nbr[_axis] += _step
+                if 0 <= _nbr[_axis] < _size[_axis]:
+                    _edges.append(float(np.linalg.norm(_grd[tuple(_nbr)] - _node)))
+        _edges = [_e for _e in _edges if _e > 0.0]
+        return min(_edges) if _edges else 0.0
+
+    def _is_node(self, _i, _j, _k):
+        """True when ``self.ppoint`` coincides with grid node ``(_i, _j, _k)``.
+
+        This is the node test on its own. It used to be the first branch of
+        ``_cell_index``, which meant node detection and cell selection shared a
+        code path and could not be corrected independently -- and cell
+        selection was the half that was wrong on curvilinear grids.
+
+        The tolerance is ``_NODE_REL_TOL`` times the shortest edge at the node,
+        with a floor at coordinate round-off, so it means the same thing on a
+        millimetre grid and on a metre grid.
+        """
+        if self.ppoint is None or self.block is None:
+            return False
+        _node = self.grid.grd[int(_i), int(_j), int(_k), :, self.block]
+        _tol = max(_NODE_REL_TOL * self._cell_scale(_i, _j, _k),
+                   np.finfo('f8').eps * float(np.max(np.abs(_node))))
+        return bool(np.linalg.norm(np.asarray(self.ppoint, dtype='f8') - _node)
+                    <= _tol)
+
+    def _locate_from_cpoint(self, _cpoint):
+        """Set ``cell`` -- and ``info`` if the point is a node -- from c-space.
+
+        The computational coordinate is the grid-agnostic source of truth for
+        which cell holds a point: the cell origin is simply the integer part of
+        the c-space coordinate. ``_cell_index`` instead decided by the
+        Cartesian octant of ``ppoint - grd[i, j, k]``, which is only the same
+        thing when the computational axes happen to line up with x, y and z --
+        i.e. on a Cartesian grid, not on the curvilinear grids this library
+        exists for. On the quarter-annulus fixture that octant test disagreed
+        with the computational coordinate for 57 per cent of in-domain points,
+        and ``Interpolation`` -- which builds its local weights as
+        ``cpoint - cell[0]`` -- silently extrapolated by up to 0.996 of a cell
+        for every one of them.
+
+        Deciding from ``_cell_split`` makes ``cpoint - cell[0]`` land in
+        ``[0, 1]`` by construction, which is the invariant tri-linear
+        interpolation needs.
+
+        Node detection is done separately and explicitly: round the c-space
+        coordinate to the nearest node index and ask ``_is_node`` whether the
+        query point really is that node. Newton-Raphson can converge to a node
+        from just below (``7.999999999998`` for node 8), so rounding rather
+        than truncating is what makes the node test stable. ``info`` is only
+        claimed when the node is the located cell's own origin, because the
+        shortcut ``Interpolation`` takes reads ``cell[0]``; a node on the far
+        i/j/k face is clamped into the last cell, where it is not the origin,
+        and falls through to the regular path that weights it exactly anyway.
+        """
+        _c = np.asarray(_cpoint, dtype='f8')
+        _eps, _ = self._cell_split(_c)
+        self.cell = self._cell_nodes(int(_eps[0]), int(_eps[1]), int(_eps[2]))
+
+        _size = np.array([self.grid.ni[self.block], self.grid.nj[self.block],
+                          self.grid.nk[self.block]], dtype=int)
+        _near = np.clip(np.rint(_c).astype(int), 0, _size - 1)
+        if self._is_node(*_near):
+            _node_cell = self._cell_nodes(int(_near[0]), int(_near[1]),
+                                          int(_near[2]))
+            if np.array_equal(_node_cell[0], _near):
+                self.cell = _node_cell
+                # The wording is the library's public marker for this state --
+                # ``Interpolation`` and the tests compare against it verbatim --
+                # so it is kept exactly as it was even though the tolerance is
+                # now relative rather than an absolute 1e-12. See ``_is_node``.
+                self.info = 'Given point is a node in the domain with a tol of 1e-12.\n' \
+                            'Interpolation will assign node properties for integration.\n' \
+                            'Index of the node will be returned by cell attribute\n'
+        return self.cell
+
     def _cell_nodes(self, _i, _j, _k):
         # _Internal method to get the nodes of a cell
         # Clamp to valid range to prevent negative indices wrapping
@@ -128,8 +238,95 @@ class Search:
                           [_i, _j + 1, _k + 1]], dtype=int)
         return _cell
 
+    def _point_in_cell(self, tol=1e-9):
+        """True unless ``self.ppoint`` provably lies outside ``self.cell``.
+
+        ``_cell_nodes`` clamps the cell origin into the valid range so that a
+        point sitting exactly on the far i/j/k face is located in the last
+        cell rather than in a cell that starts one node past the end of the
+        grid. That clamp is required -- without it the far-face lookup raised
+        ``IndexError`` -- but it also means the index-range test the
+        ``distance`` searches used to make (``max(cell[:, 0]) > ni - 1``) can
+        never fire again, so out-of-domain points need a separate containment
+        test. This is that test.
+
+        ``_find_block`` only checks the point against a block's axis-aligned
+        bounding box. On a Cartesian grid the box is the block, so that check
+        is exact. On a curvilinear grid -- an annular sector, a C-grid, any
+        body-fitted block around a curved surface -- the box strictly contains
+        points that are outside the block, and those points reach the cell
+        search. This method compares the point against the bounding box of the
+        eight nodes of the located cell instead of the whole block.
+
+        The test is conservative in one direction only: the cell is contained
+        in the box of its own nodes, so a point outside the box is certainly
+        outside the cell and is rejected, while a point inside the box may
+        still be outside a curved cell and is accepted. It therefore never
+        rejects a point that is genuinely inside the grid, but it does accept
+        a thin sliver of points immediately outside a curved boundary face,
+        where the search extrapolates by less than one cell.
+
+        The box is padded before the comparison. ``_cell_index`` decides which
+        of the eight cells around the nearest node to take by comparing
+        Cartesian offsets against ``_QUADRANT_REL_TOL`` of the local cell, so a
+        point that close to a node can be reported in the neighbouring cell and
+        sit that far outside it while being firmly inside the grid. The pad
+        covers that, plus coordinate round-off scaled to the magnitude of the
+        node coordinates. It is a fraction of this cell rather than an absolute
+        length, so it means the same thing on a micron grid and a metre grid --
+        the absolute 1e-6 it replaces was most of a cell on a fine mesh and
+        below round-off on a coarse one. Points landing exactly on a boundary
+        face are corners or face points of the located cell and are always
+        accepted.
+        """
+        if self.cell is None or self.block is None or self.ppoint is None:
+            return False
+        _nodes = self.grid.grd[self.cell[:, 0], self.cell[:, 1], self.cell[:, 2],
+                               :, self.block]
+        _lo, _hi = _nodes.min(axis=0), _nodes.max(axis=0)
+        _pad = (_QUADRANT_REL_TOL * float(np.max(_hi - _lo))
+                + tol * float(np.max(np.abs(_nodes))))
+        _p = np.asarray(self.ppoint, dtype='f8')
+        return bool(np.all(_p >= _lo - _pad) and np.all(_p <= _hi + _pad))
+
     @staticmethod
     def _cell_index(self, i, j, k):
+        """Pick the cell around node ``(i, j, k)`` that holds ``self.ppoint``.
+
+        The choice is made by which Cartesian octant of the node the point
+        falls in: the sign of ``ppoint - grd[i, j, k]`` along x, y and z
+        selects ``i`` or ``i - 1``, ``j`` or ``j - 1``, ``k`` or ``k - 1``.
+
+        SCOPE -- this is only used by the ``distance`` and ``block_distance``
+        searches, which locate the nearest node and have no computational
+        coordinate to index with. It is exact only when the computational axes
+        are aligned with x, y and z, i.e. on a Cartesian grid; on a
+        curvilinear grid the i axis need not point along x at all (in an
+        annular block it points radially), so the octant test can pick a
+        neighbouring cell. ``_point_in_cell`` is what catches the case where
+        that lands outside the grid.
+
+        The searches that *do* have a computational coordinate -- ``p-space``
+        and ``c-space``, via ``p2c`` -- must not use this method. They use
+        ``_locate_from_cpoint``, which indexes by the c-space coordinate and is
+        correct on any grid. Before that split, ``p2c`` called this method and
+        ``cell[0]`` disagreed with ``cpoint.astype(int)`` for 57 per cent of
+        in-domain points on the quarter-annulus fixture, which made
+        ``Interpolation`` extrapolate by up to 0.996 of a cell.
+
+        The octant threshold is ``_QUADRANT_REL_TOL`` of the local cell rather
+        than the absolute 1e-6 it used to be. That number was 4 per cent of a
+        cell on the oblique-shock fixture (``dz = 2.5e-5``) and pushed points
+        that close to a node into the wrong cell even on a Cartesian grid.
+
+        Node detection is no longer done here: it is ``_is_node``, which this
+        method calls. The two concerns were entangled in one branch, and only
+        the cell-selection half was wrong.
+
+        Note this is separate from domain containment: ``_point_in_cell``
+        tolerates exactly this much slop and still rejects points that are
+        outside the grid.
+        """
         # _Internal method to obtain the nodes of the cell in which the given point is present
 
         # Transform to found node to find the location of point
@@ -137,9 +334,12 @@ class Search:
         # to find the nodes of the respective cell
         _node = self.grid.grd[i, j, k, :, self.block]
         _point_transform = self.ppoint - _node
+        # Octant threshold as a length: a fraction of the local cell, not the
+        # scale-free absolute constant this used to hard-code eight times.
+        _tol = _QUADRANT_REL_TOL * self._cell_scale(i, j, k)
 
         # Check if point is a node in the domain
-        if np.all(abs(_point_transform) <= 1e-12):
+        if self._is_node(i, j, k):
             self.cell = self._cell_nodes(i, j, k)
             # A node on the far i/j/k face is clamped into the last cell, where
             # it is no longer that cell's first node. The "node" shortcut reads
@@ -156,28 +356,28 @@ class Search:
         # ON BOUNDARY FOR A GENERALIZED HEXA IS SAME AS DEFAULT SEARCH
         # Removed the code for on the boundary case
         # Start the main cell nodes code
-        if np.all(_point_transform >= 1e-6):
+        if np.all(_point_transform >= _tol):
             self.cell = self._cell_nodes(i, j, k)
             return
-        if _point_transform[0] <= 1e-6 and _point_transform[1] >= 1e-6 and _point_transform[2] >= 1e-6:
+        if _point_transform[0] <= _tol and _point_transform[1] >= _tol and _point_transform[2] >= _tol:
             self.cell = self._cell_nodes(i - 1, j, k)
             return
-        if _point_transform[0] <= 1e-6 and _point_transform[1] <= 1e-6 and _point_transform[2] >= 1e-6:
+        if _point_transform[0] <= _tol and _point_transform[1] <= _tol and _point_transform[2] >= _tol:
             self.cell = self._cell_nodes(i - 1, j - 1, k)
             return
-        if _point_transform[0] >= 1e-6 and _point_transform[1] <= 1e-6 and _point_transform[2] >= 1e-6:
+        if _point_transform[0] >= _tol and _point_transform[1] <= _tol and _point_transform[2] >= _tol:
             self.cell = self._cell_nodes(i, j - 1, k)
             return
-        if _point_transform[0] >= 1e-6 and _point_transform[1] >= 1e-6 and _point_transform[2] <= 1e-6:
+        if _point_transform[0] >= _tol and _point_transform[1] >= _tol and _point_transform[2] <= _tol:
             self.cell = self._cell_nodes(i, j, k - 1)
             return
-        if _point_transform[0] <= 1e-6 and _point_transform[1] >= 1e-6 and _point_transform[2] <= 1e-6:
+        if _point_transform[0] <= _tol and _point_transform[1] >= _tol and _point_transform[2] <= _tol:
             self.cell = self._cell_nodes(i - 1, j, k - 1)
             return
-        if np.all(_point_transform <= 1e-6):
+        if np.all(_point_transform <= _tol):
             self.cell = self._cell_nodes(i - 1, j - 1, k - 1)
             return
-        if _point_transform[0] >= 1e-6 and _point_transform[1] <= 1e-6 and _point_transform[2] <= 1e-6:
+        if _point_transform[0] >= _tol and _point_transform[1] <= _tol and _point_transform[2] <= _tol:
             self.cell = self._cell_nodes(i, j - 1, k - 1)
             return
 
@@ -211,10 +411,44 @@ class Search:
 
         parameter:
             method: str
-                Currently distance or block_distance
+                One of 'distance', 'block_distance', 'p-space', 'c-space'
 
         return:
         None
+
+        Out-of-domain behaviour
+        -----------------------
+        Every method first calls ``_find_block``, which tests the point
+        against each block's axis-aligned bounding box. A point outside every
+        box is rejected outright: ``cell``, ``ppoint``, ``cpoint`` and
+        ``block`` are set to ``None`` and ``info`` explains why.
+
+        That box test is exact only for a Cartesian block. On a curvilinear
+        grid a point can sit inside a block's bounding box and still be
+        outside the block, so each method has to reject it itself:
+
+        - ``distance`` and ``block_distance`` locate the nearest node and pick
+          a cell around it, then check the point against the bounding box of
+          that cell's eight nodes (``_point_in_cell``). A point outside it is
+          rejected by setting ``ppoint`` and ``cpoint`` to ``None`` -- callers
+          test ``ppoint is None``. Note that ``cell`` keeps the last cell that
+          was examined, so ``ppoint``, not ``cell``, is the rejection signal.
+          Because the test is against the cell's bounding box rather than the
+          curved cell itself, a point less than about one cell outside a
+          curved boundary face can still be accepted and will be
+          extrapolated; anything further out is rejected.
+        - ``p-space`` and ``c-space`` invert the tri-linear map with
+          Newton-Raphson (``p2c``). The iterate is clamped into the valid
+          index range every step, so an out-of-domain point can never be
+          reproduced, the residual never reaches tolerance, and ``p2c``
+          gives up after 1000 iterations and returns ``None``, leaving
+          ``ppoint`` and ``cpoint`` as ``None``. These methods therefore
+          reject out-of-domain points, at the cost of running the full
+          iteration budget before doing so.
+
+        Points lying exactly on a boundary face -- including the far i/j/k
+        faces -- are inside the domain and are located, not rejected. See
+        ``_cell_nodes`` and ``_cell_split`` for how the far face is handled.
 
         author: Dilip Kalagotla @ kal ~ dilip.kalagotla@gmail.com
         date: 10-24/2021
@@ -238,10 +472,13 @@ class Search:
                 self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
                 i, j, k, self.block = self.index[0], self.index[1], self.index[2], self.index[3]
                 self._cell_index(self, i, j, k)
-                # Check for the end of the domain case
-                if max(self.cell[:, 0]) > self.grid.ni[self.block] - 1 or \
-                        max(self.cell[:, 1]) > self.grid.nj[self.block] - 1 or \
-                        max(self.cell[:, 2]) > self.grid.nk[self.block] - 1:
+                # Check for the end of the domain case. _cell_nodes clamps the
+                # cell origin into range, so the located cell is always a real
+                # cell; what still has to be checked is whether the point is
+                # actually in it. See _point_in_cell.
+                if not self._point_in_cell():
+                    logger.warning('Given point is outside the grid. '
+                                   'Point position lost.\n')
                     self.cpoint = None
                     self.ppoint = None
                     return
@@ -261,10 +498,11 @@ class Search:
                 self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
                 i, j, k = self.index
                 self._cell_index(self, i, j, k)
-                # Check for the end of the domain case
-                if max(self.cell[:, 0]) > self.grid.ni[self.block] - 1 or \
-                        max(self.cell[:, 1]) > self.grid.nj[self.block] - 1 or \
-                        max(self.cell[:, 2]) > self.grid.nk[self.block] - 1 or np.any(self.cell < 0):
+                # Check for the end of the domain case. _cell_nodes clamps the
+                # cell origin into range, so the located cell is always a real
+                # cell; what still has to be checked is whether the point is
+                # actually in it. See _point_in_cell.
+                if not self._point_in_cell():
                     logger.warning('Block search returned wrong cell! Point position lost.\n')
                     self.cpoint = None
                     self.ppoint = None
@@ -426,12 +664,16 @@ class Search:
                 best_tol = _tol
 
             if sum(abs(_delta_ppoint)) <= _tol:
-                _eps0, _eps1, _eps2 = _cpoint.astype(int)
-                # same as self.cell = self._cell_nodes(_eps0, _eps1, _eps2)
-                self._cell_index(self, _eps0, _eps1, _eps2)
+                # The converged c-space coordinate is what decides the cell.
+                # This used to call ``_cell_index``, whose comment already
+                # claimed the two were equivalent; they are not on a
+                # curvilinear grid, which is the whole point of the c-space
+                # search. ``_locate_from_cpoint`` also runs the node test that
+                # ``_cell_index`` used to fold into the same branch.
+                self.ppoint = _pred_ppoint
+                self._locate_from_cpoint(_cpoint)
                 self.cpoint = _cpoint
                 self._cpoint = _cpoint
-                self.ppoint = _pred_ppoint
                 return _cpoint
 
             # Transform from p to c-space
@@ -453,11 +695,13 @@ class Search:
                 # point as completely out-of-domain. Use a slightly relaxed tolerance.
                 if best_cpoint is not None and best_residual is not None and best_tol is not None:
                     if best_residual <= 10 * best_tol:
-                        _eps0, _eps1, _eps2 = best_cpoint.astype(int)
-                        self._cell_index(self, _eps0, _eps1, _eps2)
+                        # Same rule as the converged branch: the cell comes
+                        # from the c-space coordinate, not from a Cartesian
+                        # octant test around the nearest node.
+                        self.ppoint = best_ppoint
+                        self._locate_from_cpoint(best_cpoint)
                         self.cpoint = best_cpoint
                         self._cpoint = best_cpoint
-                        self.ppoint = best_ppoint
                         logger.warning('**WARNING** Newton-Raphson did not fully converge within 1000 iterations.\n'
                               'Using best available in-domain approximation for point location.')
                         return best_cpoint

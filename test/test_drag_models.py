@@ -276,3 +276,103 @@ def test_single_drag_implementation():
     source = inspect.getsource(integration)
     assert "_drag_constant" not in source
     assert "compute_drag_coefficient" in source
+
+
+# ---------------------------------------------------------------------------
+# Continuity of Cd across the internal Re = 1 branch point.
+# ---------------------------------------------------------------------------
+
+# Cd is a physical closure: two models that differ by an epsilon in Reynolds
+# number must not differ by a finite amount in drag. Several models in this
+# suite are piecewise in Re, and a piecewise definition is only legitimate if
+# the arms meet. This sweep measures the jump at Re = 1, which is where the
+# suite's Knudsen-number definition changes, and pins it for every model.
+#
+# The tolerance is loose by the standards of a closure that should simply be
+# continuous. It is set at 3 per cent, which passes 'sphere' -- whose
+# standard-drag-curve arms meet at Re = 1 with a measured 1.75 per cent step, a
+# real but modest artefact of a piecewise fit whose branch points were tuned by
+# hand, documented as such in the in-line note on that case -- and fails
+# anything that changes the meaning of a variable across the branch. The two
+# models below the line jump by 4.4 to 33 per cent, so nothing here turns on
+# where in that gap the threshold is put.
+RE_CONTINUITY_TOL = 0.03
+
+# Models whose Re = 1 branch is known to be discontinuous, with the measured
+# relative jump at M = 0.1 and M = 0.5. Both come from the same line of code in
+# the same place: the branch redefines the Knudsen number as ``M/sqrt(Re)``
+# above Re = 1, where the arm below Re = 1 uses ``Kn = M/Re * sqrt(gamma*pi/2)``
+# -- which is also the definition every other model in the suite uses, and the
+# one the module docstring states. ``M/sqrt(Re)`` is not a Knudsen number in
+# any usual sense, and using two different ones on either side of Re = 1 makes
+# Cd step there.
+#
+#   'cunningham'  src/lptlib/function/variables.py, the ``case 'cunningham'``
+#                 branch -- ``if _re > 1: _kn = _mach / np.sqrt(_re)``.
+#                 Measured jump: 15.0 per cent at M = 0.1, 33.4 per cent at
+#                 M = 0.5. The in-line note on that case already flags it as a
+#                 defect a maintainer must resolve; this marks it in the test
+#                 suite so it is tracked rather than invisible.
+#   'tedeschi'    same file, the ``case 'tedeschi'`` branch -- the identical
+#                 ``if _re <= 1: ... else: _kn = _mach / np.sqrt(_re)`` split,
+#                 feeding the rarefaction factor epsilon(Kn). Measured jump:
+#                 4.4 per cent at M = 0.1, 13.4 per cent at M = 0.5. Not
+#                 previously recorded anywhere; it is the same defect, copied.
+#
+# Neither is changed here: the fix is a numerics decision about which Knudsen
+# definition is correct, which belongs to the maintainer, not to a test.
+DISCONTINUOUS_AT_RE_1 = {
+    "cunningham": "Kn redefined as M/sqrt(Re) above Re = 1; "
+                  "measured jump 15.0% at M = 0.1, 33.4% at M = 0.5",
+    "tedeschi": "same Kn switch as cunningham; "
+                "measured jump 4.4% at M = 0.1, 13.4% at M = 0.5",
+}
+
+
+def _relative_jump_across_re_one(drag, model, mach, epsilon=1e-9):
+    """Relative step in Cd between Re just below and just above 1."""
+    below = _scalar(drag(1.0 - epsilon, mach=mach, model=model))
+    above = _scalar(drag(1.0 + epsilon, mach=mach, model=model))
+    return abs(above - below) / max(abs(below), 1e-30)
+
+
+@pytest.mark.parametrize("mach", [0.1, 0.5])
+@pytest.mark.parametrize("model", VARIABLES_MODELS)
+def test_drag_is_continuous_across_reynolds_one(drag, model, mach, request):
+    """Cd does not step at the internal Re = 1 branch.
+
+    Applied to every model in the suite, because a discontinuity is a property
+    of the implementation rather than of any one closure, and because the two
+    models that fail here fail for the same copied reason -- which is only
+    visible when the whole suite is measured the same way.
+
+    A particle crossing Re = 1 during a trajectory sees the jump as an
+    instantaneous change in the force acting on it, so this is not cosmetic:
+    it makes the integrated path depend on which side of the branch the time
+    step happened to land.
+    """
+    if model in DISCONTINUOUS_AT_RE_1:
+        request.node.add_marker(
+            pytest.mark.xfail(strict=True,
+                              reason=f"{model}: {DISCONTINUOUS_AT_RE_1[model]}"))
+
+    jump = _relative_jump_across_re_one(drag, model, mach)
+    assert jump < RE_CONTINUITY_TOL, (
+        f"{model} at M = {mach}: Cd jumps by {100 * jump:.1f} per cent across "
+        f"Re = 1")
+
+
+@pytest.mark.parametrize("mach", [0.1, 0.5])
+@pytest.mark.parametrize("model", sorted(DISCONTINUOUS_AT_RE_1))
+def test_known_reynolds_one_discontinuity_has_not_grown(drag, model, mach):
+    """Pin the size of the two known jumps so a change is noticed.
+
+    ``xfail`` above says only that the models are discontinuous. This says by
+    how much, so that a maintainer who changes the Knudsen definition sees the
+    number move, and so that the figures quoted in the note above stay
+    verifiable rather than becoming folklore.
+    """
+    expected = {("cunningham", 0.1): 0.150, ("cunningham", 0.5): 0.334,
+                ("tedeschi", 0.1): 0.044, ("tedeschi", 0.5): 0.134}
+    jump = _relative_jump_across_re_one(drag, model, mach)
+    assert jump == pytest.approx(expected[(model, mach)], abs=2e-3)
