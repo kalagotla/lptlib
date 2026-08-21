@@ -43,6 +43,14 @@ gpu = [
     "torch",
 ]
 
+# Test and coverage tooling. Install with:
+#     pip install -e ".[test]"
+test = [
+    "pytest",
+    "parameterized",
+    "pytest-cov",
+]
+
 [tool.ruff]
 exclude = [
     ".git",
@@ -51,6 +59,16 @@ exclude = [
     ".tox",
     ".eggs",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+
+[tool.coverage.run]
+source = ["lptlib"]
+branch = false
+
+[tool.coverage.report]
+show_missing = true
 
 [project.urls]
 homepage = "https://github.com/kalagotla/lptlib"
