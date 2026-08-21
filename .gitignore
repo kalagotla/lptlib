@@ -76,3 +76,6 @@ benchmarks/results/synthetic_grid.x
 *.mov
 *.webm
 *.mkv
+
+# Cached particle tracks for the paper figure (regenerate with paper/make_figure.py)
+paper/.tracks.npz

@@ -1,3 +1,10 @@
+% Bibliography for paper.md.
+%
+% Entries below are cited only from source comments, not from paper.md, so they
+% produce no output in the rendered paper. They record the provenance of the
+% drag and viscosity implementations for anyone reading the code:
+%   harrison2021comment, loth2021reply, keyes1951viscosity
+
 % ---------------------------------------------------------------------------
 % Bibliography for the JOSS submission of lptlib.
 %
@@ -127,6 +134,39 @@
   doi     = {10.2514/1.28943}
 }
 
+% Errata to loth2008compressibility. Harrison shows that Loth's eq. (25b) is
+% printed without the 2*sqrt(pi)/(3*s) term of eq. (25a), and that eq. (26)
+% carries a stray prime on the drag coefficient in its denominator. lptlib
+% implements the corrected forms; see the 'loth' case in variables.py.
+% Metadata verified via the Crossref REST API; the text was read from the
+% accepted manuscript (LA-UR-21-21429) at
+% https://www.osti.gov/servlets/purl/1812671.
+@article{harrison2021comment,
+  author  = {Harrison, Alan K.},
+  title   = {Comment on ``{C}ompressibility and {R}arefaction {E}ffects on {D}rag of a {S}pherical {P}article''},
+  journal = {AIAA Journal},
+  year    = {2021},
+  volume  = {59},
+  number  = {8},
+  pages   = {3288--3289},
+  doi     = {10.2514/1.J060681}
+}
+
+% Loth's reply to harrison2021comment. Metadata verified via the Crossref REST
+% API. The text itself has NOT been read: AIAA refuses automated retrieval and
+% no open copy was found, so this file makes no claim about which of Harrison's
+% two corrections Loth accepts.
+@article{loth2021reply,
+  author  = {Loth, Eric},
+  title   = {Reply by the Author to {A}. {K}. {H}arrison},
+  journal = {AIAA Journal},
+  year    = {2021},
+  volume  = {59},
+  number  = {8},
+  pages   = {3290--3290},
+  doi     = {10.2514/1.J060850}
+}
+
 @article{tedeschi1999motion,
   author  = {Tedeschi, G. and Gouin, H. and Elena, M.},
   title   = {Motion of tracer particles in supersonic flows},
@@ -165,24 +205,27 @@
   doi     = {10.1080/14786449308620508}
 }
 
-% UNVERIFIED -- DELIBERATELY COMMENTED OUT, DO NOT UNCOMMENT WITHOUT CHECKING.
-% This is the presumed source of the Keyes viscosity correlation implemented in
-% lptlib (constants a0 = 1.488, a = 122.1, a1 = 5.0). The ASME Digital
-% Collection record for J. Fluids Eng. 73(5):589 (1951) carries this exact
-% title, but the publisher page could not be retrieved to confirm the author's
-% name or obtain a DOI, and no DOI was found through any other source.
-% Confirm the author initials and the DOI against the ASME Digital Collection
-% before citing this. No DOI is given here because none was verified.
+% Source of the Keyes viscosity correlation used by lptlib. Bibliographic
+% detail (author F. G. Keyes; Trans. Am. Soc. Mech. Engrs. 73, 589--596, 1951)
+% confirmed from an indexed bibliography record, and consistent with the ASME
+% Digital Collection record for J. Fluids Eng. 73(5):589 -- J. Fluids Eng. being
+% the modern name of that Transactions series. The ASME page itself refuses
+% automated retrieval. No DOI was found for this paper through any source, so
+% none is given.
 %
-% @article{keyes1951viscosity,
-%   author  = {Keyes, F. G.},
-%   title   = {A Summary of Viscosity and Heat-Conduction Data for {He}, {A}, {H2}, {O2}, {N2}, {CO}, {CO2}, {H2O}, and Air},
-%   journal = {Transactions of the ASME},
-%   year    = {1951},
-%   volume  = {73},
-%   number  = {5},
-%   pages   = {589--596}
-% }
+% Caveat, recorded deliberately: the correlation's three constants as coded
+% (a0 = 1.488, a = 122.1, a1 = 5.0) were verified against NASA Glenn's Wind-US
+% 3.0 documentation, which states the same formula in imperial units and calls
+% it Keyes' law, NOT against the 1951 paper itself.
+@article{keyes1951viscosity,
+  author  = {Keyes, F. G.},
+  title   = {A Summary of Viscosity and Heat-Conduction Data for {He}, {A}, {H2}, {O2}, {N2}, {CO}, {CO2}, {H2O}, and Air},
+  journal = {Transactions of the ASME},
+  year    = {1951},
+  volume  = {73},
+  number  = {5},
+  pages   = {589--596}
+}
 
 % ------------------------------ Data formats and tooling -------------------
 
@@ -288,6 +331,20 @@
   doi     = {10.1007/s00348-026-04216-z}
 }
 
+% Earliest paper in this line of work: the tracer-particle methodology applied
+% to turbomachinery CFD data, before the library carried its present name.
+% Metadata verified via the Crossref REST API on 21 August 2026. Crossref gives
+% the third author's given name as "Mark" with no middle initial, and the
+% container title with "Scitech" in that exact mixed case; both are reproduced
+% as published rather than normalised.
+@inproceedings{kalagotla2020rotor37,
+  author    = {Kalagotla, Dilip and Orkwis, Paul D. and Turner, Mark},
+  title     = {Methodology to Study the Behavior of Tracer Particles in the Flow Field of Rotor 37 Using {CFD} Data},
+  booktitle = {{AIAA} Scitech 2020 Forum},
+  year      = {2020},
+  doi       = {10.2514/6.2020-1809}
+}
+
 @inproceedings{kalagotla2023api,
   author    = {Chhabra, Harpreet Singh and Kalagotla, Dilip and Orkwis, Paul D.},
   title     = {Python Based {API} to Post-Process {CFD} Data},
@@ -304,6 +361,18 @@
   doi       = {10.2514/6.2023-3276}
 }
 
+% Metadata verified via the Crossref REST API on 21 August 2026. Crossref
+% records the second author's given name as "Paul" for this DOI alone; it is
+% written here as "Paul D." to match the same author's other Crossref records,
+% including 10.2514/6.2020-1809. Title and booktitle are as published.
+@inproceedings{kalagotla2024synthetic,
+  author    = {Kalagotla, Dilip and Orkwis, Paul D.},
+  title     = {A New Approach to Synthetic {PIV} Data Based on Particle Dynamics History},
+  booktitle = {{AIAA} SCITECH 2024 Forum},
+  year      = {2024},
+  doi       = {10.2514/6.2024-2667}
+}
+
 @inproceedings{kalagotla2024drag,
   author    = {Kalagotla, Dilip and Orkwis, Paul D.},
   title     = {Numerical Analysis of Drag Models and Particle Size Estimation for {PIV} in Supersonic Flows},
@@ -318,4 +387,29 @@
   booktitle = {{AIAA} SCITECH 2025 Forum},
   year      = {2025},
   doi       = {10.2514/6.2025-0476}
+}
+
+% The two 2026 AVIATION papers below were both verified via the Crossref REST
+% API on 21 August 2026. Crossref gives every author on both papers the
+% affiliation "Florida State University Florida Center for Advanced
+% Aero-Propulsion", the first author included. Crossref dates both to
+% 4 June 2026, not the 8 June 2026 shown on the ORCID record.
+%
+% The second author of 10.2514/6.2026-4128 is recorded by Crossref with
+% given = "Saranyamol" and family = "V. S."; the BibTeX name below preserves
+% that split so the name renders as "Saranyamol V. S.".
+@inproceedings{kalagotla2026hemisphere,
+  author    = {Kalagotla, Dilip and {V. S.}, Saranyamol and Kumar, Rajan},
+  title     = {Influence of Particle Inertia on {PIV} Measurements in Supersonic Wall-Mounted Hemisphere Flow},
+  booktitle = {{AIAA} AVIATION 2026 Forum},
+  year      = {2026},
+  doi       = {10.2514/6.2026-4128}
+}
+
+@inproceedings{kalagotla2026uq,
+  author    = {Kalagotla, Dilip and Oates, William and Kumar, Rajan},
+  title     = {Uncertainty Quantification of Particle Inertia Effects in Supersonic Particle Image Velocimetry},
+  booktitle = {{AIAA} AVIATION 2026 Forum},
+  year      = {2026},
+  doi       = {10.2514/6.2026-4490}
 }
