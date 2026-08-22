@@ -33,7 +33,6 @@ class TestSearch(unittest.TestCase):
         grid = GridIO(filename)
         grid.read_grid(data_type=data_type)
         grid.compute_metrics()
-        flow = None
 
         # Start test for search algorithm
         # Check if distance and neighbors are working fine

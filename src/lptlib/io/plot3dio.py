@@ -526,9 +526,9 @@ class GridIO:
             step_size = abs(min(np.diff(self.grd[:, 0, 0, 0, 0])))
 
         # check self.ni, self.nj dtype -- This is to keep the old functionality working.
-        self.ni = self.ni[0] if type(self.ni) == np.ndarray else self.ni
-        self.nj = self.nj[0] if type(self.nj) == np.ndarray else self.nj
-        self.nk = self.nk[0] if type(self.nk) == np.ndarray else self.nk
+        self.ni = self.ni[0] if isinstance(self.ni, np.ndarray) else self.ni
+        self.nj = self.nj[0] if isinstance(self.nj, np.ndarray) else self.nj
+        self.nk = self.nk[0] if isinstance(self.nk, np.ndarray) else self.nk
 
         _nk = int(steps)
         _a_temp = np.array([self.nb, self.ni, self.nj, _nk], dtype='i4')
@@ -1143,9 +1143,9 @@ class FlowIO:
 
         """
         # check self.ni, self.nj dtype -- This is to keep the old functionality working.
-        self.ni = self.ni[0] if type(self.ni) == np.ndarray else self.ni
-        self.nj = self.nj[0] if type(self.nj) == np.ndarray else self.nj
-        self.nk = self.nk[0] if type(self.nk) == np.ndarray else self.nk
+        self.ni = self.ni[0] if isinstance(self.ni, np.ndarray) else self.ni
+        self.nj = self.nj[0] if isinstance(self.nj, np.ndarray) else self.nj
+        self.nk = self.nk[0] if isinstance(self.nk, np.ndarray) else self.nk
         _a_temp = np.array([self.nb, self.ni, self.nj, int(steps)], dtype='i4')
         _b_temp = np.array([self.mach, self.alpha, self.rey, self.time], dtype=data_type)
 

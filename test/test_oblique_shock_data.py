@@ -356,3 +356,276 @@ def test_missing_inlet_temperature_raises_named_error():
     osd.inlet_temperature = None
     with pytest.raises(ValueError, match="inlet_temperature"):
         osd.create_flow()
+
+
+# ---------------------------------------------------------------------------
+# ObliqueShockAlignedData
+#
+# The shock-aligned generator is exported from ``lptlib.test_cases``, re-exported
+# at the package top level, and named in the README and docs alongside
+# ``ObliqueShockData``, but nothing exercised it: ``create_grid`` and
+# ``create_flow`` were entirely uncovered. Unlike ``ObliqueShockData``, which
+# puts a shock-normal flow either side of the plane x = 0, this one keeps the
+# incoming flow horizontal and tilts the shock plane to the computed shock
+# angle beta, so the two are checked against different expectations.
+# ---------------------------------------------------------------------------
+
+ALIGNED_KWARGS = dict(nx_max=10e-3, ny_max=10e-3, nz_max=1e-4,
+                      xpoints=8, ypoints=9, zpoints=3,
+                      inlet_temperature=300.0, inlet_density=1.273)
+
+
+def _aligned_case(shock_strength="weak", mach=2.3, deflection=10.0, **overrides):
+    """A built ``ObliqueShockAlignedData`` plus the ``ObliqueShock`` behind it."""
+    from lptlib.test_cases import ObliqueShockAlignedData
+
+    shock = _solved(mach, deflection)
+    kwargs = dict(ALIGNED_KWARGS)
+    kwargs.update(overrides)
+    osd = ObliqueShockAlignedData(oblique_shock=shock, **kwargs)
+    osd.shock_strength = shock_strength
+    osd.create_grid()
+    osd.create_flow()
+    return osd, shock
+
+
+def _static_temperature(state, gas_constant):
+    """Static temperature from a conservative ``[rho, rho*u, rho*v, rho*w, e]``."""
+    rho = state[0]
+    vel_sq = ((state[1:4] / rho) ** 2).sum()
+    return (GAMMA - 1) * (state[4] / rho - vel_sq / 2) / gas_constant
+
+
+def _pre_post_states(osd):
+    """Two q states straddling the tilted shock plane, taken from grid nodes.
+
+    The plane is ``s = sin(beta) x - cos(beta) (y - ny_max/2)``, so the node at
+    the far-left of the mid-height row has ``s < 0`` (upstream) and the node at
+    the far-right of the same row has ``s > 0`` (downstream), for any attached
+    shock angle.
+    """
+    j_mid = osd.flow.nj[0] // 2
+    return osd.flow.q[0, j_mid, 0, :, 0], osd.flow.q[-1, j_mid, 0, :, 0]
+
+
+def test_aligned_data_builds_a_grid():
+    """``create_grid`` fills in a usable GridIO, metrics included."""
+    osd, _ = _aligned_case()
+
+    assert osd.grid.nb == 1
+    assert osd.grid.grd.shape == (2 * ALIGNED_KWARGS["xpoints"],
+                                  ALIGNED_KWARGS["ypoints"],
+                                  ALIGNED_KWARGS["zpoints"], 3, 1)
+    np.testing.assert_allclose(osd.grid.grd_min, [[-10e-3, 0, 0]])
+    np.testing.assert_allclose(osd.grid.grd_max, [[10e-3, 10e-3, 1e-4]])
+    # The domain really spans the requested box.
+    assert osd.grid.grd[..., 0, 0].min() == pytest.approx(-10e-3)
+    assert osd.grid.grd[..., 0, 0].max() == pytest.approx(10e-3)
+    # compute_metrics ran, so the grid is usable by Search/Interpolation.
+    assert osd.grid.m1 is not None
+    assert osd.grid.m2 is not None
+    assert osd.grid.J is not None
+    assert np.all(np.isfinite(osd.grid.grd))
+
+
+def test_aligned_data_builds_a_flow():
+    """``create_flow`` fills in a usable FlowIO matching the grid."""
+    osd, shock = _aligned_case()
+
+    assert osd.flow.nb == 1
+    assert osd.flow.q.shape == (2 * ALIGNED_KWARGS["xpoints"],
+                                ALIGNED_KWARGS["ypoints"],
+                                ALIGNED_KWARGS["zpoints"], 5, 1)
+    np.testing.assert_array_equal(osd.flow.ni, osd.grid.ni)
+    np.testing.assert_array_equal(osd.flow.nj, osd.grid.nj)
+    np.testing.assert_array_equal(osd.flow.nk, osd.grid.nk)
+    assert osd.flow.mach == shock.mach
+    assert np.all(np.isfinite(osd.flow.q))
+    # The field is genuinely two-valued, not a single constant state.
+    assert len(np.unique(osd.flow.q[..., 0, 0])) == 2
+
+
+def test_aligned_flow_carries_the_computed_shock_ratios():
+    """The two states either side of the tilted plane are the R-H jump."""
+    osd, shock = _aligned_case()
+    pre, post = _pre_post_states(osd)
+
+    # Upstream state is exactly the free stream, flowing along +x.
+    assert pre[0] == pytest.approx(osd.inlet_density, rel=1e-12)
+    assert _static_temperature(pre, shock.gas_constant) == pytest.approx(
+        osd.inlet_temperature, rel=1e-10)
+    assert pre[2] == pytest.approx(0.0, abs=1e-12)  # no y-momentum upstream
+    assert pre[3] == pytest.approx(0.0, abs=1e-12)  # no z-momentum anywhere
+
+    # Downstream state carries the weak-branch density and temperature ratios.
+    assert post[0] / pre[0] == pytest.approx(shock.density_ratio[0], rel=1e-10)
+    assert (_static_temperature(post, shock.gas_constant)
+            / _static_temperature(pre, shock.gas_constant)
+            == pytest.approx(shock.temperature_ratio[0], rel=1e-10))
+
+    # Downstream velocity is turned by exactly the deflection angle.
+    turn = np.degrees(np.arctan2(post[2], post[1]))
+    assert turn == pytest.approx(shock.deflection, rel=1e-10)
+
+
+def test_aligned_flow_strong_branch_uses_the_second_root():
+    """``shock_strength='strong'`` picks the strong solution, not the weak one."""
+    weak, shock = _aligned_case("weak")
+    strong, _ = _aligned_case("strong")
+
+    _, weak_post = _pre_post_states(weak)
+    weak_pre, _ = _pre_post_states(weak)
+    _, strong_post = _pre_post_states(strong)
+    strong_pre, _ = _pre_post_states(strong)
+
+    assert weak_post[0] / weak_pre[0] == pytest.approx(shock.density_ratio[0],
+                                                       rel=1e-10)
+    assert strong_post[0] / strong_pre[0] == pytest.approx(shock.density_ratio[1],
+                                                           rel=1e-10)
+    # The strong shock really is the stronger compression.
+    assert strong_post[0] > weak_post[0]
+
+
+def test_aligned_flow_rejects_an_unknown_shock_strength():
+    from lptlib.test_cases import ObliqueShockAlignedData
+
+    shock = _solved(2.3, 10)
+    osd = ObliqueShockAlignedData(oblique_shock=shock, **ALIGNED_KWARGS)
+    osd.shock_strength = 'oblique'
+    osd.create_grid()
+    with pytest.raises(ValueError, match="weak"):
+        osd.create_flow()
+
+
+def test_aligned_create_flow_leaves_the_shock_object_intact():
+    """Building a case must not consume the ObliqueShock it was handed.
+
+    ``ObliqueShockData.create_flow`` replaces each two-element ratio array on
+    the shock with the single branch it selected, so the same ``ObliqueShock``
+    cannot be reused. The aligned generator reads the branch into locals
+    instead, and this pins that difference: two instances can share one shock
+    and both get the same answer.
+    """
+    from lptlib.test_cases import ObliqueShockAlignedData
+
+    shock = _solved(2.3, 10)
+    before = (np.array(shock.shock_angle, copy=True),
+              np.array(shock.density_ratio, copy=True),
+              np.array(shock.temperature_ratio, copy=True),
+              np.array(shock.mach_ratio, copy=True))
+
+    first = ObliqueShockAlignedData(oblique_shock=shock, **ALIGNED_KWARGS)
+    first.create_grid()
+    first.create_flow()
+
+    for expected, name in zip(before, ('shock_angle', 'density_ratio',
+                                       'temperature_ratio', 'mach_ratio')):
+        np.testing.assert_allclose(getattr(shock, name), expected,
+                                   err_msg=f'create_flow mutated {name}')
+
+    second = ObliqueShockAlignedData(oblique_shock=shock, **ALIGNED_KWARGS)
+    second.create_grid()
+    second.create_flow()
+    np.testing.assert_allclose(second.flow.q, first.flow.q)
+
+
+def test_aligned_instances_do_not_share_grid_or_flow_objects():
+    """Two instances hold their own GridIO/FlowIO, so one cannot clobber the other."""
+    from lptlib.test_cases import ObliqueShockAlignedData
+
+    first = ObliqueShockAlignedData(**ALIGNED_KWARGS)
+    second = ObliqueShockAlignedData(**ALIGNED_KWARGS)
+
+    assert first.grid is not second.grid
+    assert first.flow is not second.flow
+    assert first.oblique_shock is not second.oblique_shock
+
+    first.oblique_shock.mach = 2.0
+    first.oblique_shock.deflection = 8.0
+    first.oblique_shock.compute()
+    first.create_grid()
+    first.create_flow()
+
+    assert second.grid.grd is None
+    assert second.flow.q is None
+    assert second.oblique_shock.shock_angle is None
+
+
+@pytest.mark.parametrize("attribute", ["nx_max", "ypoints", "nz_max"])
+def test_aligned_missing_grid_input_raises_named_error(attribute):
+    """The shared input checks are wired up on the aligned generator too."""
+    from lptlib.test_cases import ObliqueShockAlignedData
+
+    osd = ObliqueShockAlignedData(**ALIGNED_KWARGS)
+    setattr(osd, attribute, None)
+    with pytest.raises(ValueError, match=attribute):
+        osd.create_grid()
+
+
+def test_aligned_missing_inlet_temperature_raises_named_error():
+    from lptlib.test_cases import ObliqueShockAlignedData
+
+    osd = ObliqueShockAlignedData(oblique_shock=_solved(2.3, 10), **ALIGNED_KWARGS)
+    osd.create_grid()
+    osd.inlet_temperature = None
+    with pytest.raises(ValueError, match="inlet_temperature"):
+        osd.create_flow()
+
+
+# ---------------------------------------------------------------------------
+# create_flow must not consume the ObliqueShock it is given
+#
+# It used to select the weak or strong branch by overwriting the two-element
+# ratio arrays on the shock object in place. That made the object single-use: a
+# second create_flow call indexed a scalar and raised, and a shock shared
+# between two instances silently handed the second one the branch the first had
+# already selected.
+# ---------------------------------------------------------------------------
+
+
+def _reusable_shock():
+    shock = ObliqueShock()
+    shock.mach = 7.6
+    shock.deflection = 20
+    shock.compute()
+    return shock
+
+
+def _build_case(shock, strength):
+    osd = ObliqueShockData()
+    osd.oblique_shock = shock
+    osd.nx_max, osd.ny_max, osd.nz_max = 5e-3, 30e-3, 1e-4
+    osd.inlet_temperature, osd.inlet_density = 48.20, 0.07747
+    osd.xpoints, osd.ypoints, osd.zpoints = 12, 20, 3
+    osd.shock_strength = strength
+    osd.create_grid()
+    osd.create_flow()
+    return osd
+
+
+@pytest.mark.parametrize('name', ['shock_angle', 'density_ratio', 'pressure_ratio',
+                                  'temperature_ratio', 'mach_ratio'])
+def test_shock_object_survives_create_flow(name):
+    shock = _reusable_shock()
+    _build_case(shock, 'weak')
+    assert np.asarray(getattr(shock, name)).shape == (2,), \
+        f'{name} was consumed by create_flow'
+
+
+def test_create_flow_is_repeatable_on_one_shock():
+    shock = _reusable_shock()
+    first = _build_case(shock, 'weak')
+    second = _build_case(shock, 'weak')
+    np.testing.assert_array_equal(first.flow.q, second.flow.q)
+
+
+def test_strong_branch_still_differs_from_weak():
+    shock = _reusable_shock()
+    weak = _build_case(shock, 'weak')
+    strong = _build_case(shock, 'strong')
+    assert not np.array_equal(weak.flow.q, strong.flow.q)
+
+
+def test_unknown_shock_strength_raises():
+    with pytest.raises(ValueError, match='weak'):
+        _build_case(_reusable_shock(), 'medium')

@@ -15,7 +15,6 @@ import numpy as np
 import pytest
 
 from lptlib.io import DataIO
-from lptlib.streamlines import Search, Interpolation
 
 
 def _make_dataio(oblique_case, tmp_path, **kwargs):
@@ -80,7 +79,7 @@ def test_sample_data_conserves_all_points_at_full_percent(oblique_case, tmp_path
     coords[:, 1] = rng.uniform(0.01, 0.99, n)
     coords[:, 2:] = rng.random((n, 13))
 
-    sampled = data._sample_data(data, coords, 100)
+    sampled = data._sample_data(coords, 100)
     assert sampled.shape[1] == 15
     # The bins are half-open, so only the single x-max and y-max points can fall
     # outside the top bin; every other record is retained exactly once.
@@ -111,7 +110,7 @@ def test_sample_data_is_spatially_stratified(oblique_case, tmp_path):
     coords = np.vstack([left, right])
 
     np.random.seed(3)
-    sampled = data._sample_data(data, coords, 20)
+    sampled = data._sample_data(coords, 20)
     xs = sampled[:, 0]
     # Both the left and right clusters contribute to the sample.
     assert np.any(xs < 0.1)
@@ -126,7 +125,7 @@ def test_sample_data_rejects_bad_percent(oblique_case, tmp_path):
     data.oblique_shock = False
     coords = np.random.default_rng(4).random((10, 15))
     with pytest.raises(ValueError):
-        data._sample_data(data, coords, 0)
+        data._sample_data(coords, 0)
 
 
 def test_flow_data_in_and_out_of_domain(oblique_case, tmp_path, upstream_point):
@@ -148,12 +147,21 @@ def test_flow_data_in_and_out_of_domain(oblique_case, tmp_path, upstream_point):
 def test_compute_reduces_to_grid_shapes(oblique_case, tmp_path):
     """The full reduction writes fluid and particle fields of the grid shape.
 
+    Skipped without ``mpi4py``. ``DataIO.compute`` runs its whole body through a
+    communicator, so it needs ``mpi4py`` even on a single rank, and ``mpi4py``
+    lives in the optional ``mpi`` extra rather than in ``test``. Every other
+    test in this file exercises the building blocks directly and runs without it.
+
     A small synthetic particle set is placed inside the domain, then
     ``compute`` interpolates fluid data to the particles and maps fluid and
     particle momentum onto a coarse Eulerian grid. The saved arrays must have
     shape ``(5, x_refinement, y_refinement)`` and the PLOT3D output files must
     exist.
     """
+    pytest.importorskip(
+        'mpi4py',
+        reason="DataIO.compute needs mpi4py; install the optional 'mpi' extra")
+
     x_refinement, y_refinement = 20, 16
     data = _make_dataio(oblique_case, tmp_path,
                         x_refinement=x_refinement, y_refinement=y_refinement)

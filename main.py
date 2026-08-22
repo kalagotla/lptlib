@@ -78,19 +78,19 @@ def oblique_shock_response(filepath='./tio2_particle/', dp=5.272e-6, rhop=182.22
     plt.close('all')
 
     # Test SpawnLocations class
-    l = SpawnLocations(p)
-    l.x_min = -50e-3
-    l.z_min = 5e-5
+    spawn = SpawnLocations(p)
+    spawn.x_min = -50e-3
+    spawn.z_min = 5e-5
     # Spawn across the full height of the domain. Setting y_min == y_max
     # instead spawns every particle at one point, which is the ideal setup for
     # a response analysis.
-    l.y_min, l.y_max = 0, osd.ny_max
-    l.compute()
+    spawn.y_min, spawn.y_max = 0, osd.ny_max
+    spawn.compute()
 
     # Run the model in parallel
     grid = osd.grid
     flow = osd.flow
-    sm = StochasticModel(p, l, grid=grid, flow=flow)
+    sm = StochasticModel(p, spawn, grid=grid, flow=flow)
     sm.method = 'adaptive-ppath'
     sm.search = 'p-space'
     sm.time_step = 1e-10

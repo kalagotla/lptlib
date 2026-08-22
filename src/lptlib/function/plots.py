@@ -178,7 +178,7 @@ class Plots:
             axis
         """
         if ax is None:
-            fig, ax = plt.subplots()
+            _fig, ax = plt.subplots()
 
         new_cmap, sm = self.get_color_code(**kwargs)
         if sm is None:

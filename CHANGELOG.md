@@ -11,8 +11,26 @@ contemporaneous release note.
 
 ## [Unreleased]
 
-The version in `pyproject.toml` is already set to `0.2.0`; these entries become
-the 0.2.0 release notes when it is tagged.
+
+### Fixed
+
+- `ObliqueShockData.create_flow` no longer consumes the `ObliqueShock` it is
+  given. It selected the weak or strong branch by overwriting the two-element
+  ratio arrays in place, so the shock object was single-use and a shock shared
+  between two instances silently gave the second one the first one's branch.
+  Output is bit-identical for a single call.
+- `test_dataio_reduction.py::test_compute_reduces_to_grid_shapes` now skips
+  rather than errors when `mpi4py` is absent. `DataIO.compute` runs its whole
+  body through a communicator, and `mpi4py` lives in the optional `mpi` extra,
+  so a checkout installed with `[test]` alone reported a failure on healthy code.
+
+### Removed
+
+- `DataIO.__init__`'s `read_file` parameter, which was accepted and never
+  assigned. Passing it now raises `TypeError` rather than being ignored.
+Nothing yet.
+
+## [0.2.0] - 2026-08-22
 
 ### Added
 
@@ -22,8 +40,8 @@ the 0.2.0 release notes when it is tagged.
 - A synthetic test-fixture layer (`test/conftest.py`, `test/synthetic.py`) so the
   search, interpolation, integration, and stochastic-model tests run without any
   external data files, plus new tests for the drag models, PLOT3D round trips,
-  the `DataIO` Lagrangian-to-Eulerian reduction, and a gated two-rank MPI
-  reduction test.
+  the `DataIO` Lagrangian-to-Eulerian reduction, the plotting helpers, and a
+  gated two-rank MPI reduction test.
 - An optional `store_type` argument to `GridIO.read_grid` that keeps the
   reconstructed grid in single precision, roughly halving the read time on large
   grids.
@@ -51,6 +69,15 @@ the 0.2.0 release notes when it is tagged.
 - `.gitignore` no longer blanket-ignores `*.png`, `*.csv`, `*.dat`, `*.txt`, and
   similar extensions across the whole repository; those patterns are scoped to
   run-output directories.
+- The Ruff rule set is pinned in `pyproject.toml` (`select = ["E4", "E7", "E9",
+  "F"]`) instead of inheriting Ruff's default selection, which widens between
+  releases, and the CI lint job is now blocking rather than advisory.
+- `scripts/bump_version.py` now updates every file that carries the version:
+  `pyproject.toml`, `CITATION.cff`, `uv.lock`, and the release heading and
+  comparison links in `CHANGELOG.md`.
+- The top level of the package re-exports its public classes explicitly with an
+  `__all__` instead of using star imports, so `lptlib.streamlines` resolves to
+  the subpackage rather than to the module of the same name.
 
 ### Removed
 
@@ -119,7 +146,8 @@ First release prepared for public review.
 
 Earlier alpha releases predate this changelog. See the git history for details.
 
-[Unreleased]: https://github.com/kalagotla/lptlib/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kalagotla/lptlib/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kalagotla/lptlib/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kalagotla/lptlib/compare/v0.0.6...v0.1.0
 [0.0.6]: https://github.com/kalagotla/lptlib/compare/v0.0.5a6...v0.0.6
 [0.0.5a6]: https://github.com/kalagotla/lptlib/releases/tag/v0.0.5a6

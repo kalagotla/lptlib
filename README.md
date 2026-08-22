@@ -16,9 +16,9 @@ The library was built to quantify how inertial tracer particles lag the fluid in
 
 Three capabilities set lptlib apart.
 
-- **Vectorized PLOT3D input and output.** Each grid or flow file is read in a single buffered `numpy.fromfile` call and reconstructed into multi-block arrays through strided slicing and Fortran-order reshaping. This removes the per-point Python overhead that dominates naive readers and was designed to be competitive with a compiled Fortran PLOT3D reader on the same files. Compared at matched precision on a 2.04 million-point four-block grid, the strided single-precision read is about 7.7 times faster than an equivalent naive Python reader and within about a third of a compiled Fortran reader, and the margin over the naive reader grows to about 20 times on a 28 million-point grid. The comparison is reproducible with a single command in [`benchmarks/`](benchmarks/README.md).
+- **Vectorized PLOT3D input and output.** Each grid or flow file is read in a single buffered `numpy.fromfile` call and reconstructed into multi-block arrays through strided slicing and Fortran-order reshaping. This removes the per-point Python overhead that dominates naive readers. Readers are only ever compared when they do matched work, since a bare stream read and a read followed by a full array reorder are not the same task. On a 2.04 million-point four-block grid with the page-cache state verified by measurement, the strided single-precision read is 27.80 times faster than an otherwise identical naive Python reader, with a 95 percent bootstrap confidence interval of 26.09 to 28.76. Against a compiled Fortran reader doing the identical transpose it is about 1.40 times slower, while the full `read_grid`, which also builds the padded double-precision array and the per-block coordinate bounds, is about 1.75 times faster than Fortran doing that same work. The margin over the naive reader narrows as the grid grows rather than widening. On a 28.2 million-point grid it falls to 13.85 times, and at that size the Fortran reader is ahead on both matched-work comparisons. These come from one machine and are quoted as ratios, because absolute read times move by more than an order of magnitude between machines while the matched-work ratios largely do not. Result files, machine metadata, and per-run uncertainty live in [`benchmarks/results/`](benchmarks/results/SUMMARY.md), and [`benchmarks/README.md`](benchmarks/README.md) explains how to rerun the comparison and how to add a machine.
 - **MPI-parallel Lagrangian-to-Eulerian reduction.** Scattered particle tracks are binned and interpolated back onto a user-defined structured mesh in parallel with MPI, then exported as PLOT3D grid, fluid, and particle files. This produces the PIV-like Eulerian fields that a downstream synthetic-imaging tool consumes to render frames.
-- **A twelve-model drag suite behind one argument.** Stokes, Oseen, Schiller-Naumann, Melling, Cunningham, Henderson, Loth, Subramaniam-Balachandar, and Tedeschi closures, together with a rigid-sphere standard-drag curve and a zero-drag mode for fluid tracers, are all selectable through a single `drag_model` argument. Tracer response can be studied as a function of particle size, density, and drag closure without changing anything else.
+- **A twelve-model drag suite behind one argument.** `drag_model` accepts twelve values: the nine published closures `stokes`, `oseen`, `schiller-nauman`, `melling`, `cunningham`, `henderson`, `loth`, `subramaniam-balachandar`, and `tedeschi`, the nine the accompanying paper counts, plus `melling-2` for the alternative Knudsen prefactor, the rigid-sphere standard-drag curve `sphere`, and a `zero-drag` mode for fluid tracers. Tracer response can be studied as a function of particle size, density, and drag closure without changing anything else.
 
 ## Full feature list
 
@@ -28,7 +28,7 @@ At a glance, lptlib provides:
 - Point location in curvilinear grids with physical-space and computational-space search, and conversion between the two spaces.
 - Interpolation of flow variables to arbitrary points, with physical-space, computational-space, radial-basis-function, and regular-grid options, plus an analytic oblique-shock interpolant for controlled test cases.
 - Streamline and particle-path integration with second- and fourth-order Runge-Kutta schemes in physical and computational space, unsteady variants, and adaptive time stepping.
-- The twelve-model spherical-particle drag suite described above, with air viscosity evaluated through Sutherland or Keyes laws.
+- The twelve `drag_model` values described above, with air viscosity evaluated through Sutherland or Keyes laws.
 - Stochastic seeding of particle-size distributions and spawn locations, with parallel execution over many particles through multiprocessing, thread pools, and MPI.
 - Derived-variable computation for velocity, temperature, pressure, Mach number, and viscosity.
 - The MPI-parallel Lagrangian-to-Eulerian reduction that writes PLOT3D fluid and particle fields for visualization and for synthetic PIV imaging.
@@ -53,7 +53,7 @@ pip install "lptlib[mpi]"
 
 ## Quickstart
 
-Every snippet below runs against a synthetic oblique-shock case that lptlib builds in memory, so no external data files, downloads, or CFD solutions are needed. The snippets build on each other: run them in order in one interactive session, or paste them into a single file. The whole quickstart runs in about fifteen seconds on a laptop; the times quoted below are for the examples themselves and exclude a second or two of import.
+Every snippet below runs against a synthetic oblique-shock case that lptlib builds in memory, so no external data files, downloads, or CFD solutions are needed. The snippets build on each other: run them in order in one interactive session, or paste them into a single file. The whole quickstart runs in about thirteen seconds on the two-core machine these timings were measured on; the per-example times quoted below vary with core count for example 4, which runs its particles in parallel.
 
 ### 1. Build a synthetic test case (about one second)
 
@@ -119,9 +119,9 @@ x =  +2.0 mm  |u| =   950.5 m/s  T = 155.41 K  M = 3.80
 
 ### 3. Track an inertial particle and compare drag models (about three seconds)
 
-This is the measurement lptlib exists to make. A 1.94 micron tracer is released upstream and integrated across the shock under three closures. `zero-drag` reproduces the fluid path exactly, while the inertial closures leave the particle over-speeding the decelerated post-shock gas by roughly 107 m/s, which is the velocity bias a PIV or PTV measurement would report.
+This is the measurement lptlib exists to make. A 1.94 micron tracer is released upstream and integrated across the shock under three closures. `zero-drag` reproduces the fluid path exactly, while the inertial closures leave the particle over-speeding the decelerated post-shock gas by roughly 105 m/s, which is the velocity bias a PIV or PTV measurement would report.
 
-`max_steps` caps the integration so the example finishes quickly; drop it to run the particle to the domain boundary.
+`max_steps` caps the integration so the example finishes quickly.
 
 ```python
 import numpy as np
@@ -142,11 +142,13 @@ for model in ('zero-drag', 'stokes', 'loth'):
 
 ```text
  zero-drag: particle   950.5 m/s   fluid   950.5 m/s   slip    0.0 m/s
-    stokes: particle  1057.2 m/s   fluid   950.5 m/s   slip  106.8 m/s
-      loth: particle  1057.3 m/s   fluid   950.5 m/s   slip  106.8 m/s
+    stokes: particle  1055.9 m/s   fluid   950.5 m/s   slip  105.4 m/s
+      loth: particle  1056.1 m/s   fluid   950.5 m/s   slip  105.6 m/s
 ```
 
-### 4. Run an ensemble in parallel (about seven seconds)
+The two inertial runs each also print a line saying the step cap was reached, which is `max_steps` doing its job. Drop `max_steps` and the particle runs to the domain boundary instead.
+
+### 4. Run an ensemble in parallel (about nine seconds on two cores)
 
 `Particle` defines a size distribution, `SpawnLocations` defines where the particles enter, and `StochasticModel` runs them. The backends are `serial()`, `multi_thread()`, `multi_process()`, and `mpi_run()`; only the last needs the `mpi` extra.
 
@@ -184,6 +186,8 @@ print(f'first track: {len(xyz)} points, x from {xyz[0, 0]:+.4f} to {xyz[-1, 0]:+
 tracked 8 particles
 first track: 300 points, x from -0.0050 to +0.0000 m
 ```
+
+As in example 3, the run also prints a `tqdm` progress bar and one step-cap notice per particle alongside the two lines above.
 
 A production run raises `n_concentration` to thousands and removes `max_steps`, which is where the parallel backends and the MPI reduction earn their keep. Expect minutes to hours rather than seconds.
 
@@ -229,15 +233,17 @@ Real grids are read the same way: point `GridIO` and `FlowIO` at an existing `.x
 
 ### Reduce particle tracks to an Eulerian field
 
-`DataIO` reads the scattered particle tracks a run writes out, interpolates the flow to those points, removes outliers, interpolates both the flow and particle fields onto a structured mesh, and writes PLOT3D grid, fluid, and particle files. This is the MPI-parallel stage, so it needs the `mpi` extra and a system MPI runtime. `test/test_dataio_reduction.py` exercises it, but only when the reference datasets are present; see [Testing](#testing).
+`DataIO` reads the scattered particle tracks a run writes out, interpolates the flow to those points, removes outliers, interpolates both the flow and particle fields onto a structured mesh, and writes PLOT3D grid, fluid, and particle files. This is the stage that parallelizes over MPI. `DataIO.compute()` distributes the track files across ranks and gathers the result, so a production reduction over a large ensemble is launched under `mpiexec`. Because the whole of `compute()` goes through a communicator, it needs the `mpi` extra even when it runs on a single rank. The reduction stages underneath it are plain NumPy and SciPy.
+
+`test/test_dataio_reduction.py` exercises the reduction on a tiny synthetic particle set built by the test fixtures. It needs no external data and no `mpiexec` launcher, and `pytest test/test_dataio_reduction.py -q` reports `8 passed` on a fresh clone with the `mpi` extra installed. Seven of those tests cover the reduction stages directly and run without `mpi4py` at all; the eighth drives the full `compute()` pipeline and so needs `mpi4py` present. See [Testing](#testing).
 
 ### A larger script
 
-`main.py` in the repository root is a longer, research-scale version of examples 1, 3, and 4 combined: a 100 mm by 500 mm oblique-shock domain, a thousand particles, and no step cap. It is a real production run, not a quickstart, and it takes a long time and writes output files. Read it as a worked example rather than as something to run first.
+`main.py` in the repository root is a longer, research-scale version of examples 1, 3, and 4 combined: a 100 mm by 500 mm oblique-shock domain and no step cap. Its `n_concentration` defaults to 4 particles so a first run finishes in minutes; the published cloud used 1000, which `oblique_shock_response(n_concentration=1000)` reproduces. It is a real production run, not a quickstart, and it takes a long time and writes output files. Read it as a worked example rather than as something to run first.
 
 ## Architecture
 
-lptlib is organized into three subpackages under `lptlib`.
+lptlib is organized into four subpackages under `lptlib`.
 
 `lptlib.io` handles file I/O. `GridIO` and `FlowIO` read and write PLOT3D grids and solutions and compute grid metrics, and `DataIO` performs the MPI-parallel Lagrangian-to-Eulerian reduction and PLOT3D export.
 
@@ -253,23 +259,27 @@ An overview of the modules, the public API, and worked examples is in [docs/inde
 
 ## Testing
 
-Install the test extra and run the suite from the repository root. `pytest` alone is not enough; several test modules import `parameterized`, and collection fails without it.
+Install the test and `mpi` extras and run the suite from the repository root. `pytest` alone is not enough; several test modules import `parameterized`, and collection fails without it.
 
 ```bash
-pip install -e ".[test]"
+pip install -e ".[test,mpi]"
 pytest test -v
 ```
 
-The suite covers search, interpolation for steady and unsteady flow, integration, drag models, streamlines, the DataIO reduction, plotting, and the MPI helpers. Continuous integration runs the same tests on Ubuntu and macOS for Python 3.10 through 3.13 on every push and pull request.
+The suite covers search, interpolation for steady and unsteady flow, integration, drag models, streamlines, the stochastic model, the PLOT3D readers and round trips, the DataIO reduction, plotting, and the MPI helpers. Continuous integration runs the same tests on Ubuntu and macOS for Python 3.10 through 3.13 on every push and pull request, with a coverage floor of 60 percent.
+
+The `mpi` extra belongs in that install even though the MPI launcher tests are opt-in. One test drives `DataIO.compute()`, which goes through a communicator on a single rank, and it errors rather than skipping when `mpi4py` is absent. With `pip install -e ".[test]"` alone the suite reports one failure in `test/test_dataio_reduction.py`.
 
 Two groups of tests do not run by default.
 
 - **Data-backed tests skip.** Some tests need large PLOT3D grids and solutions from the original research cases. Those datasets are not published and are not part of this repository, so the tests that need them skip with a message naming the missing path. This is expected on a fresh clone, and the rest of the suite still runs and still covers the library. Nothing in the quickstart above needs them.
-- **MPI tests are opt-in.** Set `LPTLIB_RUN_MPI=1` to enable the tests that launch MPI processes. They also need the `mpi` extra and a working system MPI runtime.
+- **MPI tests are opt-in.** Set `LPTLIB_RUN_MPI=1` to enable the tests that launch MPI processes with `mpiexec -np 2`. They also need `mpiexec` on `PATH`, and they add a few minutes to the run.
 
 ```bash
 LPTLIB_RUN_MPI=1 pytest test -v
 ```
+
+Open MPI refuses to launch as root, so in a container running as root those tests also need `OMPI_ALLOW_RUN_AS_ROOT=1` and `OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1` in the environment. Neither is needed on a normal user account or on a GitHub-hosted runner.
 
 Matplotlib is forced to a headless backend by the test configuration, so no display or `MPLBACKEND` setting is needed.
 

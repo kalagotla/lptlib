@@ -87,8 +87,6 @@ def _worker(args):
 
 def main():
     from multiprocessing import Pool
-    osd = build_case()
-
     here = os.path.dirname(os.path.abspath(__file__))
     cache = os.path.join(here, '.tracks.npz')
     if os.path.exists(cache) and '--recompute' not in sys.argv:

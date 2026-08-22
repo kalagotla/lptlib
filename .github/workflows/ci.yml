@@ -45,18 +45,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[test,mpi]"
 
-      # The coverage floor is deliberately conservative. Current coverage is
-      # around 44 percent, and much of the uncovered code is the MPI and
-      # large-dataset paths that cannot run in CI. The gate exists to catch a
-      # regression that guts the suite, not to certify a coverage target; raise
-      # it as data-independent tests are added.
+      # The coverage floor is deliberately conservative. Measured coverage is
+      # 68 percent, and much of the uncovered code is the MPI and large-dataset
+      # paths that cannot run in CI. The floor is set at 60 so there is real
+      # headroom: it catches a regression that guts the suite without failing a
+      # pull request that legitimately moves a few points. Raise it as
+      # data-independent tests are added.
+      #
+      # The tests that launch MPI processes are opt-in and stay skipped here:
+      # nothing sets LPTLIB_RUN_MPI, so a two-rank run never happens in this
+      # job. mpi4py is still installed above so that the DataIO reduction test,
+      # which drives the single-rank MPI path in-process, runs rather than
+      # failing on the import. Enabling the launcher tests on a GitHub-hosted
+      # runner needs no extra setup, because those runners execute as the
+      # unprivileged `runner` user; only a root environment such as a container
+      # needs OMPI_ALLOW_RUN_AS_ROOT=1 and OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1,
+      # which Open MPI otherwise refuses.
       - name: Run test suite with coverage
         run: >-
           pytest test -v
           --cov=lptlib
           --cov-report=term-missing
           --cov-report=xml
-          --cov-fail-under=40
+          --cov-fail-under=60
 
   import-without-mpi:
     name: Import without the mpi extra
@@ -93,11 +104,12 @@ jobs:
   lint:
     name: Lint (ruff)
     runs-on: ubuntu-latest
-    # Non-blocking for now: `ruff check src test` currently reports about 160
-    # findings (198 across the whole repository), so a blocking gate would fail
-    # every pull request on day one. The step runs so the count is visible and
-    # can be driven down; remove continue-on-error once the backlog is cleared.
-    continue-on-error: true
+    # Blocking. The backlog this job was once advisory for is cleared:
+    # `ruff check src test` reports zero findings under the rule set pinned in
+    # pyproject.toml (`[tool.ruff.lint] select = ["E4", "E7", "E9", "F"]`).
+    # Pinning matters as much as clearing: Ruff's default selection widens
+    # between releases, so an unpinned project starts failing this gate on
+    # rules it never opted into.
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

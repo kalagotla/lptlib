@@ -19,7 +19,7 @@ The easiest way to release is using GitHub Actions:
 2. **Create a release**:
    - Go to your GitHub repository
    - Click "Releases" → "Create a new release"
-   - Create a new tag (e.g., `v0.0.6`)
+   - Create a new tag matching the version in `pyproject.toml` (e.g., `v0.2.0`)
    - Add release notes
    - Click "Publish release"
 
@@ -68,25 +68,50 @@ python scripts/bump_version.py minor
 # Patch version (1.0.0 -> 1.0.1)
 python scripts/bump_version.py patch
 
-# Alpha release (1.0.0 -> 1.0.1a1)
+# Alpha release (1.0.0 -> 1.0.0a0, then 1.0.0a0 -> 1.0.0a1)
 python scripts/bump_version.py alpha
 
-# Beta release (1.0.0 -> 1.0.1b1)
+# Beta release (1.0.0 -> 1.0.0b0, then 1.0.0b0 -> 1.0.0b1)
 python scripts/bump_version.py beta
 
-# Release candidate (1.0.0 -> 1.0.1rc1)
+# Release candidate (1.0.0 -> 1.0.0rc0, then 1.0.0rc0 -> 1.0.0rc1)
 python scripts/bump_version.py rc
 ```
+
+A prerelease bump attaches the prerelease segment to the current release number
+rather than opening the next one, and it restarts the counter at 0 whenever the
+prerelease kind changes. Bump `patch` first if the prerelease is meant to lead
+to a new release number.
+
+The script rewrites every file that carries the version, so the four version
+sites cannot drift apart between releases:
+
+| File | What is updated |
+|---|---|
+| `pyproject.toml` | the `version` field in `[project]`, which the build backend reads |
+| `CITATION.cff` | the top-level `version:` key |
+| `uv.lock` | the `version` in the `lptlib` package entry |
+| `CHANGELOG.md` | the `[Unreleased]` entries become a dated section for the new version, a fresh empty `[Unreleased]` heading is written above it, and the comparison links at the foot of the file are rewritten |
+
+`__version__` in `src/lptlib/__init__.py` is not a fifth site to maintain by
+hand. It is read from the installed package metadata with
+`importlib.metadata.version`, so it follows `pyproject.toml` automatically. The
+script rewrites it only if that file is ever changed to carry a literal release
+number instead.
+
+`uv.lock` is a generated file. The script keeps its version consistent, but run
+`uv lock` as well if the dependency set changed in the same release.
 
 ## Release Checklist
 
 Before releasing:
 
-- [ ] Move the `[Unreleased]` entries in `CHANGELOG.md` under a heading for the new version, with the date and the comparison link
-- [ ] Run tests: `pytest`
+- [ ] Write the release's entries under `[Unreleased]` in `CHANGELOG.md`; the bump script moves them under the new version heading and adds the date and the comparison link
+- [ ] Run tests: `pytest test`
+- [ ] Run the linter: `ruff check src test`
 - [ ] Update documentation if needed
-- [ ] Commit all changes
-- [ ] Choose appropriate version bump type
+- [ ] Choose appropriate version bump type and run the bump script
+- [ ] Review the diff across all four version sites, then commit all changes
 
 ## Testing Releases
 
@@ -138,11 +163,14 @@ lptlib/
 ├── scripts/
 │   ├── bump_version.py            # Version bumping script
 │   └── release.py                 # Complete release script
-├── pyproject.toml                 # Package configuration and version
-├── CHANGELOG.md                   # Release notes
+├── pyproject.toml                 # Package configuration and the source of truth for the version
+├── CITATION.cff                   # Citation metadata, carries the version
+├── uv.lock                        # Generated lockfile, carries the version
+├── CHANGELOG.md                   # Release notes, carries the version headings
 └── RELEASE.md                     # This file
 ```
 
-There is no `setup.py`. All package metadata, including the version, lives in
-`pyproject.toml`, and `scripts/bump_version.py` is the supported way to change
-the version.
+There is no `setup.py`. All package metadata lives in `pyproject.toml`, which is
+also the source of truth for the version, and `scripts/bump_version.py` is the
+supported way to change it. Editing any version site by hand is what lets the
+four of them drift apart.

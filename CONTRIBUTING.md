@@ -27,12 +27,14 @@ Clone the repository and install the package in editable mode together with the 
 ```bash
 git clone https://github.com/kalagotla/lptlib.git
 cd lptlib
-python -m pip install -e ".[test]"
+python -m pip install -e ".[test,mpi]"
 ```
 
 The `test` extra pulls in `pytest`, `parameterized`, and `pytest-cov`. Installing bare `pytest` is not enough: several test modules import `parameterized`, and collection fails without it.
 
-The MPI-parallel execution backends are optional and live behind a separate extra, `pip install -e ".[mpi]"`. They require a system MPI implementation. On Debian or Ubuntu you can install one with `sudo apt-get install libopenmpi-dev openmpi-bin`, and on macOS with `brew install open-mpi`. Everything except those backends works without MPI, and a change must not make `import lptlib` depend on it.
+The MPI-parallel execution backends are optional and live behind the separate `mpi` extra. They require a system MPI implementation. On Debian or Ubuntu you can install one with `sudo apt-get install libopenmpi-dev openmpi-bin`, and on macOS with `brew install open-mpi`. Everything except those backends works without MPI, and a change must not make `import lptlib` depend on it.
+
+Install `mpi` alongside `test` all the same, because one test drives `DataIO.compute()`, which runs over MPI even on a single rank, and it errors rather than skipping when `mpi4py` is absent. With `pip install -e ".[test]"` alone, `pytest test` reports one failure in `test/test_dataio_reduction.py` on an otherwise healthy checkout. The continuous integration workflow installs `".[test,mpi]"` for the same reason.
 
 ## Running the tests
 
@@ -42,19 +44,25 @@ The test suite lives under `test/` and is run with pytest from the repository ro
 pytest test -v
 ```
 
+The suite covers search, interpolation for steady and unsteady flow, integration, the drag models, streamlines, the stochastic model, the PLOT3D readers and round trips, the `DataIO` Lagrangian-to-Eulerian reduction, the `Plots` helpers, and the MPI helpers.
+
 Two groups of tests do not run by default. Tests that need the large PLOT3D datasets from the original research cases skip with a message naming the missing path, because those datasets are unpublished and are not part of this repository. Tests that launch MPI processes are opt-in and are enabled with an environment variable.
 
 ```bash
 LPTLIB_RUN_MPI=1 pytest test -v
 ```
 
+Those tests launch `mpiexec -np 2`, so they also need `mpiexec` on `PATH`, and they take a few minutes. Open MPI refuses to launch as root, so in a container running as root add `OMPI_ALLOW_RUN_AS_ROOT=1` and `OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1` to the environment as well. GitHub-hosted runners execute as an unprivileged user and need neither variable.
+
 Matplotlib is forced to the headless `Agg` backend in `test/conftest.py`, so you do not need to set `MPLBACKEND` yourself.
 
-Please make sure the full suite passes before you open a pull request. If you add a feature or fix a bug, add a test that covers it. The continuous integration workflow runs the same suite on Ubuntu and macOS for Python 3.10 through 3.13 for every push and pull request.
+Please make sure the full suite passes before you open a pull request. If you add a feature or fix a bug, add a test that covers it. The continuous integration workflow runs the same suite on Ubuntu and macOS for Python 3.10 through 3.13 for every push and pull request, under a coverage floor of 60 percent.
 
 ## Coding style
 
-Match the style of the surrounding code. Keep public classes and functions documented with clear docstrings that state what the method does, its arguments, and what it returns. Prefer vectorized NumPy operations over Python-level loops in the performance-sensitive I/O and interpolation paths. The project is configured for Ruff, so `ruff check src` should pass before you submit.
+Match the style of the surrounding code. Keep public classes and functions documented with clear docstrings that state what the method does, its arguments, and what it returns. Prefer vectorized NumPy operations over Python-level loops in the performance-sensitive I/O and interpolation paths.
+
+The project lints with Ruff, and `ruff check src test` should report no findings before you submit. That is the exact command the CI lint job runs, and it is a blocking gate rather than an advisory one. The rule set is pinned in `pyproject.toml` under `[tool.ruff.lint]` as `select = ["E4", "E7", "E9", "F"]`: the pycodestyle error groups for imports, statements, and syntax or IO errors, plus Pyflakes for undefined names, unused imports, and unused variables. It is pinned rather than left at Ruff's default because that default widens between Ruff releases, which would fail the gate on rules the project never opted into. Widening the set is a deliberate change to `pyproject.toml`, made together with the fixes it demands.
 
 ## Pull request process
 

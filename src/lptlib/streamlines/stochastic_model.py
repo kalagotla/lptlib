@@ -11,6 +11,11 @@ from tqdm import tqdm
 import socket
 
 try:  # mpi4py needs a system MPI runtime; keep it optional at import time
+    import mpi4py
+    # See the identical note in lptlib.io.dataio: importing mpi4py.MPI would
+    # otherwise call MPI_Init as a side effect of importing lptlib.
+    mpi4py.rc.initialize = False
+    mpi4py.rc.finalize = True
     from mpi4py import MPI
 except (ImportError, RuntimeError):  # pragma: no cover - depends on the host
     MPI = None
@@ -35,6 +40,23 @@ def _require_mpi():
             "Use StochasticModel.serial(), multi_thread() or multi_process() to run "
             "without MPI."
         )
+    return MPI
+
+
+def _init_mpi():
+    """
+    Ensure MPI is available *and* initialised before any communicator is used.
+
+    ``mpi4py.rc.initialize`` is turned off at import time so that importing
+    lptlib has no side effects, which means the first MPI entry point reached
+    has to call ``MPI_Init`` itself.
+
+    Returns:
+        The imported ``mpi4py.MPI`` module, with MPI initialised.
+    """
+    _require_mpi()
+    if not MPI.Is_initialized():
+        MPI.Init()
     return MPI
 
 
@@ -152,7 +174,7 @@ class StochasticModel(Streamlines):
         Returns:
 
         """
-        _require_mpi()
+        _init_mpi()
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
         size = comm.Get_size()

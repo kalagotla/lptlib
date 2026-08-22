@@ -2,7 +2,6 @@
 
 import numpy as np
 from ..io.plot3dio import GridIO, FlowIO
-from ..function.variables import Variables
 
 
 # Create a class to calculate oblique shock properties from given mach and deflection angle
@@ -217,18 +216,25 @@ class ObliqueShockData:
         self._check_flow_inputs()
         # Create a vector with density, shock-normal, shock-tangential, zero velocities, and energy
         # Have pre-shock before x=0 and post-shock after
+        # Select the weak or strong branch into locals. This used to overwrite the
+        # arrays on ``self.oblique_shock`` in place, which made the shock object
+        # single-use: a second ``create_flow`` call indexed a scalar and raised,
+        # and a shock shared between two instances silently gave the second one
+        # the first one's selected branch.
         if self.shock_strength == 'weak':
-            self.oblique_shock.shock_angle = self.oblique_shock.shock_angle[0]
-            self.oblique_shock.density_ratio = self.oblique_shock.density_ratio[0]
-            self.oblique_shock.pressure_ratio = self.oblique_shock.pressure_ratio[0]
-            self.oblique_shock.temperature_ratio = self.oblique_shock.temperature_ratio[0]
-            self.oblique_shock.mach_ratio = self.oblique_shock.mach_ratio[0]
+            _branch = 0
         elif self.shock_strength == 'strong':
-            self.oblique_shock.shock_angle = self.oblique_shock.shock_angle[1]
-            self.oblique_shock.density_ratio = self.oblique_shock.density_ratio[1]
-            self.oblique_shock.pressure_ratio = self.oblique_shock.pressure_ratio[1]
-            self.oblique_shock.temperature_ratio = self.oblique_shock.temperature_ratio[1]
-            self.oblique_shock.mach_ratio = self.oblique_shock.mach_ratio[1]
+            _branch = 1
+        else:
+            raise ValueError(
+                f"shock_strength must be 'weak' or 'strong', "
+                f"got {self.shock_strength!r}")
+
+        _shock_angle = np.asarray(self.oblique_shock.shock_angle).reshape(-1)[_branch]
+        _density_ratio = np.asarray(self.oblique_shock.density_ratio).reshape(-1)[_branch]
+        _pressure_ratio = np.asarray(self.oblique_shock.pressure_ratio).reshape(-1)[_branch]
+        _temperature_ratio = np.asarray(self.oblique_shock.temperature_ratio).reshape(-1)[_branch]
+        _mach_ratio = np.asarray(self.oblique_shock.mach_ratio).reshape(-1)[_branch]
         # Compute inlet flow properties -- pre-shock
         if self.inlet_density is None and self.inlet_pressure is not None:
             self.inlet_density = self.inlet_pressure / (self.oblique_shock.gas_constant * self.inlet_temperature)
@@ -240,8 +246,8 @@ class ObliqueShockData:
         _density = self.inlet_density
         _velocity = self.oblique_shock.mach * np.sqrt(self.oblique_shock.gamma * self.oblique_shock.gas_constant *
                                                       self.inlet_temperature)
-        _x_velocity = _velocity * np.sin(np.radians(self.oblique_shock.shock_angle))
-        _y_velocity = _velocity * np.cos(np.radians(self.oblique_shock.shock_angle))
+        _x_velocity = _velocity * np.sin(np.radians(_shock_angle))
+        _y_velocity = _velocity * np.cos(np.radians(_shock_angle))
         _z_velocity = 0
         _energy = _density * (self.oblique_shock.gas_constant * self.inlet_temperature / (self.oblique_shock.gamma - 1)
                               + 0.5 * _velocity**2)
@@ -250,17 +256,17 @@ class ObliqueShockData:
                                _energy])
 
         # post-shock properties
-        _density_post = _density * self.oblique_shock.density_ratio
-        _velocity_post = self.oblique_shock.mach * self.oblique_shock.mach_ratio * np.sqrt(
+        _density_post = _density * _density_ratio
+        _velocity_post = self.oblique_shock.mach * _mach_ratio * np.sqrt(
             self.oblique_shock.gamma * self.oblique_shock.gas_constant
-            * self.inlet_temperature * self.oblique_shock.temperature_ratio)
-        _x_velocity_post = _velocity_post * np.sin(np.radians(self.oblique_shock.shock_angle
+            * self.inlet_temperature * _temperature_ratio)
+        _x_velocity_post = _velocity_post * np.sin(np.radians(_shock_angle
                                                               - self.oblique_shock.deflection))
-        _y_velocity_post = _velocity_post * np.cos(np.radians(self.oblique_shock.shock_angle
+        _y_velocity_post = _velocity_post * np.cos(np.radians(_shock_angle
                                                               - self.oblique_shock.deflection))
         _z_velocity_post = 0
         _energy_post = _density_post * (self.oblique_shock.gas_constant * self.inlet_temperature *
-                                        self.oblique_shock.temperature_ratio / (self.oblique_shock.gamma - 1)
+                                        _temperature_ratio / (self.oblique_shock.gamma - 1)
                                         + 0.5 * _velocity_post**2)
         _post_shock = np.array([_density_post, _x_velocity_post * _density_post, _y_velocity_post * _density_post,
                                 _z_velocity_post * _density_post, _energy_post])

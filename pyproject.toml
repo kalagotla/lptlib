@@ -71,6 +71,15 @@ exclude = [
     ".eggs",
 ]
 
+# Pin the rule set instead of inheriting Ruff's default selection. The default
+# widens between Ruff releases, so an unpinned project starts failing its own
+# lint gate when a new Ruff version ships rules it never opted into. These four
+# are the pycodestyle error groups that catch real breakage (E4 imports,
+# E7 statements, E9 syntax and IO errors) plus Pyflakes (F), which finds
+# undefined names, unused imports, and unused variables.
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
 [tool.pytest.ini_options]
 testpaths = ["test"]
 

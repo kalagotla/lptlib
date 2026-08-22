@@ -43,21 +43,21 @@ class TestMPI(unittest.TestCase):
 
     @staticmethod
     def create_spawn_locations(p):
-        l = SpawnLocations(p)
-        l.x_min = -50e-3
-        l.z_min = 5e-5
-        l.y_min, l.y_max = 1e-4, 1e-4
-        l.compute()
-        l.compute()
-        return l
+        locations = SpawnLocations(p)
+        locations.x_min = -50e-3
+        locations.z_min = 5e-5
+        locations.y_min, locations.y_max = 1e-4, 1e-4
+        locations.compute()
+        locations.compute()
+        return locations
 
     def lpt_code(self):
         osd = self.create_oblique_shock()
         p = self.create_particle()
-        l = self.create_spawn_locations(p)
+        locations = self.create_spawn_locations(p)
         grid = osd.grid
         flow = osd.flow
-        sm = StochasticModel(p, l, grid=grid, flow=flow)
+        sm = StochasticModel(p, locations, grid=grid, flow=flow)
         sm.method = 'adaptive-ppath'
         sm.search = 'p-space'
         sm.time_step = 1e-10

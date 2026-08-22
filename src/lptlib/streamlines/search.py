@@ -80,8 +80,10 @@ class Search:
         self._cpoint = None if warm_start is None else np.array(warm_start, dtype='f8')
 
     def __str__(self):
-        doc = "This instance takes in the grid of shape " + self.grid.grd.shape + \
-              "\nand the searches for the point " + self.ppoint + " in the grid.\n" \
+        # grd.shape is a tuple and ppoint is an array, so both have to be
+        # formatted rather than concatenated onto the string.
+        doc = f"This instance takes in the grid of shape {self.grid.grd.shape}\n" \
+              f"and the searches for the point {self.ppoint} in the grid.\n" \
               "Use method 'compute' to find (attributes) the closest 'index' and the nodes of the 'cell'.\n"
         return doc
 
@@ -353,7 +355,6 @@ class Search:
         _p = np.asarray(self.ppoint, dtype='f8')
         return bool(np.all(_p >= _lo - _pad) and np.all(_p <= _hi + _pad))
 
-    @staticmethod
     def _cell_index(self, i, j, k):
         """Pick the cell around node ``(i, j, k)`` that holds ``self.ppoint``.
 
@@ -449,7 +450,6 @@ class Search:
 
         return
 
-    @staticmethod
     def _find_block(self):
         # _Internal method to find the block
         # Setup to compute block number in which the point is present
@@ -458,7 +458,10 @@ class Search:
         _bool = _bool_max == _bool_min
 
         # Test if the given point is in domain or not
-        if np.all(_bool.all(axis=1) == False) or np.all(_bool_min == False) or np.all(_bool_max == False):
+        # ``np.logical_not`` rather than ``not``: these are boolean arrays, and
+        # ``not`` on an array of more than one element raises.
+        if (np.all(np.logical_not(_bool.all(axis=1))) or np.all(np.logical_not(_bool_min))
+                or np.all(np.logical_not(_bool_max))):
             self.info = 'Given point is not in the domain. The cell attribute will return "None" in search algorithm\n'
             self.cell = None
             self.ppoint = None
@@ -525,7 +528,7 @@ class Search:
         """
 
         # Find the block number
-        self.block = self._find_block(self)
+        self.block = self._find_block()
         # To check for point out-of-domain case
         if self.block is None:
             return
@@ -541,7 +544,7 @@ class Search:
                 # Find the closest node to the point --> index.ndim = 4
                 self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
                 i, j, k, self.block = self.index[0], self.index[1], self.index[2], self.index[3]
-                self._cell_index(self, i, j, k)
+                self._cell_index(i, j, k)
                 # Check for the end of the domain case. _cell_nodes clamps the
                 # cell origin into range, so the located cell is always a real
                 # cell; what still has to be checked is whether the point is
@@ -570,7 +573,7 @@ class Search:
 
                 self.index = np.array(np.unravel_index(_dist.argmin(), _dist.shape))
                 i, j, k = self.index
-                self._cell_index(self, i, j, k)
+                self._cell_index(i, j, k)
                 # Check for the end of the domain case. _cell_nodes clamps the
                 # cell origin into range, so the located cell is always a real
                 # cell; what still has to be checked is whether the point is
@@ -657,7 +660,7 @@ class Search:
         self.ppoint = _ppoint
 
         if self.block is None:
-            self.block = self._find_block(self)
+            self.block = self._find_block()
 
         # Start Newton-Raphson
         _iter = 0
@@ -754,9 +757,6 @@ class Search:
 
             # Transform from p to c-space
             _delta_cpoint = np.matmul(_J_inv, _delta_ppoint)
-
-            # Save old point
-            _cpoint_old = _cpoint.copy()
 
             # Update point
             _cpoint += _delta_cpoint

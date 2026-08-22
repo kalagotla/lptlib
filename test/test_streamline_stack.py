@@ -210,7 +210,7 @@ def test_particle_relaxes_toward_the_fluid(synthetic_flow, synthetic_grid,
     intg = Integration(interp)
 
     v_start = np.array([100.0, 0.0, 0.0])
-    x_new, v_new, u_f = intg.compute_ppath(
+    _x_new, v_new, u_f = intg.compute_ppath(
         diameter=281e-9, density=813.0, velocity=v_start.copy(),
         method="pRK4", time_step=1e-8, drag_model="stokes")
 

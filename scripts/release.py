@@ -79,11 +79,16 @@ def create_git_tag():
         version = match.group(1)
         tag_name = f"v{version}"
         print(f"Creating git tag: {tag_name}")
-        run_command(f"git add pyproject.toml src/lptlib/__init__.py")
+        # Every file scripts/bump_version.py rewrites, so the tagged commit
+        # carries a consistent version across all of them.
+        run_command(
+            "git add pyproject.toml CITATION.cff uv.lock CHANGELOG.md "
+            "src/lptlib/__init__.py"
+        )
         run_command(f"git commit -m 'Release {version}'")
         run_command(f"git tag {tag_name}")
         print(f"Created tag: {tag_name}")
-        print(f"Push with: git push origin main --tags")
+        print("Push with: git push origin main --tags")
 
 def main():
     if len(sys.argv) < 2:
@@ -104,7 +109,7 @@ def main():
             print("Invalid upload target. Use --test or --prod")
             sys.exit(1)
     
-    print(f"Starting release process:")
+    print("Starting release process:")
     print(f"  Bump type: {bump_type}")
     print(f"  Upload target: {upload_target}")
     print()
@@ -137,7 +142,7 @@ def main():
         # Step 6: Create git tag
         create_git_tag()
         
-        print(f"\n🎉 Release completed successfully!")
+        print("\n🎉 Release completed successfully!")
         
     except KeyboardInterrupt:
         print("\n❌ Release cancelled by user")

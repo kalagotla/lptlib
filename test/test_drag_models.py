@@ -162,7 +162,7 @@ def test_all_twelve_models_advance_particle(synthetic_grid, synthetic_flow,
                                 velocity=np.array([100.0, 0.0, 0.0]),
                                 method="pRK4", time_step=1e-9, drag_model=model)
     assert result is not None
-    x_new, v_new, u_f = result
+    x_new, v_new, _u_f = result
     assert np.all(np.isfinite(x_new))
     assert np.all(np.isfinite(v_new))
     # The particle stays inside the physical domain after one small step.
@@ -182,7 +182,7 @@ def test_zero_drag_particle_follows_fluid(synthetic_grid, synthetic_flow,
     interp.compute(method="p-space")
     intg = Integration(interp)
 
-    x_new, v_new, u_f = intg.compute_ppath(
+    _x_new, v_new, u_f = intg.compute_ppath(
         diameter=281e-9, density=813,
         velocity=np.array([10.0, 0.0, 0.0]), method="pRK4",
         time_step=1e-9, drag_model="zero-drag")

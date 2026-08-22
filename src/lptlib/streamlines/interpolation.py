@@ -2,7 +2,6 @@
 
 import logging
 import numpy as np
-from ..function.variables import Variables
 
 logger = logging.getLogger(__name__)
 
@@ -78,11 +77,12 @@ class Interpolation:
         self.time = []
 
     def __str__(self):
-        doc = "This instance uses " + self.flow.filename + " as the flow file " \
-                                                           "to compute properties at " + self.idx.ppoint + "\n"
+        # idx.ppoint is an array, so it has to be formatted rather than
+        # concatenated onto the string.
+        doc = f"This instance uses {self.flow.filename} as the flow file " \
+              f"to compute properties at {self.idx.ppoint}\n"
         return doc
 
-    @staticmethod
     def _shock_cell_check(self):
         # Inspect shock cell and assign nearest interpolation
         # Compute velocity and Mach only at the 2 nodes (not the entire flow field)
@@ -118,7 +118,6 @@ class Interpolation:
 
         return _mach_n0, _mach_n1
 
-    @staticmethod
     def _discontinuity_check(self):
         """Classify the flow feature in the current cell using all 8 nodes.
 
@@ -274,7 +273,7 @@ class Interpolation:
                 if self.idx.cell.shape == (8, 3) and self.idx.info is None:
                     # Shock cell check: fall back to nearest-neighbor across shocks
                     if self.adaptive == 'shock':
-                        _mach_n0, _mach_n1 = self._shock_cell_check(self)
+                        _mach_n0, _mach_n1 = self._shock_cell_check()
                         if _mach_n0 > 1 > _mach_n1:
                             _distance = np.sqrt(np.sum((_cell_grd - self.idx.ppoint) ** 2, axis=1))
                             _nn = np.argmin(_distance)
@@ -282,7 +281,7 @@ class Interpolation:
                             self.q = self.q.reshape((1, 1, 1, -1, 1))
                             return
                     elif self.adaptive == 'auto':
-                        _feature = self._discontinuity_check(self)
+                        _feature = self._discontinuity_check()
                         if _feature == 'strong_shock':
                             _distance = np.sqrt(np.sum((_cell_grd - self.idx.ppoint) ** 2, axis=1))
                             _nn = np.argmin(_distance)
@@ -372,7 +371,7 @@ class Interpolation:
                 # Do the shock cell check
                 if self.idx.cell.shape == (8, 3) and self.idx.info is None:
                     if self.adaptive == "shock":
-                        _mach_n0, _mach_n1 = self._shock_cell_check(self)
+                        _mach_n0, _mach_n1 = self._shock_cell_check()
                         # if shock is in the cell _mach_n0 > 1 > _mach_n1
                         if _mach_n0 > 1 > _mach_n1:
                             _distance = np.sqrt(np.sum((self.idx.cell - self.idx.cpoint) ** 2, axis=1))
@@ -387,7 +386,7 @@ class Interpolation:
                         else:
                             pass
                     elif self.adaptive == "auto":
-                        _feature = self._discontinuity_check(self)
+                        _feature = self._discontinuity_check()
                         if _feature == 'strong_shock':
                             _distance = np.sqrt(np.sum((self.idx.cell - self.idx.cpoint) ** 2, axis=1))
                             _nn = np.argmin(_distance)
@@ -727,7 +726,7 @@ class Interpolation:
                             len(_cell_grd), _shape[0], _shape[1], _shape[2]))
 
                 if self.adaptive =='shock':
-                    _mach_n0, _mach_n1 = self._shock_cell_check(self)
+                    _mach_n0, _mach_n1 = self._shock_cell_check()
                     # if shock is in the cell _mach_n0 > 1 > _mach_n1
                     if _mach_n0 > 1 > _mach_n1:
                         _method = 'nearest'
@@ -865,7 +864,7 @@ class Interpolation:
                 _shape = np.array([len(_x), len(_y), len(_z)])
 
                 if self.adaptive =='shock':
-                    _mach_n0, _mach_n1 = self._shock_cell_check(self)
+                    _mach_n0, _mach_n1 = self._shock_cell_check()
                     # if shock is in the cell _mach_n0 > 1 > _mach_n1
                     if _mach_n0 > 1 > _mach_n1:
                         _method = 'nearest'

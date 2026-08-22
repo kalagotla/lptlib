@@ -74,7 +74,7 @@ def _local_velocity(interp):
 def _step(grid, flow, point, method, time_step=TIME_STEP):
     """Advance one step and return (physical new point, local fluid velocity)."""
     space = "p-space" if method in P_SPACE_SCHEMES else "c-space"
-    intg, interp, idx = _stack(grid, flow, point, space)
+    intg, interp, _idx = _stack(grid, flow, point, space)
     velocity = _local_velocity(interp)
     result = intg.compute(method=method, time_step=time_step)
 

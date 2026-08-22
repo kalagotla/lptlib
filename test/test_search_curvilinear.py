@@ -258,7 +258,7 @@ def _octant_choice_holds_the_point(grid, point, method):
 
     probe = Search(grid, list(point))
     probe.block = 0
-    probe._cell_index(probe, *node)
+    probe._cell_index(*node)
     return probe._point_in_cell()
 
 

@@ -4,13 +4,22 @@ import logging
 import numpy as np
 from ..streamlines.search import Search
 from ..streamlines.interpolation import Interpolation
-from scipy.interpolate import griddata, LinearNDInterpolator, RBFInterpolator
+from scipy.interpolate import griddata
 import os
 import re
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 try:  # mpi4py needs a system MPI runtime; keep it optional at import time
+    import mpi4py
+    # Importing mpi4py.MPI calls MPI_Init by default, so merely importing lptlib
+    # would turn the interpreter into an MPI singleton. That breaks any process
+    # that later wants to launch mpiexec itself (the gated MPI tests do exactly
+    # that). Defer initialisation to _init_mpi(), which the MPI entry points
+    # call. finalize stays enabled so that MPI_Finalize still runs at exit once
+    # we have initialised; disabling it makes ranks exit abnormally.
+    mpi4py.rc.initialize = False
+    mpi4py.rc.finalize = True
     from mpi4py import MPI
 except (ImportError, RuntimeError):  # pragma: no cover - depends on the host
     MPI = None
@@ -33,6 +42,23 @@ def _require_mpi():
             "'brew install open-mpi' on macOS) and then reinstall mpi4py with "
             "'pip install --no-binary mpi4py --force-reinstall mpi4py'."
         )
+    return MPI
+
+
+def _init_mpi():
+    """
+    Ensure MPI is available *and* initialised before any communicator is used.
+
+    ``mpi4py.rc.initialize`` is turned off at import time so that importing
+    lptlib has no side effects, which means the first MPI entry point reached
+    has to call ``MPI_Init`` itself.
+
+    Returns:
+        The imported ``mpi4py.MPI`` module, with MPI initialised.
+    """
+    _require_mpi()
+    if not MPI.Is_initialized():
+        MPI.Init()
     return MPI
 
 
@@ -108,7 +134,7 @@ class DataIO:
     date: 12-28/2022
     """
 
-    def __init__(self, grid, flow, percent_data=100, read_file=None, location='.',
+    def __init__(self, grid, flow, percent_data=100, location='.',
                  x_refinement: int = 50, y_refinement: int = 40, seed=None):
         self.grid = grid
         self.flow = flow
@@ -134,8 +160,12 @@ class DataIO:
             sorted list in natural order
 
         """
-        convert = lambda text: int(text) if text.isdigit() else text.lower()
-        alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+        def convert(text):
+            return int(text) if text.isdigit() else text.lower()
+
+        def alphanum_key(key):
+            return [convert(c) for c in re.split('([0-9]+)', key)]
+
         return sorted(_l, key=alphanum_key)
 
     def _flow_data(self, _point):
@@ -192,7 +222,6 @@ class DataIO:
 
         return _q
 
-    @staticmethod
     def _sample_data(self, _data, _percent, xn_bins=10, yn_bins=10):
         """
         Uniformly samples the given percentage of data spread on an XY plane using a binning approach.
@@ -274,7 +303,7 @@ class DataIO:
             sampled_indices = np.array(sampled_indices)
 
         # create a xy plot and save it
-        fig, ax = plt.subplots()
+        _fig, ax = plt.subplots()
         ax.scatter(_data[:, 0], _data[:, 1], s=1, label=f'Original data: {len(_data[:, 0])} points')
         ax.scatter(_data[sampled_indices, 0], _data[sampled_indices, 1], s=1, color='red',
                    label=f'Sampled data: {len(sampled_indices)} points')
@@ -374,7 +403,7 @@ class DataIO:
         Returns:
         """
         # MPI
-        _require_mpi()
+        _init_mpi()
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
         size = comm.Get_size()
@@ -416,7 +445,7 @@ class DataIO:
         else:
             # Get a uniform distribution of the sample using stratified sampling in x and y
             if rank == 0:
-                _p_data = self._sample_data(self, _p_data, self.percent_data)
+                _p_data = self._sample_data(_p_data, self.percent_data)
             else:
                 _p_data = None
         # broadcast the data to all processes
@@ -656,9 +685,6 @@ class DataIO:
                     # Distribute the grid for each rank
                     grid_chunk, (x_start, x_end), (y_start, y_end) = distribute_grid(grid, i, size,
                                                                                      overlap_fraction=0.5)
-                    # print(f'_locations shape: {_locations.shape}')
-                    # print(f'_q_f_list shape: {_q_f_list.shape}')
-                    # print(f'_q_p_list shape: {_q_p_list.shape}')
                     _xy_chunk, _qf_chunk, _qp_chunk = distribute_points(grid_chunk, _locations[:, :2],
                                                                         _q_f_list, _q_p_list)
                     _scatter_chunks.append((_xy_chunk, _qf_chunk, _qp_chunk))
@@ -680,18 +706,6 @@ class DataIO:
             _xy_chunk = comm.scatter([chunk[0] for chunk in _scatter_chunks], root=0)
             _qf_chunk = comm.scatter([chunk[1] for chunk in _scatter_chunks], root=0)
             _qp_chunk = comm.scatter([chunk[2] for chunk in _scatter_chunks], root=0)
-            # progress statements
-            # print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qf_chunk.shape} values')
-            # print(f'Rank {rank} has {grid_chunk.shape} grid points')
-
-            # # Debugging plot
-            # fig, ax = plt.subplots()
-            # ax.scatter(_xy_chunk[:, 0], _xy_chunk[:, 1], s=1, label='Scattered points')
-            # ax.scatter(grid_chunk[:, 0], grid_chunk[:, 1], s=1, label='Grid points')
-            # ax.set_xlabel('x')
-            # ax.set_ylabel('y')
-            # ax.legend(loc='upper right')
-            # plt.show()
 
             # Perform RBF interpolation on each process
             _fill_value = [2 * np.nanmax(self.flow.q[..., 0, :]), 0.0, 0.0, 0.0, 2 * np.nanmax(self.flow.q[..., -1, :])]
@@ -720,11 +734,6 @@ class DataIO:
                 e_result_chunk = self._grid_interp(_xy_chunk, _qf_chunk[:, 4], grid_chunk[:, 0], grid_chunk[:, 1],
                                                    fill_value=_fill_value[4], method='linear')
                 logger.debug(f'    Done interpolating energy on Rank {rank} with {e_result_chunk.shape} shape\n')
-
-                # print(f'Rank {rank} rho before interp: {_qf_chunk[:, 0].min()}, {_qf_chunk[:, 0].max()}')
-                # print(f'Rank {rank} rho after interp: {rho_result_chunk.min()}, {rho_result_chunk.max()}')
-                # print(f'Rank {rank} ux before interp: {_qf_chunk[:, 1].min()}, {_qf_chunk[:, 1].max()}')
-                # print(f'Rank {rank} ux after interp: {ux_result_chunk.min()}, {ux_result_chunk.max()}')
 
             # wait for all processes to finish
             comm.Barrier()
@@ -759,8 +768,6 @@ class DataIO:
 
             # Rank 0 processes final results
             if rank == 0:
-                # print(f'rho after gather: {rho_result.min()}, {rho_result.max()}')
-                # print(f'ux after gather: {ux_result.min()}, {ux_result.max()}')
                 rho_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[0])
                 ux_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[1])
                 uy_result_save = np.full((self.x_refinement, self.y_refinement), _fill_value[2])
@@ -770,15 +777,11 @@ class DataIO:
                 def reshape_to_save(variable=rho_result, variable_save=rho_result_save, _split_indices=_split_indices):
                     # Take in the interpolated grid variable and reshape it to save it
                     length_old = 0  # Initialize the length of the data
-                    # print(f'{variable.shape} is the shape of the variable')
-                    # fig, ax = plt.subplots(1, len(_split_indices))
                     for count, indices in enumerate(_split_indices):
                         # Assign split indices
                         x_start, x_end, y_start, y_end = indices
                         # Calculate the length of the data to be split
                         length = length_old + (x_end - x_start) * (y_end - y_start)
-                        # print(f'length: {length}, length_old: {length_old}')
-                        # print(f'x_start: {x_start}, x_end: {x_end}, y_start: {y_start}, y_end: {y_end}')
                         # skip edge cells to copy - 5% of the grid
                         nx = int(0.25 * (x_end - x_start))
                         ny = int(0.25 * (y_end - y_start))
@@ -786,43 +789,21 @@ class DataIO:
                         variable_temp = variable[length_old:length].reshape(x_end - x_start, y_end - y_start)
                         nx_temp_min, nx_temp_max = nx, -nx
                         ny_temp_min, ny_temp_max = ny, -ny
-                        # debug = []
                         if x_start == 0:
                             x_start = x_start - nx
                             nx_temp_min = 0
-                            # debug.append('x_start')
                         if x_end == self.x_refinement:
                             x_end = x_end + nx
                             nx_temp_max = None
-                            # debug.append('x_end')
                         if y_start == 0:
                             y_start = y_start - ny
                             ny_temp_min = 0
-                            # debug.append('y_start')
                         if y_end == self.y_refinement:
                             y_end = y_end + ny
                             ny_temp_max = None
-                            # debug.append('y_end')
                         variable_save[x_start+nx:x_end-nx, y_start+ny:y_end-ny] = variable_temp[nx_temp_min:nx_temp_max,
                                                                                                 ny_temp_min:ny_temp_max]
                         length_old = length
-                        # ax[count].contourf(_xi, _yi, variable_save, cmap='viridis')
-                        # ax[count].scatter(_xy_chunk[:, 0], _xy_chunk[:, 1], s=1, label='Scattered points')
-                        # ax[count].set_title(f'debug: {debug}')
-
-                    # print(f'shape of the variable_save: {variable_save.shape}')
-                    # print(f'shape of the grid chunk: {grid_chunk.shape}')
-
-                    # # debug plot to check the interpolation
-                    # if variable is rho_result:
-                    #     fig, ax = plt.subplots(1, 1)
-                    #     ax.contourf(_xi, _yi, variable_save, cmap='viridis')
-                    #     cbar = plt.colorbar(ax.contourf(_xi, _yi, variable_save, cmap='viridis'))
-                    #     cbar.set_label('Density')
-                    #     ax.set_xlabel('x')
-                    #     ax.set_ylabel('y')
-
-                    # plt.show()
 
                     return variable_save
 
@@ -832,9 +813,6 @@ class DataIO:
                 uz_result_save = reshape_to_save(uz_result, uz_result_save)
                 e_result_save = reshape_to_save(e_result, e_result_save)
 
-                # print(f'rho after reshape: {rho_result_save.min()}, {rho_result_save.max()}')
-                # print(f'ux after reshape: {ux_result_save.min()}, {ux_result_save.max()}')
-
                 _qf = np.stack([rho_result_save, ux_result_save, uy_result_save, uz_result_save, e_result_save])
                 np.save(self.location + 'dataio/flow_data', _qf)
                 self.flow.mgrd_to_p3d(_qf, mode='fluid', out_file=self.location + 'dataio/mgrd_to_p3d')
@@ -843,18 +821,6 @@ class DataIO:
             comm.Barrier()
 
             # Particle data interpolation
-            # debug statements
-            # print(f'Rank {rank} has {_xy_chunk.shape} scattered points and {_qp_chunk.shape} values')
-            # print(f'Rank {rank} has {grid_chunk.shape} grid points')
-
-            # # Debugging plot
-            # fig, ax = plt.subplots()
-            # ax.scatter(_xy_chunk[:, 0], _xy_chunk[:, 1], s=1, label='Scattered points')
-            # ax.scatter(grid_chunk[:, 0], grid_chunk[:, 1], s=1, label='Grid points')
-            # ax.set_xlabel('x')
-            # ax.set_ylabel('y')
-            # ax.legend(loc='upper right')
-            # plt.show()
 
             # Perform interpolation on each process for particle data
             if _qp_chunk.shape[0] <= 2:

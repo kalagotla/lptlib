@@ -2,7 +2,6 @@
 # TODO: Add the docstring test
 
 import unittest
-import doctest
 import numpy as np
 from lptlib.io import GridIO, FlowIO
 from testdata import require_data

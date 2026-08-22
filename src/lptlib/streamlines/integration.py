@@ -131,7 +131,8 @@ class Integration:
                                  warm_start=self.interp.idx._cpoint)
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
-                    if idx.ppoint is None: return None, None
+                    if idx.ppoint is None:
+                        return None, None
                     interp = Interpolation(self.interp.flow, idx)
                     interp.adaptive = self.interp.adaptive
                     interp.rbf_kernel = self.interp.rbf_kernel
@@ -145,19 +146,22 @@ class Integration:
                 # Start RK4 for p-space
                 # For p-space algos; the point-in-domain check was done in search
                 x0 = self.interp.idx.ppoint
-                if x0 is None: return None, None
+                if x0 is None:
+                    return None, None
                 q_interp = Variables(self.interp)
                 q_interp.compute_velocity()
                 u0 = q_interp.velocity.reshape(3)
                 k0 = time_step * u0
                 x1 = x0 + k0
 
-                u1, k1 = _rk2_step(self, x1)
-                if k1 is None: return None, None
+                _u1, k1 = _rk2_step(self, x1)
+                if k1 is None:
+                    return None, None
 
                 x_new = x0 + 1/2 * (k0 + k1)
                 u_new, k_new = _rk2_step(self, x_new)
-                if k_new is None: return None, None
+                if k_new is None:
+                    return None, None
 
                 self.ppoint = x_new
 
@@ -222,7 +226,7 @@ class Integration:
                 k0 = time_step * c_velocity
                 x1 = x0 + k0
 
-                k1, pv1, cv1 = _rk2_step(self, x1)
+                k1, _pv1, _cv1 = _rk2_step(self, x1)
                 if k1 is None:
                     return None, None, None
 
@@ -257,7 +261,8 @@ class Integration:
                                  warm_start=self.interp.idx._cpoint)
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
-                    if idx.ppoint is None: return None, None
+                    if idx.ppoint is None:
+                        return None, None
                     interp = Interpolation(self.interp.flow, idx)
                     interp.adaptive = self.interp.adaptive
                     interp.rbf_kernel = self.interp.rbf_kernel
@@ -271,26 +276,31 @@ class Integration:
                 # Start RK4 for p-space
                 # For p-space algos; the point-in-domain check was done in search
                 x0 = self.interp.idx.ppoint
-                if x0 is None: return None, None
+                if x0 is None:
+                    return None, None
                 q_interp = Variables(self.interp)
                 q_interp.compute_velocity()
                 u0 = q_interp.velocity.reshape(3)
                 k0 = time_step * u0
                 x1 = x0 + 0.5 * k0
 
-                u1, k1 = _rk4_step(self, x1)
-                if k1 is None: return None, None
+                _u1, k1 = _rk4_step(self, x1)
+                if k1 is None:
+                    return None, None
                 x2 = x0 + 0.5 * k1
 
-                u2, k2 = _rk4_step(self, x2)
-                if k2 is None: return None, None
+                _u2, k2 = _rk4_step(self, x2)
+                if k2 is None:
+                    return None, None
                 x3 = x0 + k2
 
-                u3, k3 = _rk4_step(self, x3)
-                if k3 is None: return None, None
+                _u3, k3 = _rk4_step(self, x3)
+                if k3 is None:
+                    return None, None
                 x_new = x0 + 1/6 * (k0 + 2*k1 + 2*k2 + k3)
                 u_new, _ = _rk4_step(self, x_new)
-                if u_new is None: return None, None
+                if u_new is None:
+                    return None, None
 
                 self.ppoint = x_new
 
@@ -355,22 +365,23 @@ class Integration:
                 k0 = time_step * c_velocity
                 x1 = x0 + 0.5 * k0
 
-                k1, pv1, cv1 = _rk4_step(self, x1)
+                k1, _pv1, _cv1 = _rk4_step(self, x1)
                 if k1 is None:
                     return None, None, None
                 x2 = x0 + 0.5 * k1
 
-                k2, pv2, cv2 = _rk4_step(self, x2)
+                k2, _pv2, _cv2 = _rk4_step(self, x2)
                 if k2 is None:
                     return None, None, None
                 x3 = x0 + k2
 
-                k3, pv3, cv3 = _rk4_step(self, x3)
+                k3, _pv3, _cv3 = _rk4_step(self, x3)
                 if k3 is None:
                     return None, None, None
                 x_new = x0 + 1/6 * (k0 + 2*k1 + 2*k2 + k3)
                 _k_final, pv_new, cv_new = _rk4_step(self, x_new)
-                if _k_final is None: return None, None, None
+                if _k_final is None:
+                    return None, None, None
 
                 self.cpoint = x_new
 
@@ -400,7 +411,8 @@ class Integration:
                                  warm_start=self.interp.idx._cpoint)
                     idx.compute(method='p-space')
                     # For p-space algos; the point-in-domain check was done in search
-                    if idx.ppoint is None: return None, None
+                    if idx.ppoint is None:
+                        return None, None
                     interp = Interpolation(self.interp.flow, idx)
                     interp.adaptive = self.interp.adaptive
                     interp.rbf_kernel = self.interp.rbf_kernel
@@ -416,26 +428,31 @@ class Integration:
                 # Start RK4 for p-space
                 # For p-space algos; the point-in-domain check was done in search
                 x0 = self.interp.idx.ppoint
-                if x0 is None: return None, None
+                if x0 is None:
+                    return None, None
                 q_interp = Variables(self.interp)
                 q_interp.compute_velocity()
                 u0 = q_interp.velocity.reshape(3)
                 k0 = time_step * u0
                 x1 = x0 + 0.5 * k0
 
-                u1, k1 = _rk4_step(self, x1)
-                if k1 is None: return None, None
+                _u1, k1 = _rk4_step(self, x1)
+                if k1 is None:
+                    return None, None
                 x2 = x0 + 0.5 * k1
 
-                u2, k2 = _rk4_step(self, x2)
-                if k2 is None: return None, None
+                _u2, k2 = _rk4_step(self, x2)
+                if k2 is None:
+                    return None, None
                 x3 = x0 + k2
 
-                u3, k3 = _rk4_step(self, x3)
-                if k3 is None: return None, None
+                _u3, k3 = _rk4_step(self, x3)
+                if k3 is None:
+                    return None, None
                 x_new = x0 + 1 / 6 * (k0 + 2 * k1 + 2 * k2 + k3)
                 u_new, _ = _rk4_step(self, x_new)
-                if u_new is None: return None, None
+                if u_new is None:
+                    return None, None
 
                 self.ppoint = x_new
 
@@ -559,7 +576,7 @@ class Integration:
                     v0 = u0.copy()
                 else:
                     v0 = velocity.copy()
-                vk0, uf0, temp = _rk4_step(self, v0, x0)
+                vk0, uf0, _temp = _rk4_step(self, v0, x0)
                 if vk0 is None:
                     return None, None, None
                 xk0 = v0 * time_step
@@ -571,7 +588,7 @@ class Integration:
                 v1 = v0 + 0.5 * vk0
                 x1 = x0 + 0.5 * xk0
 
-                vk1, uf1, temp = _rk4_step(self, v1, x1)
+                vk1, uf1, _temp = _rk4_step(self, v1, x1)
                 xk1 = v1 * time_step
                 if vk1 is None:
                     return None, None, None
@@ -590,7 +607,7 @@ class Integration:
                         or (np.linalg.norm(v2 - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v2 - v0) >= _v_tol):
                     return self._step_failed(x0, v0, u0)
 
-                vk2, uf2, temp = _rk4_step(self, v2, x2)
+                vk2, uf2, _temp = _rk4_step(self, v2, x2)
                 xk2 = v2 * time_step
                 if vk2 is None:
                     return None, None, None
@@ -604,7 +621,7 @@ class Integration:
                         or (np.linalg.norm(v3 - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v3 - v0) >= _v_tol):
                     return self._step_failed(x0, v0, u0)
 
-                vk3, uf3, temp = _rk4_step(self, v3, x3)
+                vk3, uf3, _temp = _rk4_step(self, v3, x3)
                 xk3 = v3 * time_step
                 if vk3 is None:
                     return None, None, None
@@ -618,7 +635,7 @@ class Integration:
                         or (np.linalg.norm(v_new - v0) >= _bf * np.linalg.norm(v1 - v0) and np.linalg.norm(v_new - v0) >= _v_tol):
                     return self._step_failed(x0, v0, u0)
 
-                vk_new, uf_new, temp = _rk4_step(self, v_new, x_new)
+                vk_new, uf_new, _temp = _rk4_step(self, v_new, x_new)
                 # Suppress post-shock oscillations: only apply for strong shocks
                 if vk_new is None:
                     return None, None, None
@@ -727,7 +744,7 @@ class Integration:
                 x1 = x0 + 0.5 * xk0
 
                 # Integration starts
-                vk1, p_u1, c_u1, p_v1 = _rk4_step(self, c_v1, x1)
+                vk1, _p_u1, c_u1, _p_v1 = _rk4_step(self, c_v1, x1)
                 # if the residual is none return; exited the domain
                 if vk1 is None:
                     return None, None, None
@@ -743,7 +760,7 @@ class Integration:
                     return self._step_failed(x0, p_v0, p_u0)
 
                 # Repeat three more times; RK4
-                vk2, p_u2, c_u2, p_v2 = _rk4_step(self, c_v2, x2)
+                vk2, _p_u2, c_u2, _p_v2 = _rk4_step(self, c_v2, x2)
                 if vk2 is None:
                     return None, None, None
                 if np.linalg.norm(vk2) == 0:
@@ -754,7 +771,7 @@ class Integration:
                 if np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1-x0):
                     return self._step_failed(x0, p_v0, p_u0)
 
-                vk3, p_u3, c_u3, p_v3 = _rk4_step(self, c_v3, x3)
+                vk3, _p_u3, c_u3, _p_v3 = _rk4_step(self, c_v3, x3)
                 if vk3 is None:
                     return None, None, None
                 if np.linalg.norm(vk3) == 0:
@@ -765,7 +782,7 @@ class Integration:
                 if np.linalg.norm(x_new - x0) >= _bf * np.linalg.norm(x1-x0):
                     return self._step_failed(x0, p_v0, p_u0)
 
-                _vk_final, p_u_new, c_u_new, p_v_new = _rk4_step(self, c_v_new, x_new)
+                _vk_final, p_u_new, _c_u_new, p_v_new = _rk4_step(self, c_v_new, x_new)
                 if _vk_final is None:
                     return None, None, None
 
@@ -846,7 +863,7 @@ class Integration:
                     v0 = u0.copy()
                 else:
                     v0 = velocity.copy()
-                vk0, uf0, temp = _rk4_step(self, v0, x0)
+                vk0, uf0, _temp = _rk4_step(self, v0, x0)
                 if vk0 is None:
                     return None, None, None
                 xk0 = v0 * time_step
@@ -857,7 +874,7 @@ class Integration:
                 v1 = v0 + 0.5 * vk0
                 x1 = x0 + 0.5 * xk0
 
-                vk1, uf1, temp = _rk4_step(self, v1, x1)
+                vk1, uf1, _temp = _rk4_step(self, v1, x1)
                 xk1 = v1 * time_step
                 if vk1 is None:
                     return None, None, None
@@ -871,7 +888,7 @@ class Integration:
                 if np.linalg.norm(x2 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x2 - x0) >= _x_tol:
                     return self._step_failed(x0, v0, u0)
 
-                vk2, uf2, temp = _rk4_step(self, v2, x2)
+                vk2, uf2, _temp = _rk4_step(self, v2, x2)
                 xk2 = v2 * time_step
                 if vk2 is None:
                     return None, None, None
@@ -883,7 +900,7 @@ class Integration:
                 if np.linalg.norm(x3 - x0) >= _bf * np.linalg.norm(x1 - x0) and np.linalg.norm(x3 - x0) >= _x_tol:
                     return self._step_failed(x0, v0, u0)
 
-                vk3, uf3, temp = _rk4_step(self, v3, x3)
+                vk3, uf3, _temp = _rk4_step(self, v3, x3)
                 xk3 = v3 * time_step
                 if vk3 is None:
                     return None, None, None
@@ -896,7 +913,7 @@ class Integration:
                         x_new - x0) >= _x_tol:
                     return self._step_failed(x0, v0, u0)
 
-                vk_new, uf_new, temp = _rk4_step(self, v_new, x_new)
+                vk_new, uf_new, _temp = _rk4_step(self, v_new, x_new)
                 # Suppress post-shock oscillations: only apply for strong shocks
                 if vk_new is None:
                     return None, None, None
