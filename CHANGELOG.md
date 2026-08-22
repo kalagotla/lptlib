@@ -54,6 +54,10 @@ the 0.2.0 release notes when it is tagged.
 
 ### Removed
 
+- The `gpu` optional extra and the PyTorch CUDA index it resolved from. Neither
+  `torch` nor `gpytorch` is imported anywhere in the package, so the extra pulled
+  a multi-gigabyte CUDA wheel for code that never used it, and its custom index
+  made `uv lock` fail on any machine without access to `download.pytorch.org`.
 - `setup.py`. Package metadata comes from `pyproject.toml`, and the file had
   drifted out of sync with it.
 - The three private git submodules under `external/` and the `[tool.uv.workspace]`

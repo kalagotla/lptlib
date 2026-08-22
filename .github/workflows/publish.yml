@@ -1,20 +1,20 @@
 name: Publish to PyPI
 
 # ---------------------------------------------------------------------------
-# ACTION REQUIRED BEFORE THE NEXT RELEASE
-#
-# This workflow publishes with PyPI Trusted Publishing (OIDC) instead of a
-# long-lived API token. Trusted Publishing must be configured on PyPI first:
+# This workflow publishes with PyPI Trusted Publishing (OIDC) rather than a
+# long-lived API token. The matching publisher is configured on PyPI:
 #
 #   https://pypi.org/manage/project/lptlib/settings/publishing/
-#     owner:      kalagotla
-#     repository: lptlib
-#     workflow:   publish.yml
+#     owner:       kalagotla
+#     repository:  lptlib
+#     workflow:    publish.yml
 #     environment: pypi
 #
-# Until that publisher exists, the "Publish to PyPI" step below WILL FAIL with
-# an OIDC / invalid-publisher error. Nothing else is affected: the build and the
-# tests still run, and no partial upload can happen.
+# The GitHub environment named `pypi` exists under repository settings. Both
+# sides must keep matching: renaming this file, the repository, or that
+# environment invalidates the publisher and uploads will fail with an
+# invalid-publisher error. Nothing partial can be uploaded when that happens,
+# since the build and tests run in earlier jobs.
 #
 # To fall back to the previous token-based upload, delete the `permissions` and
 # `environment` blocks and replace the final step with:
