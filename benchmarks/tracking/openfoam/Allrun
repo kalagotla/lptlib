@@ -1,0 +1,22 @@
+#!/bin/sh
+# Run the frozen-carrier one-way parcel tracking case matched to the lptlib
+# verification field. Requires an OpenFOAM environment (openfoam.com v2006+
+# recommended; see README.md for Foundation-build edits).
+cd "$(dirname "$0")" || exit 1
+
+# 1. Mesh
+blockMesh > log.blockMesh 2>&1
+
+# 2. Cell centres, so set_U.py can write a matching nonuniform U field
+postProcess -func writeCellCentres -time 0 > log.writeCellCentres 2>&1
+
+# 3. Prescribe the frozen ramp carrier velocity (uniform/ramp/uniform)
+python3 set_U.py > log.set_U 2>&1
+
+# 4. Track the parcels through the frozen field
+icoUncoupledKinematicParcelFoam > log.track 2>&1
+
+# 5. Export lagrangian cloud to VTK for inspection (optional)
+foamToVTK -useTimeName -fields '()' > log.foamToVTK 2>&1 || true
+
+echo "Done. Compare with:  python3 compare_openfoam.py"

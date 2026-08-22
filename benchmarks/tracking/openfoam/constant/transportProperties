@@ -1,0 +1,8 @@
+FoamFile { version 2.0; format ascii; class dictionary; object transportProperties; }
+
+// Carrier air at 300 K, matched to the lptlib verification field.
+// Sutherland mu(300 K) = 1.8460e-5 kg/m/s, carrier density rho = 1.0 kg/m^3,
+// so kinematic viscosity nu = mu / rho.
+transportModel  Newtonian;
+nu              [0 2 -1 0 0 0 0] 1.8460e-5;
+rho             [1 -3 0 0 0 0 0] 1.0;

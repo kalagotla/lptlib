@@ -1,0 +1,24 @@
+{
+  "environment": {
+    "timestamp": "2026-08-22 18:38:59 EDT",
+    "platform": "Linux-6.8.0-136-generic-x86_64-with-glibc2.35",
+    "python": "3.10.12",
+    "numpy": "2.2.6",
+    "n_particles": 20,
+    "oceanparcels_run": false
+  },
+  "rows": [
+    {
+      "method": "lptlib (adaptive, curvilinear search+interp)",
+      "seconds": 36.18253397499211,
+      "particles_per_sec": 0.5527528838589133,
+      "total_steps": 52680
+    },
+    {
+      "method": "reference NumPy (vectorized, structured 1D)",
+      "seconds": 0.007615234993863851,
+      "particles_per_sec": 2626.314226168392,
+      "total_steps": 80020
+    }
+  ]
+}

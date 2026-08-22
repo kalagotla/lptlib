@@ -1,0 +1,18 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Seed points for manualInjection: released at x = 2e-5 m (upstream uniform    |
+| region) across the span, matching the lptlib seed location.                  |
+\*---------------------------------------------------------------------------*/
+FoamFile { version 2.0; format ascii; class vectorField; object kinematicCloudPositions; }
+
+9
+(
+    (2e-5 1e-5 3e-5)
+    (2e-5 1.5e-5 3e-5)
+    (2e-5 2e-5 3e-5)
+    (2e-5 2.5e-5 3e-5)
+    (2e-5 3e-5 3e-5)
+    (2e-5 3.5e-5 3e-5)
+    (2e-5 4e-5 3e-5)
+    (2e-5 4.5e-5 3e-5)
+    (2e-5 5e-5 3e-5)
+)

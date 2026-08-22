@@ -1,0 +1,7 @@
+FoamFile { version 2.0; format ascii; class dictionary; object fvSolution; }
+
+// The carrier flow is not solved (frozen field), so no linear solvers are
+// needed. An empty solvers dict keeps icoUncoupledKinematicParcelFoam happy.
+solvers { }
+
+SIMPLE { }

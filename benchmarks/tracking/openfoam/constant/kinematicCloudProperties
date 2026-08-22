@@ -1,0 +1,62 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Kinematic cloud matched to the lptlib 'sphere' drag verification case:       |
+|   particle density 1000 kg/m^3, diameter 1e-6 m, standard sphere drag,       |
+|   one-way coupling, seeded at x = 2e-5 m with the upstream fluid velocity     |
+|   (12, 0, 0) m/s so it advects with zero slip until it reaches the ramp.      |
+|                                                                             |
+| Format targets OpenFOAM v2006+ (openfoam.com). On the OpenFOAM Foundation    |
+| build the sub-model names are the same but a few keywords differ; see        |
+| README.md for the small edits.                                               |
+\*---------------------------------------------------------------------------*/
+FoamFile { version 2.0; format ascii; class dictionary; object kinematicCloudProperties; }
+
+solution
+{
+    active          true;
+    coupled         false;          // one-way: parcels do not affect the carrier
+    transient       yes;
+    cellValueSourceCorrection off;
+
+    interpolationSchemes { U cellPoint; }
+    integrationSchemes   { U Euler; }
+
+    sourceTerms { schemes { U explicit 1; } }
+}
+
+constantProperties
+{
+    rho0            1000;           // particle material density (kg/m^3)
+}
+
+subModels
+{
+    particleForces
+    {
+        sphereDrag;                 // standard drag curve, matches lptlib 'sphere'
+    }
+
+    injectionModels
+    {
+        seed
+        {
+            type            manualInjection;
+            massTotal       0;               // 0 with fixed nParticle basis
+            parcelBasisType fixed;
+            nParticle       1;               // one physical particle per parcel
+            SOI             0;
+            positionsFile   "kinematicCloudPositions";
+            U0              (12 0 0);         // start at upstream fluid velocity
+            sizeDistribution
+            {
+                type        fixedValue;
+                fixedValueDistribution { value 1e-6; }   // diameter (m)
+            }
+        }
+    }
+
+    dispersionModel none;
+    patchInteractionModel standardWallInteraction;
+    standardWallInteractionCoeffs { type escape; }
+    stochasticCollisionModel none;
+    surfaceFilmModel none;
+}
