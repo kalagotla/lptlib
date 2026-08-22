@@ -84,6 +84,17 @@ def _in_bounding_box(grid, point):
                 and np.all(grid.grd_max[0] >= point))
 
 
+def _rejects(grid, point, method):
+    """True when ``method`` reports ``point`` as not being in the grid.
+
+    ``ppoint is None`` is the rejection signal every caller in the library
+    tests; ``cell`` deliberately keeps the last cell that was examined.
+    """
+    idx = Search(grid, list(point))
+    idx.compute(method=method)
+    return idx.ppoint is None
+
+
 def _located_cell_bounds(grid, search):
     """Axis-aligned bounds of the eight nodes of the located cell."""
     nodes = grid.grd[search.cell[:, 0], search.cell[:, 1], search.cell[:, 2],
@@ -183,6 +194,186 @@ def test_boundary_face_point_round_trips_through_c_space(curvilinear_grid,
         rtol=0, atol=1e-9)
 
 
+def _interior_sweep(n_r=10, n_theta=10, n_z=4):
+    """A lattice of points strictly inside the annulus, in cylindrical space.
+
+    Built from ``(r, theta, z)`` and converted, so membership of the block is a
+    property of how the points were made rather than something the search is
+    trusted to confirm. The small inset keeps them off the six boundary faces,
+    which have their own tests above.
+    """
+    points = []
+    for radius in np.linspace(R_IN + 0.02, R_OUT - 0.02, n_r):
+        for theta in np.linspace(0.01, THETA_MAX - 0.01, n_theta):
+            for height in np.linspace(0.005, Z_MAX - 0.005, n_z):
+                points.append(_cyl(radius, theta, height))
+    return np.array(points)
+
+
+@pytest.mark.parametrize("method", METHODS)
+def test_no_in_domain_point_is_falsely_rejected(curvilinear_grid, method):
+    """The nearest-node searches must not reject points that are in the grid.
+
+    ``distance`` and ``block_distance`` locate the nearest node and pick one of
+    the eight cells around it by the Cartesian octant of the offset
+    (``_cell_index``). That test is exact only when the computational axes are
+    aligned with x, y and z; on this annulus the i axis is radial, so it can
+    name a cell adjacent to the one the point is really in. The containment
+    test then correctly reports that the point is not in the cell it was handed
+    -- and the search used to conclude the point was outside the grid.
+
+    Measured on this fixture before the fix: 48 of these 400 points rejected by
+    each method (12.0 per cent), rising to 15.0 per cent on the stretched
+    variant and 12.9 per cent over 1500 random in-domain points. Every one of
+    them was a point sitting in a cell adjacent to the nearest node.
+
+    The searches now try the other cells touching that node before giving up
+    (``Search._relocate_near_node``), so the figure is zero. ``p-space`` and
+    ``c-space`` never had the problem -- they index by the computational
+    coordinate -- and are swept here as the control.
+    """
+    points = _interior_sweep()
+    rejected = [point for point in points
+                if _rejects(curvilinear_grid, point, method)]
+
+    assert not rejected, (
+        f"{method} rejected {len(rejected)} of {len(points)} points that are "
+        f"inside the block, the first at r={_radius(rejected[0]):.4f} "
+        f"(the block spans r in [{R_IN}, {R_OUT}])")
+
+
+def _octant_choice_holds_the_point(grid, point, method):
+    """Whether the *un*-widened search would have accepted ``point``.
+
+    Reproduces what ``distance``/``block_distance`` did before the retry
+    existed: locate the nearest node, take the single cell ``_cell_index``
+    picks by Cartesian octant, and ask whether the point is in it. Points for
+    which this is false are precisely the ones the old code rejected.
+    """
+    idx = Search(grid, list(point))
+    idx.compute(method=method)
+    ni, nj, nk = int(grid.ni[0]), int(grid.nj[0]), int(grid.nk[0])
+    distances = np.linalg.norm(grid.grd[:ni, :nj, :nk, :, 0] - point, axis=-1)
+    node = np.unravel_index(distances.argmin(), distances.shape)
+
+    probe = Search(grid, list(point))
+    probe.block = 0
+    probe._cell_index(probe, *node)
+    return probe._point_in_cell()
+
+
+@pytest.mark.parametrize("method", ["distance", "block_distance"])
+def test_recovered_points_land_in_the_cell_that_contains_them(curvilinear_grid,
+                                                              method):
+    """Widening the candidate set must find the right cell, not merely a cell.
+
+    Accepting a point into a cell that does not contain it would trade a false
+    rejection for a silent extrapolation, which is the worse failure. So the
+    points the retry rescues -- the ones whose octant choice missed, which are
+    exactly the ones the old code rejected -- are checked against the
+    computational coordinate, which is the definition of the containing cell.
+
+    On this sweep every rescued point lands in the cell ``c-space`` converges
+    to. That is not luck: on the fixture, exactly one of the cells around the
+    nearest node has a node bounding box containing the point, so the widened
+    search has no choice to get wrong.
+    """
+    grid = curvilinear_grid
+    rescued = 0
+    for point in _interior_sweep(n_r=6, n_theta=6, n_z=3):
+        if _octant_choice_holds_the_point(grid, point, method):
+            continue
+        rescued += 1
+
+        idx = Search(grid, list(point))
+        idx.compute(method=method)
+        assert idx.ppoint is not None, (
+            f"{method} still rejects an in-domain point the retry should hold")
+
+        truth = Search(grid, list(point))
+        truth.compute(method="c-space")
+        assert truth.cpoint is not None
+        expected = np.asarray(truth.cpoint, dtype="f8").astype(int)
+
+        low, high = _located_cell_bounds(grid, idx)
+        assert np.all(point >= low) and np.all(point <= high)
+        np.testing.assert_array_equal(idx.cell[0], expected)
+
+    assert rescued > 0, (
+        "no point in the sweep needs the widened candidate set, so this test "
+        "is no longer exercising it")
+
+
+@pytest.mark.parametrize("method", ["distance", "block_distance"])
+def test_octant_choice_is_never_more_than_one_cell_off(curvilinear_grid,
+                                                       method):
+    """The residual limitation of the nearest-node searches, stated as a bound.
+
+    Widening the candidate set fixes the false *rejections*, and nothing more.
+    It deliberately leaves the cell alone whenever the octant choice already
+    passes the containment test, so that no value the library used to produce
+    changes. That leaves a separate, pre-existing inaccuracy in place: the
+    containment test compares the point against the located cell's node
+    bounding box, and the boxes of adjacent curved cells overlap, so a point
+    can pass in a cell that does not actually contain it. Measured over 2000
+    random in-domain points on this fixture, the cell these searches report
+    differs from the computational one for 31.4 per cent of them (30.6 on the
+    stretched variant).
+
+    Separating the two would need a real point-in-hexahedron test rather than a
+    bounding box, which is a redesign of what these searches are -- they exist
+    as the cheap non-iterative option, and ``p-space``/``c-space`` are the ones
+    that index by the computational coordinate and are exact. What is asserted
+    here is the bound that does hold, and that the retry did not loosen it: the
+    reported cell is never more than one index away along any axis.
+    """
+    grid = curvilinear_grid
+    for point in _interior_sweep(n_r=6, n_theta=6, n_z=3):
+        idx = Search(grid, list(point))
+        idx.compute(method=method)
+        assert idx.ppoint is not None
+
+        truth = Search(grid, list(point))
+        truth.compute(method="c-space")
+        assert truth.cpoint is not None
+        expected = np.asarray(truth.cpoint, dtype="f8").astype(int)
+
+        deviation = np.abs(np.asarray(idx.cell[0]) - expected)
+        assert np.all(deviation <= 1), (method, point, idx.cell[0], expected)
+
+
+@pytest.mark.parametrize("method", ["distance", "block_distance"])
+def test_the_widened_candidate_set_stays_bounded(curvilinear_grid, method):
+    """The retry costs at most the eight cells that touch one node.
+
+    The point of widening the search is that a nearest-node result can be one
+    cell off, not that the search should wander. ``_candidate_cells`` enumerates
+    the cells sharing the nearest node and nothing beyond them, so the extra
+    work per query is bounded by eight bounding-box tests however large the
+    grid is.
+    """
+    idx = Search(curvilinear_grid, list(INTERIOR))
+    idx.compute(method=method)
+
+    ni, nj, nk = (int(curvilinear_grid.ni[0]), int(curvilinear_grid.nj[0]),
+                  int(curvilinear_grid.nk[0]))
+    node = np.array([ni // 2, nj // 2, nk // 2])
+    candidates = idx._candidate_cells(*node)
+
+    assert 1 <= len(candidates) <= 8
+    assert len(set(candidates)) == len(candidates), "duplicate candidate cells"
+    for origin in candidates:
+        assert np.all(np.abs(np.array(origin) - node) <= 1)
+        assert 0 <= origin[0] <= ni - 2
+        assert 0 <= origin[1] <= nj - 2
+        assert 0 <= origin[2] <= nk - 2
+
+    # At a block corner the clamp collapses the eight cells onto the one that
+    # exists there, and the list must not report phantom duplicates of it.
+    corner = idx._candidate_cells(0, 0, 0)
+    assert corner == [(0, 0, 0)]
+
+
 # ---------------------------------------------------------------------------
 # Points that are not in the domain must be rejected, by every method.
 # ---------------------------------------------------------------------------
@@ -279,3 +470,28 @@ def test_rejection_starts_within_one_cell_of_the_curved_boundary(
         idx.compute(method=method)
         assert idx.ppoint is None, (
             f"{method} accepted a point {overshoot} cells outside the block")
+
+
+def test_distance_search_with_c_space_interpolation_raises(
+        curvilinear_stretched_grid, curvilinear_analytic_flow):
+    """A distance search leaves ``cpoint`` unset, so c-space interpolation cannot run.
+
+    Before this guard the pairing returned an array of NaN rather than
+    complaining, so a user who mixed the cheap search with an exact
+    interpolation got a silently useless answer instead of an error.
+    """
+    from lptlib.streamlines import Interpolation, Search
+
+    theta = np.pi / 4
+    point = [1.5 * np.cos(theta), 1.5 * np.sin(theta), 0.125]
+
+    for search_method in ('distance', 'block_distance'):
+        idx = Search(curvilinear_stretched_grid, point)
+        idx.compute(method=search_method)
+        assert idx.ppoint is not None, 'probe should be in the domain'
+        assert idx.cpoint is None
+
+        for interp_method in ('c-space', 'rbf-c-space'):
+            interp = Interpolation(curvilinear_analytic_flow, idx)
+            with pytest.raises(ValueError, match='computational-space'):
+                interp.compute(method=interp_method)

@@ -238,6 +238,70 @@ class Search:
                           [_i, _j + 1, _k + 1]], dtype=int)
         return _cell
 
+    def _candidate_cells(self, i, j, k):
+        """Origins of every cell that touches node ``(i, j, k)``.
+
+        A node in the interior of a block is shared by eight cells, whose
+        origins are the corners of ``{i-1, i} x {j-1, j} x {k-1, k}``.
+        ``_cell_index`` picks exactly one of them, by Cartesian octant; this is
+        the full set it picks from. Origins are clamped into the valid range
+        the same way ``_cell_nodes`` clamps them, and duplicates -- which the
+        clamp produces at a block face, where fewer than eight distinct cells
+        meet the node -- are dropped, so the list holds between one and eight
+        entries and the containment sweep over it is bounded.
+        """
+        _i_max, _j_max, _k_max = self._last_cell_origin()
+        _origins = []
+        for _a in (i, i - 1):
+            for _b in (j, j - 1):
+                for _c in (k, k - 1):
+                    _origin = (min(max(int(_a), 0), _i_max),
+                               min(max(int(_b), 0), _j_max),
+                               min(max(int(_c), 0), _k_max))
+                    if _origin not in _origins:
+                        _origins.append(_origin)
+        return _origins
+
+    def _relocate_near_node(self, i, j, k):
+        """Retry containment against every cell that touches node ``(i, j, k)``.
+
+        ``_cell_index`` chooses one of those cells by the Cartesian octant of
+        ``ppoint - grd[i, j, k]``, which is exact only when the computational
+        axes line up with x, y and z. On a curvilinear block it can name a
+        neighbouring cell, and ``_point_in_cell`` then correctly reports that
+        the point is not in the cell it was handed -- so the ``distance``
+        searches rejected points that are plainly inside the grid. Measured on
+        the quarter-annulus fixture: 12.9 per cent of 1500 random in-domain
+        points, and 15 per cent of the 400-point lattice on its stretched
+        variant.
+
+        A nearest-node search can legitimately land one cell off on a curved
+        mesh, so the honest repair is to widen the candidate set rather than to
+        loosen the containment test. Every rejected point in that measurement
+        was in a cell adjacent to the nearest node -- 194 of 194 -- and in
+        every one of those cases exactly one of the adjacent cells' node
+        bounding boxes contained the point, so the widened search is not only
+        sufficient but unambiguous.
+
+        Only reached when the octant choice has already failed, so a point that
+        the ``distance`` searches accept today keeps the cell they give it
+        today and every interpolated value downstream is unchanged. Out-of-
+        domain points still have to fall inside *some* adjacent cell's box to
+        be accepted, which is the same conservative test as before applied to
+        at most eight boxes instead of one.
+
+        Returns ``True`` and leaves ``self.cell`` on the containing cell, or
+        returns ``False`` and restores the octant choice for the caller to
+        report.
+        """
+        _chosen = self.cell
+        for _origin in self._candidate_cells(i, j, k):
+            self.cell = self._cell_nodes(*_origin)
+            if self._point_in_cell():
+                return True
+        self.cell = _chosen
+        return False
+
     def _point_in_cell(self, tol=1e-9):
         """True unless ``self.ppoint`` provably lies outside ``self.cell``.
 
@@ -304,7 +368,9 @@ class Search:
         curvilinear grid the i axis need not point along x at all (in an
         annular block it points radially), so the octant test can pick a
         neighbouring cell. ``_point_in_cell`` is what catches the case where
-        that lands outside the grid.
+        that lands outside the grid, and ``_relocate_near_node`` is what stops
+        it from being reported as out-of-domain when the point is really in one
+        of the other cells around the same node.
 
         The searches that *do* have a computational coordinate -- ``p-space``
         and ``c-space``, via ``p2c`` -- must not use this method. They use
@@ -429,13 +495,17 @@ class Search:
 
         - ``distance`` and ``block_distance`` locate the nearest node and pick
           a cell around it, then check the point against the bounding box of
-          that cell's eight nodes (``_point_in_cell``). A point outside it is
-          rejected by setting ``ppoint`` and ``cpoint`` to ``None`` -- callers
-          test ``ppoint is None``. Note that ``cell`` keeps the last cell that
-          was examined, so ``ppoint``, not ``cell``, is the rejection signal.
-          Because the test is against the cell's bounding box rather than the
-          curved cell itself, a point less than about one cell outside a
-          curved boundary face can still be accepted and will be
+          that cell's eight nodes (``_point_in_cell``). If the point is not in
+          that cell the search does not give up: the octant choice is exact
+          only on a Cartesian grid, so the remaining cells that touch the same
+          node are tried too (``_relocate_near_node``), and the point is
+          accepted in whichever of them contains it. Only a point that is in
+          none of them is rejected, by setting ``ppoint`` and ``cpoint`` to
+          ``None`` -- callers test ``ppoint is None``. Note that ``cell`` keeps
+          the octant choice on rejection, so ``ppoint``, not ``cell``, is the
+          rejection signal. Because the test is against each cell's bounding
+          box rather than the curved cell itself, a point less than about one
+          cell outside a curved boundary face can still be accepted and will be
           extrapolated; anything further out is rejected.
         - ``p-space`` and ``c-space`` invert the tri-linear map with
           Newton-Raphson (``p2c``). The iterate is clamped into the valid
@@ -475,8 +545,11 @@ class Search:
                 # Check for the end of the domain case. _cell_nodes clamps the
                 # cell origin into range, so the located cell is always a real
                 # cell; what still has to be checked is whether the point is
-                # actually in it. See _point_in_cell.
-                if not self._point_in_cell():
+                # actually in it. See _point_in_cell. If the octant choice
+                # missed -- which it can by one cell on a curved block -- try
+                # the other cells around the same node before giving up. See
+                # _relocate_near_node.
+                if not self._point_in_cell() and not self._relocate_near_node(i, j, k):
                     logger.warning('Given point is outside the grid. '
                                    'Point position lost.\n')
                     self.cpoint = None
@@ -501,8 +574,11 @@ class Search:
                 # Check for the end of the domain case. _cell_nodes clamps the
                 # cell origin into range, so the located cell is always a real
                 # cell; what still has to be checked is whether the point is
-                # actually in it. See _point_in_cell.
-                if not self._point_in_cell():
+                # actually in it. See _point_in_cell. If the octant choice
+                # missed -- which it can by one cell on a curved block -- try
+                # the other cells around the same node before giving up. See
+                # _relocate_near_node.
+                if not self._point_in_cell() and not self._relocate_near_node(i, j, k):
                     logger.warning('Block search returned wrong cell! Point position lost.\n')
                     self.cpoint = None
                     self.ppoint = None

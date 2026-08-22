@@ -176,6 +176,15 @@ class Interpolation:
         extrapolation on the library's headline use case. Nothing warned. This
         is where it would now.
         """
+        if self.idx.cpoint is None:
+            raise ValueError(
+                'This interpolation method needs a computational-space '
+                'coordinate, but the search that produced this index left '
+                "cpoint unset. The 'distance' and 'block_distance' searches "
+                'locate a cell without solving for the computational '
+                "coordinate, so pair them with 'p-space' or 'rbf-p-space' "
+                "interpolation, or re-run Search.compute(method='c-space') "
+                "or 'p-space' first.")
         _fractions = np.asarray(self.idx.cpoint, dtype='f8') - self.idx.cell[0]
         if np.any(_fractions < -_FRACTION_TOL) or np.any(_fractions > 1.0 + _FRACTION_TOL):
             logger.warning(
@@ -197,6 +206,26 @@ class Interpolation:
             q --> Attribute with the interpolated flow data.
             Has same ndim as q attribute from flow object
 
+        Grid requirements
+        -----------------
+        Every method here works on a curvilinear block except one.
+        ``rgi-p-space`` builds a ``scipy.interpolate.RegularGridInterpolator``
+        over the *physical* x, y and z coordinates of the located cell, and
+        that class interpolates on a tensor product of strictly ascending
+        coordinates -- so it needs the block to be rectilinear and aligned with
+        the Cartesian axes. On a curvilinear block the eight nodes of a cell
+        are not such a tensor product and the method raises ``ValueError``
+        naming the alternatives, rather than failing obscurely inside numpy or
+        scipy. Use ``p-space`` for tri-linear interpolation in physical space,
+        or ``rgi-c-space``, which runs the same interpolator over the
+        computational coordinates, where the grid is regular for any block.
+
+        ``rgi-c-space`` is not a drop-in replacement for ``rgi-p-space``: the
+        two build the spline over different knots, so they agree only where the
+        physical spacing is uniform or the interpolation order is linear. That
+        difference is the whole distinction between p-space and c-space
+        interpolation and is why ``rgi-p-space`` reports the limitation instead
+        of quietly switching spaces.
         """
         # this object is used for integration without changing much of the code
         self.method = method
@@ -658,6 +687,44 @@ class Interpolation:
                 _z = np.unique(_cell_grd[:, 2])
                 # Set the shape for reshaping q
                 _shape = np.array([len(_x), len(_y), len(_z)])
+
+                # ``RegularGridInterpolator`` interpolates on a tensor product
+                # of ascending x, y and z coordinates, so the nodes it is given
+                # have to *be* that tensor product: the block must be
+                # rectilinear and aligned with the Cartesian axes. A
+                # curvilinear block is not. On the quarter-annulus fixture a
+                # single cell's eight nodes span four distinct x values, three
+                # distinct y and two distinct z, and the reshape below failed
+                # with ``cannot reshape array of size 8 into shape (4, 3, 2)``
+                # -- a numpy error naming neither this method nor the reason,
+                # for 100 per cent of in-domain points.
+                #
+                # Building the interpolator over computational coordinates
+                # instead would make it work on any grid, but that method
+                # already exists: it is ``rgi-c-space``, which runs the same
+                # ``RegularGridInterpolator`` over the unit cell. The two agree
+                # to round-off wherever the physical spacing is uniform and
+                # differ only where it is not and the spline order exceeds
+                # linear, which is precisely the difference between
+                # interpolating in physical and in computational space. So the
+                # limitation is real rather than incidental, and this says so.
+                if (int(np.prod(_shape)) != len(_cell_grd)
+                        or not np.array_equal(
+                            _cell_grd.reshape(_shape[0], _shape[1], _shape[2], 3),
+                            np.stack(np.meshgrid(_x, _y, _z, indexing='ij'), axis=-1))):
+                    raise ValueError(
+                        "interpolation method 'rgi-p-space' requires a "
+                        "rectilinear, axis-aligned block, because it builds a "
+                        "scipy RegularGridInterpolator over the physical x, y "
+                        "and z coordinates of the cell. The {} nodes supplied "
+                        "span {} x {} x {} distinct coordinates, so they are "
+                        "not a tensor product of the Cartesian axes -- this "
+                        "block is curvilinear. Use 'p-space' for tri-linear "
+                        "interpolation in physical space, or 'rgi-c-space' to "
+                        "run the same RegularGridInterpolator over the "
+                        "computational coordinates, where the grid is regular "
+                        "by construction.".format(
+                            len(_cell_grd), _shape[0], _shape[1], _shape[2]))
 
                 if self.adaptive =='shock':
                     _mach_n0, _mach_n1 = self._shock_cell_check(self)

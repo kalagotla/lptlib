@@ -285,48 +285,55 @@ def test_single_drag_implementation():
 # Cd is a physical closure: two models that differ by an epsilon in Reynolds
 # number must not differ by a finite amount in drag. Several models in this
 # suite are piecewise in Re, and a piecewise definition is only legitimate if
-# the arms meet. This sweep measures the jump at Re = 1, which is where the
-# suite's Knudsen-number definition changes, and pins it for every model.
+# the arms meet. This sweep measures the jump at Re = 1 and pins it for every
+# model.
 #
-# The tolerance is loose by the standards of a closure that should simply be
-# continuous. It is set at 3 per cent, which passes 'sphere' -- whose
-# standard-drag-curve arms meet at Re = 1 with a measured 1.75 per cent step, a
-# real but modest artefact of a piecewise fit whose branch points were tuned by
-# hand, documented as such in the in-line note on that case -- and fails
-# anything that changes the meaning of a variable across the branch. The two
-# models below the line jump by 4.4 to 33 per cent, so nothing here turns on
-# where in that gap the threshold is put.
-RE_CONTINUITY_TOL = 0.03
+# HISTORY. Re = 1 used to be where the suite's Knudsen-number definition
+# changed. The 'cunningham' and 'tedeschi' cases each redefined Kn as
+# ``M/sqrt(Re)`` above Re = 1 while using ``Kn = M/Re * sqrt(gamma*pi/2)``
+# below it, and so stepped by a finite amount there: 15.0 per cent at M = 0.1
+# and 33.4 per cent at M = 0.5 for 'cunningham', 4.4 and 13.4 per cent for
+# 'tedeschi'. Those two tests were strict xfails pinning exactly those numbers.
+#
+# Both were transcription bugs, not seams between two source correlations, and
+# both are now fixed in src/lptlib/function/variables.py -- each case uses the
+# single kinetic-theory Knudsen number at all Re. The evidence is recorded in
+# the in-line note on the 'cunningham' case; in outline:
+#   * ``Kn = sqrt(pi*gamma/2) * M/Re`` (Kn on the particle diameter) is the
+#     standard hard-sphere relation, confirmed against four independent
+#     sources, and is what the 'loth' case and the method docstring already
+#     used.
+#   * ``M/sqrt(Re)`` is Tsien's rarefaction parameter, proportional to
+#     sqrt(M*Kn). It is a real group -- it is what sits in Henderson's
+#     ``exp(-0.5*M/sqrt(Re))`` factor -- but it is not a Knudsen number, and it
+#     cannot be substituted into a slip correction of the form (1 + A*Kn)^-1.
+#   * In 'cunningham' both arms carried the same functional form and the same
+#     prefactor, so unifying Kn makes the branch vanish outright. A genuine
+#     seam between two correlations would leave two distinct formulas behind.
+#   * In 'tedeschi' the group ``(s*sqrt(pi)/Kn)**0.687`` inside the implicit
+#     equation for k is exactly ``Re**0.687`` under the correct Kn and is not a
+#     Reynolds number at all under ``M/sqrt(Re)``, so the Re > 1 arm was
+#     internally inconsistent with its own derivation.
+#
+# The xfails are gone and the tolerance is now tight: every model except
+# 'sphere' is continuous at Re = 1 to within 1e-6 relative, which is itself
+# only the finite-difference residual of a continuous function sampled 1e-9
+# apart in Re (measured: at most 2e-9 relative for every model in the suite).
+RE_CONTINUITY_TOL = 1e-6
 
-# Models whose Re = 1 branch is known to be discontinuous, with the measured
-# relative jump at M = 0.1 and M = 0.5. Both come from the same line of code in
-# the same place: the branch redefines the Knudsen number as ``M/sqrt(Re)``
-# above Re = 1, where the arm below Re = 1 uses ``Kn = M/Re * sqrt(gamma*pi/2)``
-# -- which is also the definition every other model in the suite uses, and the
-# one the module docstring states. ``M/sqrt(Re)`` is not a Knudsen number in
-# any usual sense, and using two different ones on either side of Re = 1 makes
-# Cd step there.
-#
-#   'cunningham'  src/lptlib/function/variables.py, the ``case 'cunningham'``
-#                 branch -- ``if _re > 1: _kn = _mach / np.sqrt(_re)``.
-#                 Measured jump: 15.0 per cent at M = 0.1, 33.4 per cent at
-#                 M = 0.5. The in-line note on that case already flags it as a
-#                 defect a maintainer must resolve; this marks it in the test
-#                 suite so it is tracked rather than invisible.
-#   'tedeschi'    same file, the ``case 'tedeschi'`` branch -- the identical
-#                 ``if _re <= 1: ... else: _kn = _mach / np.sqrt(_re)`` split,
-#                 feeding the rarefaction factor epsilon(Kn). Measured jump:
-#                 4.4 per cent at M = 0.1, 13.4 per cent at M = 0.5. Not
-#                 previously recorded anywhere; it is the same defect, copied.
-#
-# Neither is changed here: the fix is a numerics decision about which Knudsen
-# definition is correct, which belongs to the maintainer, not to a test.
-DISCONTINUOUS_AT_RE_1 = {
-    "cunningham": "Kn redefined as M/sqrt(Re) above Re = 1; "
-                  "measured jump 15.0% at M = 0.1, 33.4% at M = 0.5",
-    "tedeschi": "same Kn switch as cunningham; "
-                "measured jump 4.4% at M = 0.1, 13.4% at M = 0.5",
+# 'sphere' is the one model with a real, documented step at Re = 1. Its
+# standard-drag-curve arms are ``24/Re (1 + 3Re/16)`` below and
+# ``24/Re (1 + Re**(2/3)/6)`` above, two different published fits whose branch
+# point was tuned by hand against the VISUAL3 code (see the in-line note on
+# that case). The arms do not meet: the measured step is 1.75 per cent,
+# independent of Mach number because the model is incompressible. That is a
+# genuine modelling seam between two correlations rather than a variable
+# changing meaning, so it is documented and bounded here instead of being
+# fixed -- closing it would mean re-tuning a fit this library did not author.
+SEAM_AT_RE_1 = {
+    "sphere": 0.0175439,
 }
+SEAM_TOL = 1e-5
 
 
 def _relative_jump_across_re_one(drag, model, mach, epsilon=1e-9):
@@ -337,42 +344,104 @@ def _relative_jump_across_re_one(drag, model, mach, epsilon=1e-9):
 
 
 @pytest.mark.parametrize("mach", [0.1, 0.5])
-@pytest.mark.parametrize("model", VARIABLES_MODELS)
-def test_drag_is_continuous_across_reynolds_one(drag, model, mach, request):
-    """Cd does not step at the internal Re = 1 branch.
+@pytest.mark.parametrize("model", [m for m in VARIABLES_MODELS
+                                   if m not in SEAM_AT_RE_1])
+def test_drag_is_continuous_across_reynolds_one(drag, model, mach):
+    """Cd does not step at Re = 1.
 
-    Applied to every model in the suite, because a discontinuity is a property
-    of the implementation rather than of any one closure, and because the two
-    models that fail here fail for the same copied reason -- which is only
-    visible when the whole suite is measured the same way.
+    Applied to every model in the suite bar 'sphere', because a discontinuity
+    is a property of the implementation rather than of any one closure, and
+    because the two models that used to fail here failed for the same copied
+    reason -- which is only visible when the whole suite is measured the same
+    way.
 
-    A particle crossing Re = 1 during a trajectory sees the jump as an
+    A particle crossing Re = 1 during a trajectory sees a jump as an
     instantaneous change in the force acting on it, so this is not cosmetic:
-    it makes the integrated path depend on which side of the branch the time
-    step happened to land.
+    it would make the integrated path depend on which side of the branch the
+    time step happened to land.
     """
-    if model in DISCONTINUOUS_AT_RE_1:
-        request.node.add_marker(
-            pytest.mark.xfail(strict=True,
-                              reason=f"{model}: {DISCONTINUOUS_AT_RE_1[model]}"))
-
     jump = _relative_jump_across_re_one(drag, model, mach)
     assert jump < RE_CONTINUITY_TOL, (
-        f"{model} at M = {mach}: Cd jumps by {100 * jump:.1f} per cent across "
+        f"{model} at M = {mach}: Cd jumps by {100 * jump:.4g} per cent across "
         f"Re = 1")
 
 
 @pytest.mark.parametrize("mach", [0.1, 0.5])
-@pytest.mark.parametrize("model", sorted(DISCONTINUOUS_AT_RE_1))
-def test_known_reynolds_one_discontinuity_has_not_grown(drag, model, mach):
-    """Pin the size of the two known jumps so a change is noticed.
+@pytest.mark.parametrize("model", sorted(SEAM_AT_RE_1))
+def test_known_reynolds_one_seam_has_not_moved(drag, model, mach):
+    """Pin the size of the one remaining Re = 1 step.
 
-    ``xfail`` above says only that the models are discontinuous. This says by
-    how much, so that a maintainer who changes the Knudsen definition sees the
-    number move, and so that the figures quoted in the note above stay
-    verifiable rather than becoming folklore.
+    'sphere' joins two different published fits at Re = 1 and they do not
+    meet. The step is real and is left in place; this records how big it is so
+    that the figure quoted above stays verifiable rather than becoming
+    folklore, and so that a maintainer who re-tunes the branch points sees the
+    number move.
     """
-    expected = {("cunningham", 0.1): 0.150, ("cunningham", 0.5): 0.334,
-                ("tedeschi", 0.1): 0.044, ("tedeschi", 0.5): 0.134}
     jump = _relative_jump_across_re_one(drag, model, mach)
-    assert jump == pytest.approx(expected[(model, mach)], abs=2e-3)
+    assert jump == pytest.approx(SEAM_AT_RE_1[model], abs=SEAM_TOL)
+
+
+# ---------------------------------------------------------------------------
+# The suite uses one Knudsen number.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("mach", [0.05, 0.2, 0.5, 1.5])
+@pytest.mark.parametrize(
+    "re", [1e-3, 0.1, 0.5, 1.0 - 1e-9, 1.0, 1.0 + 1e-9, 1.1, 2.0, 10.0, 1e3])
+def test_slip_models_share_one_knudsen_number(drag, re, mach):
+    """The three ``(1 + A*Kn)^-1`` closures must agree on what Kn is.
+
+    'melling', 'melling-2' and 'cunningham' are the same slip correction on
+    Stokes drag with A = 1, 2.7 and 4.5 respectively, so
+
+        Cd = 24/Re * (1 + A*Kn)^-1   =>   Kn = (24/(Re*Cd) - 1) / A
+
+    recovers Kn from each without touching the library's own expression. All
+    three must return the suite's single definition,
+    ``Kn = M/Re * sqrt(pi*gamma/2)``, at every Reynolds number.
+
+    This is the direct regression test for the defect the continuity tests
+    above only detect indirectly: 'cunningham' used to return a different Kn
+    above Re = 1, which this would catch at every sampled Re > 1 rather than
+    only at the branch point.
+    """
+    gamma = 1.4  # the Variables default the drag fixture is built with
+    expected_kn = mach / re * np.sqrt(np.pi * gamma / 2)
+
+    for model, a in [("melling", 1.0), ("melling-2", 2.7), ("cunningham", 4.5)]:
+        cd = _scalar(drag(re, mach=mach, model=model))
+        recovered = (24.0 / (re * cd) - 1.0) / a
+        assert recovered == pytest.approx(expected_kn, rel=1e-12), (
+            f"{model} at Re = {re}, M = {mach} implies Kn = {recovered:g}, "
+            f"expected {expected_kn:g}")
+
+
+@pytest.mark.parametrize("mach", [0.05, 0.2, 0.5, 1.5])
+@pytest.mark.parametrize("re", [0.5, 1.0 - 1e-9, 1.0 + 1e-9, 2.0, 100.0])
+def test_tedeschi_knudsen_group_reduces_to_reynolds(mach, re):
+    """The identity that fixes which Kn ``tedeschi`` was written for.
+
+    ``_solve_k`` inside the 'tedeschi' case contains the group
+    ``(s*sqrt(pi)/Kn)**0.687`` with ``s = M*sqrt(gamma/2)``. That exponent is
+    Schiller-Naumann's, so the base has to be a Reynolds number. It is, and
+    only under the suite's Knudsen definition:
+
+        s*sqrt(pi)/Kn = M*sqrt(gamma/2)*sqrt(pi) * Re / (M*sqrt(pi*gamma/2))
+                      = Re,  for every M.
+
+    Under the ``M/sqrt(Re)`` the case used to apply above Re = 1 the same group
+    collapses to ``sqrt(pi*gamma/2 * Re)`` -- Mach-independent, and not a
+    Reynolds number -- so that arm was feeding ``fsolve`` an equation
+    inconsistent with its own derivation. This is the evidence that the Re = 1
+    split there was a transcription bug and not a modelling seam, so it is
+    checked rather than left in a comment.
+    """
+    gamma = 1.4
+    s = mach * np.sqrt(gamma / 2)
+
+    kn = mach / re * np.sqrt(np.pi * gamma / 2)
+    assert s * np.sqrt(np.pi) / kn == pytest.approx(re, rel=1e-12)
+
+    kn_tsien = mach / np.sqrt(re)
+    assert s * np.sqrt(np.pi) / kn_tsien == pytest.approx(
+        np.sqrt(np.pi * gamma / 2 * re), rel=1e-12)

@@ -91,7 +91,7 @@
 % widely miscited as 1935; the CiNii catalogue record and Google Scholar's
 % indexed record both give 1933. Pagination is cited variously as 318--320
 % (most common in the literature) and 318--321 (CiNii).
-@article{schiller1935drag,
+@article{schiller1933drag,
   author   = {Schiller, L. and Naumann, A.},
   title    = {{\"U}ber die grundlegenden Berechnungen bei der Schwerkraftaufbereitung},
   journal  = {Zeitschrift des Vereines Deutscher Ingenieure},
@@ -165,6 +165,41 @@
   number  = {8},
   pages   = {3290--3290},
   doi     = {10.2514/1.J060850}
+}
+
+% Cited only from the in-line note on the 'cunningham' case in
+% src/lptlib/function/variables.py, as one of the independent sources
+% establishing Kn = sqrt(pi*gamma/2) * M/Re for a hard-sphere gas with Kn built
+% on the particle diameter. Metadata verified against the AIAA landing page for
+% doi:10.2514/1.J060648 and the ADS record 2022AIAAJ..60..587S. The equation
+% itself was read from the authors' open preprint of the same paper at
+% https://web.stanford.edu/group/ihmegroup/cgi-bin/MatthiasIhme/wp-content/papercite-data/pdf/singh2020drag.pdf
+% (Appendix B also reproduces Henderson's correlation in full), not from the
+% AIAA version, which refuses automated retrieval.
+@article{singh2022general,
+  author  = {Singh, Narendra and Kroells, Michael and Li, Chenxi and Ching, Eric
+             and Ihme, Matthias and Hogan, Christopher J. and Schwartzentruber, Thomas E.},
+  title   = {General Drag Coefficient for Flow over Spherical Particles},
+  journal = {AIAA Journal},
+  year    = {2022},
+  volume  = {60},
+  number  = {2},
+  pages   = {587--597},
+  doi     = {10.2514/1.J060648}
+}
+
+% Also cited only from the in-line note on the 'cunningham' case, as a second
+% independent statement of the same Knudsen relation. Read from the open arXiv
+% version, arXiv:2303.00825; metadata verified via the Crossref REST API.
+@article{capecelatro2024gasparticle,
+  author  = {Capecelatro, Jesse and Wagner, Justin L.},
+  title   = {Gas--Particle Dynamics in High-Speed Flows},
+  journal = {Annual Review of Fluid Mechanics},
+  year    = {2024},
+  volume  = {56},
+  number  = {1},
+  pages   = {379--403},
+  doi     = {10.1146/annurev-fluid-121021-015818}
 }
 
 @article{tedeschi1999motion,

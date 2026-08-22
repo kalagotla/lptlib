@@ -309,15 +309,18 @@ class Variables:
             for Re <~ 200 and M <~ 0.25, where compressibility is negligible.
             Reference: Schiller, L. and Naumann, A. (1933), Z. Ver. Dtsch. Ing.
             77, 318-320. No DOI exists. NOTE the year: this work is very widely
-            miscited as 1935, and the paper.bib key ``schiller1935drag`` keeps
+            miscited as 1935, and the paper.bib key ``schiller1933drag`` keeps
             that mis-citation as its key while carrying the correct 1933 date.
         ``'cunningham'``
             Cunningham slip correction on Stokes drag,
-            Cd = 24/Re * (1 + 4.5*Kn)^-1, with Kn switched to ``M/sqrt(Re)``
-            above Re = 1. Regime: Re << 1, M << 1, Kn <~ 0.1.
+            Cd = 24/Re * (1 + 4.5*Kn)^-1, with the suite's single Knudsen
+            definition at all Re. Regime: Re << 1, M << 1, Kn <~ 0.1.
             Reference: Cunningham, E. (1910), "On the velocity of steady fall of
             spherical particles through fluid medium", Proc. R. Soc. Lond. A
-            83(563), 357-365, doi:10.1098/rspa.1910.0024.
+            83(563), 357-365, doi:10.1098/rspa.1910.0024. NOTE that the
+            prefactor A = 4.5 is UNSOURCED -- it matches no published slip
+            coefficient and could not be traced to Cunningham; see the in-line
+            note on the case. The reference covers the form only.
         ``'henderson'``
             Henderson's correlation, valid across continuum, slip, transitional
             and free-molecular flow and across subsonic and supersonic speeds.
@@ -472,7 +475,7 @@ class Variables:
                 #   grundlegenden Berechnungen bei der Schwerkraftaufbereitung",
                 #   Zeitschrift des Vereines Deutscher Ingenieure 77, 318-320
                 #   (in German). No DOI exists. The year is very widely miscited
-                #   as 1935 -- the paper.bib key is 'schiller1935drag' for that
+                #   as 1935 -- the paper.bib key is 'schiller1933drag' for that
                 #   historical reason, but the entry itself carries 1933.
                 #   Equation number not verified -- no accessible copy.
                 if _re <= 1e-9:
@@ -483,54 +486,96 @@ class Variables:
             case 'cunningham':
                 # Cunningham model; for Re << 1; M << 1; Kn <~ 0.1
                 # Cunningham slip correction on Stokes drag,
-                #   Cd = 24/Re * (1 + A*Kn)^-1  with A = 4.5 as coded here.
-                # Kn is formed as M/Re * sqrt(gamma*pi/2) for Re <= 1 and
-                # switched to M/sqrt(Re) above Re = 1.
+                #   Cd = 24/Re * (1 + A*Kn)^-1  with A = 4.5 as coded here,
+                #   Kn = M/Re * sqrt(pi*gamma/2)  -- one definition at all Re.
                 # ref: Cunningham, E. (1910), "On the velocity of steady fall of
                 #   spherical particles through fluid medium", Proceedings of the
                 #   Royal Society of London A 83(563), 357-365,
                 #   doi:10.1098/rspa.1910.0024.
                 #   The reference covers the FORM of the slip correction only.
                 #
-                # A = 4.5 IS STILL UNSOURCED. A second attempt to trace it
-                # failed. Neither Cunningham (1910) nor Melling (1997) could be
-                # retrieved (both are paywalled and no open copy was found), so
-                # neither was read directly; but no leading Knudsen coefficient
-                # of 4.5 appears in any of the reachable secondary literature on
-                # slip-corrected sphere drag. The nearby published values are
-                # 2.514 (Cunningham-Millikan-Davies, as used by Loth's f(Kn)
-                # below), 1.257 (the standard aerosol form of the same) and 2.7
-                # (Melling, as used by the 'melling-2' case above). 4.5 is not
-                # 2x or 0.5x any of those, so a radius-versus-diameter Knudsen
-                # convention does not explain it either.
+                # FIXED: the Re > 1 branch used to redefine Kn as M/sqrt(Re),
+                # which made Cd step by 15.0% at M = 0.1 and 33.4% at M = 0.5
+                # across Re = 1. That was a defect, not a modelling seam:
+                #   (a) Kn = sqrt(pi*gamma/2) * M/Re is THE kinetic-theory
+                #       relation for a hard-sphere gas with Kn built on the
+                #       particle diameter. Verified against four independent
+                #       sources: Harrison (2021), doi:10.2514/1.J060681, eq. 10
+                #       (read from LA-UR-21-21429, https://www.osti.gov/servlets/purl/1812671),
+                #       cited as `harrison2021comment`; Singh et al. (2022),
+                #       doi:10.2514/1.J060648, which gives
+                #       Kn_inf = M_inf/Re_inf * sqrt(gamma*pi/2), cited as
+                #       `singh2022general` and read from the authors' open
+                #       preprint; the review Capecelatro and Wagner (2024),
+                #       doi:10.1146/annurev-fluid-121021-015818, same
+                #       expression, cited as `capecelatro2024gasparticle` and
+                #       read from arXiv:2303.00825; and NASA/NTRS 20220018430
+                #       (AIAA 2023), eq. 4, at
+                #       https://ntrs.nasa.gov/api/citations/20220018430/downloads/AIAA_2023_Palmer_Drag_Model_Paper_v2.pdf
+                #       -- not in paper.bib, its full author list was not
+                #       confirmed. It is also the
+                #       definition the 'loth' case below already uses, the one
+                #       this method's docstring states, and the one every other
+                #       model in this suite uses.
+                #   (b) M/sqrt(Re) is a real dimensionless group -- it is
+                #       Tsien's rarefaction parameter, proportional to
+                #       sqrt(M*Kn), i.e. to the SQUARE ROOT of a Knudsen number,
+                #       and it is what appears in Henderson's exp(-0.5*M/sqrt(Re))
+                #       factor in the 'henderson' case below. It is not Kn, and
+                #       substituting it into a slip correction of the form
+                #       (1 + A*Kn)^-1 mixes two different groups.
+                #   (c) Both arms carried the SAME functional form and the SAME
+                #       prefactor; only the meaning of the variable changed.
+                #       Restoring one Kn therefore makes the two arms literally
+                #       the same expression and the branch disappears, which a
+                #       genuine seam between two source correlations could not
+                #       do. Cunningham's slip correction is a single creeping-
+                #       flow result; nothing in the literature branches it at
+                #       Re = 1.
+                # Cd is now continuous at Re = 1 to machine precision.
                 #
-                # What a maintainer needs to check, concretely:
-                #   1. Whether A = 4.5 was ever meant to be a published constant
-                #      at all, or was tuned. If tuned, say so and drop the
-                #      Cunningham attribution from the constant.
-                #   2. The Re > 1 branch below is the stronger warning sign. It
-                #      silently redefines Kn as M/sqrt(Re), which is neither the
-                #      Kn used in the Re <= 1 branch three lines above nor the
-                #      definition used by any other model in this suite, and it
-                #      is not a Knudsen number in the usual sense. Using two
-                #      different Kn on either side of Re = 1 makes Cd jump
-                #      there: measured, Cd rises by 15% across Re = 1 at M = 0.1
-                #      and by 33% at M = 0.5. That discontinuity is a defect
-                #      regardless of what A turns out to be, and it suggests
-                #      this case is a library-specific construction rather than
-                #      anything taken from Cunningham (1910) -- in which case
-                #      A = 4.5 most likely belongs to that construction too.
-                # Until both are resolved, treat this model as unvalidated and
-                # do not present its output as "the Cunningham correction".
-                # Knudsen number
+                # A = 4.5 IS STILL UNSOURCED -- a third attempt to trace it
+                # failed. Neither Cunningham (1910) nor Melling (1997) could be
+                # retrieved (both paywalled, no open copy found), so neither was
+                # read directly; no leading Knudsen coefficient of 4.5 appears
+                # in any reachable secondary literature on slip-corrected sphere
+                # drag. Nearby published values are 2.514 (Cunningham-Millikan-
+                # Davies, as used by Loth's f(Kn) below), 1.257 (the standard
+                # aerosol form of the same) and 2.7 (the 'melling-2' case
+                # above). A radius-versus-diameter convention does not close the
+                # gap: 2x2.514 = 5.028 and 2x2.7 = 5.4, neither is 4.5.
+                #
+                # TWO UNPROVEN LEADS, recorded so the next attempt need not
+                # repeat the search. NEITHER IS AN ATTRIBUTION; do not cite
+                # either as the source of 4.5 without reading the paper.
+                #   1. The 'tedeschi' case below contains the group
+                #      9/4 * 2*Kn = 4.5*Kn inside its implicit equation for k
+                #      (the a2 coefficient), i.e. 9/4 acting on a radius-based
+                #      Knudsen number 2*Kn. Tedeschi, Gouin and Elena (1999)
+                #      describe their model as "extending Cunningham's method to
+                #      higher velocities and Knudsen numbers" (abstract, via
+                #      doi:10.1007/s003480050291), so 4.5 plausibly came from
+                #      there rather than from Cunningham (1910) directly. The
+                #      full text is paywalled and was not read.
+                #   2. 4.5 is also the leading numerator constant of Henderson's
+                #      subsonic bridging term, (4.5 + 0.38*(0.03*Re +
+                #      0.48*sqrt(Re)))/(1 + 0.03*Re + 0.48*sqrt(Re)) -- see the
+                #      'henderson' case below, and Appendix B of
+                #      `singh2022general`, which reproduces it. That term is
+                #      multiplied by
+                #      exp(-0.5*M/sqrt(Re)), so Henderson's equation contains
+                #      BOTH constants this case used to carry. Circumstantial
+                #      only, and the git history runs the wrong way (the
+                #      'cunningham' case predates the 'henderson' case by a day),
+                #      so this is a coincidence worth checking, not evidence.
+                # Until A is traced, treat the magnitude of this model's slip
+                # correction as unvalidated and do not present its output as
+                # "the Cunningham correction". The Re = 1 discontinuity is
+                # resolved; the prefactor is not.
                 if _re <= 1e-9:
                     return 0
-                if _re <= 1:
-                    _kn = _mach / _re * np.sqrt(self.gamma * np.pi/2)
-                    return 24/_re * (1 + 4.5*_kn)**-1
-                if _re > 1:
-                    _kn = _mach / np.sqrt(_re)
-                    return 24/_re * (1 + 4.5*_kn)**-1
+                _kn = _mach / _re * np.sqrt(self.gamma * np.pi/2)
+                return 24/_re * (1 + 4.5*_kn)**-1
 
             case 'henderson':
                 # Henderson model; for all flow regimes
@@ -714,6 +759,34 @@ class Variables:
                 #   tracer particles in supersonic flows", Experiments in Fluids
                 #   26(4), 288-296, doi:10.1007/s003480050291.
                 #   Equation numbers not verified -- the article is paywalled.
+                #
+                # FIXED: this case used to carry the same split as the
+                # 'cunningham' case above -- Kn = M/Re * sqrt(gamma*pi/2) for
+                # Re <= 1 and Kn = M/sqrt(Re) above it -- which made Cd step by
+                # 4.4% at M = 0.1 and 13.4% at M = 0.5 across Re = 1. It was
+                # copied: the two lines were added verbatim in commit 41538de
+                # (Mar 2024), seventeen months after the 'cunningham' case they
+                # came from (commit 6f99987, Oct 2022). See the note on that
+                # case for the sources establishing the correct relation.
+                #
+                # Beyond that shared argument, this case carries its own
+                # internal proof that M/Re * sqrt(pi*gamma/2) is the definition
+                # its equations were written for. Inside _solve_k below, a1
+                # contains the group (s * sqrt(pi) / Kn)**0.687. With
+                # s = M*sqrt(gamma/2) and Kn = M/Re * sqrt(pi*gamma/2),
+                #     s * sqrt(pi) / Kn = Re   exactly, for every M,
+                # so that group is the Schiller-Naumann Re**0.687 factor, which
+                # is what the surrounding correlation needs it to be. Under
+                # Kn = M/sqrt(Re) the same group collapses to
+                # sqrt(pi*gamma/2 * Re) -- Mach-independent, and not a Reynolds
+                # number -- so the Re > 1 arm was feeding fsolve an equation
+                # inconsistent with its own derivation. That settles it as a
+                # transcription bug rather than a seam between two source
+                # correlations, which is consistent with the paper's abstract:
+                # it states a single expression valid "from continuum to free
+                # molecule conditions, for Re <~ 200 and M <~ 1", with no
+                # branch at Re = 1.
+                # Cd is now continuous at Re = 1 to machine precision.
                 if _re < 1e-9:
                     return 0
                 if np.all(_mach <= 1e-12):
@@ -721,10 +794,7 @@ class Variables:
                     # epsilon(Kn) -> 1, leaving Schiller-Naumann. Evaluating the
                     # general expression at M = 0 divides by Kn = 0.
                     return 24/_re * (1 + 0.15 * _re**0.687)
-                if _re <= 1:
-                    _kn = _mach / _re * np.sqrt(self.gamma * np.pi/2)
-                else:
-                    _kn = _mach / np.sqrt(_re)
+                _kn = _mach / _re * np.sqrt(self.gamma * np.pi/2)
 
                 s = _mach * np.sqrt(self.gamma/2)
 

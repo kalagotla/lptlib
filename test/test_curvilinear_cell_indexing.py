@@ -44,10 +44,11 @@ from synthetic import analytic_vortex_field
 C_SPACE_SEARCHES = ["p-space", "c-space"]
 
 # Interpolation methods whose weights are ``cpoint - cell[0]``. ``rgi-p-space``
-# is deliberately absent: it feeds the cell's physical coordinates to
-# ``RegularGridInterpolator``, which needs a rectilinear cell, and it raises on
-# any curvilinear block. That is a pre-existing limitation of that method, not
-# of the cell indexing tested here.
+# is absent because it does not run on a curvilinear block at all: it builds a
+# ``RegularGridInterpolator`` over the cell's *physical* coordinates, which
+# requires a rectilinear, axis-aligned cell. That limitation is now declared
+# rather than discovered -- see
+# ``test_rgi_p_space_reports_that_it_needs_a_rectilinear_block`` below.
 FRACTION_METHODS = ["p-space", "c-space", "rbf-c-space", "rgi-c-space"]
 
 # Slack for "the weights are inside the unit cell". The invariant is exact by
@@ -220,6 +221,74 @@ def test_every_c_space_interpolation_method_stays_inside_its_cell(
 
         interp = Interpolation(flow, idx)
         interp.compute(method=method)
+        assert interp.q is not None
+        assert np.all(np.isfinite(np.asarray(interp.q, dtype="f8")))
+
+
+def test_rgi_p_space_reports_that_it_needs_a_rectilinear_block(
+        curvilinear_stretched_grid, curvilinear_analytic_flow):
+    """The one method that cannot run on a curved block says so, and why.
+
+    ``rgi-p-space`` builds a ``scipy.interpolate.RegularGridInterpolator`` over
+    the physical x, y and z coordinates of the located cell. That class
+    interpolates on a tensor product of ascending coordinates, so it needs the
+    block to be rectilinear and aligned with the Cartesian axes -- which a
+    curvilinear block is not: the eight nodes of one annulus cell span four
+    distinct x values, four distinct y and two distinct z.
+
+    It used to fail on 100 per cent of in-domain points with
+    ``ValueError: cannot reshape array of size 8 into shape (4, 4, 2)``, raised
+    by numpy from inside the method body, naming neither the method nor the
+    cause. The precondition is checked up front now.
+
+    It is deliberately *not* silently rebuilt over computational coordinates.
+    That interpolator already exists -- it is ``rgi-c-space`` -- and the two
+    are different interpolants wherever the physical node spacing is
+    non-uniform and the spline order exceeds linear, which is exactly what
+    distinguishes p-space from c-space interpolation. Switching spaces behind
+    the caller's back would silently answer a different question.
+    """
+    grid, flow = curvilinear_stretched_grid, curvilinear_analytic_flow
+    point = _sweep_points(n_r=2, n_theta=2, n_z=1)[0]
+    idx = _located(grid, point, "c-space")
+    assert idx.cpoint is not None
+
+    with pytest.raises(ValueError) as excinfo:
+        Interpolation(flow, idx).compute(method="rgi-p-space")
+
+    message = str(excinfo.value)
+    # Actionable: names the method that failed and both usable alternatives.
+    assert "rgi-p-space" in message
+    assert "rectilinear" in message
+    assert "'p-space'" in message
+    assert "'rgi-c-space'" in message
+
+
+def test_the_alternatives_rgi_p_space_suggests_actually_work(
+        curvilinear_stretched_grid, curvilinear_analytic_flow):
+    """An error message that suggests a fix has to be suggesting a real one."""
+    grid, flow = curvilinear_stretched_grid, curvilinear_analytic_flow
+    for point in _sweep_points(n_r=3, n_theta=3, n_z=2):
+        idx = _located(grid, point, "c-space")
+        for method in ("p-space", "rgi-c-space"):
+            interp = Interpolation(flow, idx)
+            interp.compute(method=method)
+            assert interp.q is not None, method
+            assert np.all(np.isfinite(np.asarray(interp.q, dtype="f8"))), method
+
+
+def test_rgi_p_space_still_runs_on_a_cartesian_block(synthetic_grid,
+                                                     synthetic_flow):
+    """The new precondition check must not reject the grids that do satisfy it.
+
+    The oblique-shock fixture is rectilinear and axis-aligned, which is exactly
+    what ``rgi-p-space`` needs, so the guard has to stay out of the way there.
+    """
+    for point in _cartesian_sweep_points(synthetic_grid, n=(4, 4, 2)):
+        idx = _located(synthetic_grid, point, "c-space")
+        assert idx.cpoint is not None
+        interp = Interpolation(synthetic_flow, idx)
+        interp.compute(method="rgi-p-space")
         assert interp.q is not None
         assert np.all(np.isfinite(np.asarray(interp.q, dtype="f8")))
 
@@ -467,34 +536,36 @@ def test_no_containment_decision_turns_on_the_size_of_the_pad(
     absolute 1e-6 -- meaningless without a length scale -- where it is now a
     fraction of the cell. Shrinking a tolerance is where an over-tight test
     starts rejecting valid points, so this measures the margin instead of
-    trusting it: every point of the sweep is either strictly inside the located
-    cell's box (miss <= 0) or outside it by at least one per cent of the cell,
-    which is four orders of magnitude clear of either pad. No point sits in the
-    band where the choice of pad decides the answer.
+    trusting it rather than merely asserting that nothing was rejected.
 
-    The rejected points are not a regression and not new. ``_cell_index``
-    chooses a cell by Cartesian octant, which on a curved block can be a
-    neighbouring cell, and ``_point_in_cell`` correctly reports that the point
-    is not in it. That is the documented limitation of the ``distance``
-    searches on curvilinear grids -- they have no computational coordinate to
-    index with -- and it is exactly why ``p2c`` no longer uses that path.
+    Every in-domain sweep point is now located in a cell whose node bounding
+    box contains it, so no miss is positive at all and no decision can turn on
+    the pad. That is stronger than it used to be. ``_cell_index`` picks one of
+    the eight cells around the nearest node by Cartesian octant, which on a
+    curved block can name a neighbouring cell; the search used to stop there
+    and report the point as out of domain, which rejected 15 per cent of this
+    sweep. It now tries the other cells touching that node
+    (``Search._relocate_near_node``) and finds the one that holds the point.
     """
     grid = curvilinear_stretched_grid
     misses = []
     for point in _sweep_points(n_r=6, n_theta=6, n_z=3):
         idx = _located(grid, point, method)
+        assert idx.ppoint is not None, (method, point)
         nodes = grid.grd[idx.cell[:, 0], idx.cell[:, 1], idx.cell[:, 2], :, 0]
         low, high = nodes.min(axis=0), nodes.max(axis=0)
         span = float(np.max(high - low))
         misses.append(float(np.max(np.maximum(low - point, point - high))) / span)
     misses = np.array(misses)
 
-    ambiguous = misses[(misses > 0.0) & (misses < 1e-2)]
-    assert ambiguous.size == 0, (
-        f"{ambiguous.size} points sit within a hundredth of a cell of the "
-        f"located cell's boundary, where the value of the pad decides whether "
-        f"they are in the domain")
-    assert np.any(misses == 0.0), "the sweep no longer reaches any valid cell"
+    assert misses.max() <= 0.0, (
+        f"{int(np.sum(misses > 0.0))} in-domain points are located in a cell "
+        f"that does not contain them, the worst by {misses.max():.3e} of a "
+        f"cell")
+    # The margin is not an artefact of every point sitting deep inside a cell:
+    # some sit exactly on a face, where a positive pad would be the only thing
+    # keeping them in the domain, and they are accepted without needing one.
+    assert np.any(misses == 0.0), "the sweep no longer reaches any cell face"
 
 
 def test_integration_reads_the_metrics_of_the_containing_cell(
