@@ -7,6 +7,11 @@ against two baselines: a naive pure-Python reader and a compiled Fortran
 reader. The results back the performance statement in the JOSS paper
 (`paper.md`) and the README.
 
+Particle-tracking benchmarks, which characterise lptlib's central
+Lagrangian-tracking capability against a reference ODE, a throughput baseline,
+and a matched OpenFOAM parcel-tracking case, live in
+[`tracking/`](tracking/README.md).
+
 ## What is measured
 
 The PLOT3D file is single precision on disk. `lptlib.io.GridIO.read_grid`
