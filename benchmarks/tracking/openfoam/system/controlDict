@@ -1,0 +1,26 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| Frozen-carrier one-way parcel tracking. The carrier U field is prescribed    |
+| (set by set_U.py) and not solved, so this is a one-way, offline tracking     |
+| run directly comparable to lptlib.                                           |
+\*---------------------------------------------------------------------------*/
+FoamFile { version 2.0; format ascii; class dictionary; object controlDict; }
+
+application     icoUncoupledKinematicParcelFoam;
+
+startFrom       startTime;
+startTime       0;
+stopAt          endTime;
+// Particle relaxation time tau ~ 3e-6 s; 8e-5 s lets it fully relax and
+// traverse the ramp, matching the verification run.
+endTime         8e-5;
+deltaT          2e-8;
+
+writeControl    adjustableRunTime;
+writeInterval   2e-6;
+purgeWrite      0;
+writeFormat     ascii;
+writePrecision  8;
+writeCompression off;
+timeFormat      general;
+timePrecision   8;
+runTimeModifiable true;

@@ -67,7 +67,7 @@ That thread has since appeared in peer-reviewed form. The neural bias corrector 
 
 Use now extends past the group that wrote the library. Two 2026 conference papers from Florida State University apply it to a supersonic wall-mounted hemisphere flow [@kalagotla2026hemisphere] and to uncertainty quantification of particle-inertia effects [@kalagotla2026uq], and the co-authors on those papers took no part in writing it. Adoption by a wholly independent party is not claimed, since the library's first author is common to all of this work.
 
-The library is installable from PyPI, documented, and covered by a test suite that runs on Linux and macOS across Python 3.10 to 3.13. Its verification tests check the implemented oblique-shock relations against an independently coded theta-beta-Mach solution and against published gas-dynamics tables, so the analytic cases can be confirmed before a computed field is trusted.
+The library is installable from PyPI, documented, and covered by a test suite that runs on Linux and macOS across Python 3.10 to 3.13. Its verification tests check the implemented oblique-shock relations against an independently coded theta-beta-Mach solution and against published gas-dynamics tables. The particle integrator is checked against a high-accuracy reference integration of the same equation of motion, which it reproduces to a relative velocity error of about 0.1 percent under both Stokes and standard sphere drag, and a physics-matched cross-code comparison against OpenFOAM parcel tracking is provided under `benchmarks/tracking/`.
 
 # AI usage disclosure
 

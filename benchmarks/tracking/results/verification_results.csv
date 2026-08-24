@@ -1,0 +1,3 @@
+model,diameter_m,density_kg_m3,tau_s,lptlib_steps,final_vp,rel_l2_error,max_abs_error_m_s
+stokes,1.000e-06,1000.0,3.0096e-06,2634,4.00000,3.8189e-04,4.3241e-03
+sphere,1.000e-06,1000.0,3.0096e-06,2618,4.00000,3.7217e-04,4.2194e-03

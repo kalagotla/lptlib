@@ -6,6 +6,11 @@ per-block coordinate arrays, against a naive pure-Python reader and a compiled
 Fortran reader. The numbers behind the performance statement in the JOSS paper
 (`paper.md`) come from here.
 
+Particle-tracking benchmarks, which characterise lptlib's central
+Lagrangian-tracking capability against a reference ODE, a throughput baseline,
+and a matched OpenFOAM parcel-tracking case, live in
+[`tracking/`](tracking/README.md).
+
 **Read this first.** The absolute read times in this benchmark move by more than
 an order of magnitude between machines, for reasons that have nothing to do with
 the readers: page-cache state, memory bandwidth, and whether the filesystem can

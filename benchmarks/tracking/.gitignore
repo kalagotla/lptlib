@@ -1,0 +1,4 @@
+# Generated artifacts
+__pycache__/
+*.pyc
+results/*.png

@@ -1,0 +1,28 @@
+[
+  {
+    "model": "stokes",
+    "diameter_m": 1e-06,
+    "density_kg_m3": 1000.0,
+    "tau_s": 3.0096465925532984e-06,
+    "u_upstream": 12.0,
+    "u_downstream": 4.0,
+    "lptlib_steps": 2634,
+    "lptlib_wall_s": 2.8466314369870815,
+    "final_vp": 4.0,
+    "rel_l2_error": 0.0003818890684798825,
+    "max_abs_error_m_s": 0.0043240560698638575
+  },
+  {
+    "model": "sphere",
+    "diameter_m": 1e-06,
+    "density_kg_m3": 1000.0,
+    "tau_s": 3.0096465925532984e-06,
+    "u_upstream": 12.0,
+    "u_downstream": 4.0,
+    "lptlib_steps": 2618,
+    "lptlib_wall_s": 1.7931628020014614,
+    "final_vp": 4.0,
+    "rel_l2_error": 0.00037216860703593593,
+    "max_abs_error_m_s": 0.004219420032209875
+  }
+]
