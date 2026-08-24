@@ -27,7 +27,7 @@ def oblique_shock_response(filepath='./tio2_particle/', dp=5.272e-6, rhop=182.22
         filepath: directory to write the per-particle trajectories into. It is
             created if it does not exist, along with a ``_temp`` sibling for
             the diagnostic plots.
-        dp: particle diameter in metres.
+        dp: particle diameter in meters.
         rhop: particle material density in kg/m^3.
         n_concentration: number of particles to track. Each particle takes a
             few minutes to cross the domain, and particles run in parallel

@@ -1,4 +1,4 @@
-"""Out-of-domain behaviour of ``Search`` on a genuinely curvilinear block.
+"""Out-of-domain behavior of ``Search`` on a genuinely curvilinear block.
 
 ``Search._find_block`` decides whether a point is in the grid at all by testing
 it against each block's axis-aligned bounding box. On a Cartesian block that is
@@ -45,7 +45,7 @@ def _cyl(r, theta, z):
     return np.array([r * np.cos(theta), r * np.sin(theta), z])
 
 
-# A point at the parametric centre of the block.
+# A point at the parametric center of the block.
 INTERIOR = _cyl(0.5 * (R_IN + R_OUT), 0.5 * THETA_MAX, 0.5 * Z_MAX)
 
 # One point exactly on each of the six boundary faces, placed at the middle of
@@ -454,7 +454,7 @@ def test_rejection_starts_within_one_cell_of_the_curved_boundary(
     never rejects a point that is genuinely inside, and it can accept a point
     just outside a curved face. This pins down that the accepted sliver is
     small -- a point a hundredth of a cell beyond the outer radius is already
-    rejected -- so the documented behaviour does not quietly widen.
+    rejected -- so the documented behavior does not quietly widen.
     """
     d_r = (R_OUT - R_IN) / (int(curvilinear_grid.ni[0]) - 1)
 

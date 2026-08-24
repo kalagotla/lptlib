@@ -90,7 +90,7 @@ class GridIO:
         store_type: str or numpy dtype, optional
             Data type used to store the reconstructed grid array ``grd``.
             The default (``None``) stores ``grd`` as float64, matching the
-            historical behaviour and giving ``compute_metrics`` full
+            historical behavior and giving ``compute_metrics`` full
             double-precision headroom for the Jacobian and inverse-metric
             terms. Passing ``'f4'`` keeps ``grd`` in single precision, which
             matches the on-disk precision and roughly halves the read time on
@@ -159,7 +159,7 @@ class GridIO:
     ) -> None:
         """Read a 2D Fortran-record Plot3D-style grid plane and populate attributes.
 
-        This method is a Python analogue of the MATLAB ``gridread2d`` helper,
+        This method is a Python analog of the MATLAB ``gridread2d`` helper,
         but instead of returning the coordinates directly it fills the
         :class:`GridIO` attributes in a way that is compatible with the rest of
         the API (``nb``, ``ni``, ``nj``, ``nk``, ``grd``, ``grd_min``,
@@ -715,7 +715,7 @@ class FlowIO:
     ) -> None:
         """Read a 2D Fortran-record RANS flow plane and populate attributes.
 
-        This is a 2D analogue of :meth:`read_flow` for legacy unformatted
+        This is a 2D analog of :meth:`read_flow` for legacy unformatted
         Fortran files that store a single ``i``, ``j``, or ``k`` plane of
         primitive variables (for example ``u, v, p, w, k, epsilon, mu``).
 

@@ -125,7 +125,7 @@ class Search:
         Tolerances that are lengths -- "is the point on this node?", "is the
         point outside this cell?" -- are meaningless as absolute numbers,
         because the grids this library reads span anything from microns to
-        metres. This is the local length they are expressed as a fraction of.
+        meters. This is the local length they are expressed as a fraction of.
         Returns ``0.0`` only for a degenerate block with no edges at all.
         """
         _grd = self.grid.grd[..., self.block]
@@ -153,7 +153,7 @@ class Search:
 
         The tolerance is ``_NODE_REL_TOL`` times the shortest edge at the node,
         with a floor at coordinate round-off, so it means the same thing on a
-        millimetre grid and on a metre grid.
+        millimeter grid and on a meter grid.
         """
         if self.ppoint is None or self.block is None:
             return False
@@ -270,7 +270,7 @@ class Search:
         ``_cell_index`` chooses one of those cells by the Cartesian octant of
         ``ppoint - grd[i, j, k]``, which is exact only when the computational
         axes line up with x, y and z. On a curvilinear block it can name a
-        neighbouring cell, and ``_point_in_cell`` then correctly reports that
+        neighboring cell, and ``_point_in_cell`` then correctly reports that
         the point is not in the cell it was handed -- so the ``distance``
         searches rejected points that are plainly inside the grid. Measured on
         the quarter-annulus fixture: 12.9 per cent of 1500 random in-domain
@@ -335,11 +335,11 @@ class Search:
         The box is padded before the comparison. ``_cell_index`` decides which
         of the eight cells around the nearest node to take by comparing
         Cartesian offsets against ``_QUADRANT_REL_TOL`` of the local cell, so a
-        point that close to a node can be reported in the neighbouring cell and
+        point that close to a node can be reported in the neighboring cell and
         sit that far outside it while being firmly inside the grid. The pad
         covers that, plus coordinate round-off scaled to the magnitude of the
         node coordinates. It is a fraction of this cell rather than an absolute
-        length, so it means the same thing on a micron grid and a metre grid --
+        length, so it means the same thing on a micron grid and a meter grid --
         the absolute 1e-6 it replaces was most of a cell on a fine mesh and
         below round-off on a coarse one. Points landing exactly on a boundary
         face are corners or face points of the located cell and are always
@@ -368,7 +368,7 @@ class Search:
         are aligned with x, y and z, i.e. on a Cartesian grid; on a
         curvilinear grid the i axis need not point along x at all (in an
         annular block it points radially), so the octant test can pick a
-        neighbouring cell. ``_point_in_cell`` is what catches the case where
+        neighboring cell. ``_point_in_cell`` is what catches the case where
         that lands outside the grid, and ``_relocate_near_node`` is what stops
         it from being reported as out-of-domain when the point is really in one
         of the other cells around the same node.
@@ -485,7 +485,7 @@ class Search:
         return:
         None
 
-        Out-of-domain behaviour
+        Out-of-domain behavior
         -----------------------
         Every method first calls ``_find_block``, which tests the point
         against each block's axis-aligned bounding box. A point outside every

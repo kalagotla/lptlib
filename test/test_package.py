@@ -77,14 +77,14 @@ def test_require_mpi_returns_module_when_available():
 def test_import_does_not_initialise_mpi():
     """``import lptlib`` must not call ``MPI_Init``.
 
-    mpi4py initialises MPI as a side effect of ``from mpi4py import MPI``
+    mpi4py initializes MPI as a side effect of ``from mpi4py import MPI``
     unless ``mpi4py.rc.initialize`` is turned off first, which is what the
     MPI-using modules do. If that regressed, any process that merely imports
     lptlib would become an MPI singleton, and a nested ``mpiexec`` launched
     from it (as the gated MPI tests do) would fail immediately.
 
     Runs in a fresh subprocess: MPI state is per-process and another test in
-    this session may legitimately have initialised it already.
+    this session may legitimately have initialized it already.
     """
     if not _mpi4py_available():
         pytest.skip("mpi4py/MPI runtime is not available on this machine")
@@ -98,14 +98,14 @@ def test_import_does_not_initialise_mpi():
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "False", (
-        "importing lptlib initialised MPI; check that mpi4py.rc.initialize is "
+        "importing lptlib initialized MPI; check that mpi4py.rc.initialize is "
         "set to False before 'from mpi4py import MPI' in lptlib.io.dataio and "
         "lptlib.streamlines.stochastic_model"
     )
 
 
 def test_init_mpi_initialises_and_returns_module():
-    """``_init_mpi`` initialises MPI on demand and hands back the module.
+    """``_init_mpi`` initializes MPI on demand and hands back the module.
 
     Runs in a subprocess so the pytest process itself is not turned into an
     MPI singleton, which would break the gated nested-``mpiexec`` tests.

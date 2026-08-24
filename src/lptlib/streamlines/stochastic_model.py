@@ -45,14 +45,14 @@ def _require_mpi():
 
 def _init_mpi():
     """
-    Ensure MPI is available *and* initialised before any communicator is used.
+    Ensure MPI is available *and* initialized before any communicator is used.
 
     ``mpi4py.rc.initialize`` is turned off at import time so that importing
     lptlib has no side effects, which means the first MPI entry point reached
     has to call ``MPI_Init`` itself.
 
     Returns:
-        The imported ``mpi4py.MPI`` module, with MPI initialised.
+        The imported ``mpi4py.MPI`` module, with MPI initialized.
     """
     _require_mpi()
     if not MPI.Is_initialized():

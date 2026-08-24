@@ -49,7 +49,7 @@ sub-models exist but a few keywords differ; the likely edits are:
 python3 compare_openfoam.py
 ```
 
-`Allrun` builds the mesh, writes the cell centres, prescribes the frozen ramp
+`Allrun` builds the mesh, writes the cell centers, prescribes the frozen ramp
 carrier field with `set_U.py`, tracks the parcels, and exports the cloud to VTK.
 `compare_openfoam.py` collects every (x, particle velocity) sample from the VTK
 output and overlays them on the reference ODE and the lptlib trajectory,

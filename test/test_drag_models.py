@@ -106,7 +106,7 @@ def test_drag_is_finite_and_nonnegative(drag, model):
     """Across each closure's defined Re range it stays finite and non-negative.
 
     The sweep stops below 3e5 because the ``subramaniam-balachandar`` closure is
-    only defined up to that Reynolds number; the high-Re behaviour of the models
+    only defined up to that Reynolds number; the high-Re behavior of the models
     that do extend further is checked in
     ``test_high_reynolds_defined_models``.
     """
@@ -327,7 +327,7 @@ RE_CONTINUITY_TOL = 1e-6
 # point was tuned by hand against the VISUAL3 code (see the in-line note on
 # that case). The arms do not meet: the measured step is 1.75 per cent,
 # independent of Mach number because the model is incompressible. That is a
-# genuine modelling seam between two correlations rather than a variable
+# genuine modeling seam between two correlations rather than a variable
 # changing meaning, so it is documented and bounded here instead of being
 # fixed -- closing it would mean re-tuning a fit this library did not author.
 SEAM_AT_RE_1 = {
@@ -433,7 +433,7 @@ def test_tedeschi_knudsen_group_reduces_to_reynolds(mach, re):
     collapses to ``sqrt(pi*gamma/2 * Re)`` -- Mach-independent, and not a
     Reynolds number -- so that arm was feeding ``fsolve`` an equation
     inconsistent with its own derivation. This is the evidence that the Re = 1
-    split there was a transcription bug and not a modelling seam, so it is
+    split there was a transcription bug and not a modeling seam, so it is
     checked rather than left in a comment.
     """
     gamma = 1.4

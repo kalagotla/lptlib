@@ -115,7 +115,7 @@ def make_curvilinear_annulus_grid(nr=9, ntheta=13, nz=5,
 
     The oblique-shock fixture above is a uniform Cartesian mesh, so each of its
     blocks *is* its own axis-aligned bounding box. That makes it blind to a
-    whole class of search behaviour: ``Search._find_block`` locates a point by
+    whole class of search behavior: ``Search._find_block`` locates a point by
     testing it against the block bounding box, which on a Cartesian block is an
     exact containment test, so no point that is outside the block ever reaches
     the cell search.
@@ -154,7 +154,7 @@ def make_curvilinear_annulus_grid(nr=9, ntheta=13, nz=5,
     z_max : float
         Height of the extrusion.
     radial_stretch : float
-        Exponent applied to the normalised radial coordinate, so that node
+        Exponent applied to the normalized radial coordinate, so that node
         ``i`` sits at ``r_in + (r_out - r_in) * (i/(nr-1))**radial_stretch``.
         The default of 1.0 gives the uniform spacing every existing test
         assumes.
@@ -213,7 +213,7 @@ def analytic_vortex_field(x, y, z):
     free-vortex-like flow around the annulus axis. Every component varies
     non-linearly with radius, which is the point: a field that is linear in
     ``x``, ``y`` and ``z`` is reproduced exactly by tri-linear extrapolation
-    from a neighbouring cell along a straight grid line, so a linear field
+    from a neighboring cell along a straight grid line, so a linear field
     cannot tell a correctly indexed cell from a wrong one. This one can.
 
     The inputs may be scalars or arrays of any matching shape; the return has
@@ -267,7 +267,7 @@ def make_coordinate_flow(grid):
     tri-linear weights that ``Search.p2c`` converged on reconstruct the point
     itself, so the answer comes back equal to the query point to round-off.
     When the cell is wrong the answer is displaced, and the size of the
-    displacement is the interpolation's positional error in metres rather than
+    displacement is the interpolation's positional error in meters rather than
     in units of some particular flow variable.
 
     The last two components are zero; nothing reads them.

@@ -70,7 +70,7 @@ Fork the repository and create a feature branch from `main`. Keep each pull requ
 
 ## Code of conduct
 
-Everyone taking part in this project, in issues, discussions, and pull requests alike, is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report unacceptable behaviour to dilipkalagotla@gmail.com.
+Everyone taking part in this project, in issues, discussions, and pull requests alike, is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report unacceptable behavior to dilipkalagotla@gmail.com.
 
 ## License
 

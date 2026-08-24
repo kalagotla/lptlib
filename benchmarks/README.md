@@ -6,7 +6,7 @@ per-block coordinate arrays, against a naive pure-Python reader and a compiled
 Fortran reader. The numbers behind the performance statement in the JOSS paper
 (`paper.md`) come from here.
 
-Particle-tracking benchmarks, which characterise lptlib's central
+Particle-tracking benchmarks, which characterize lptlib's central
 Lagrangian-tracking capability against a reference ODE, a throughput baseline,
 and a matched OpenFOAM parcel-tracking case, live in
 [`tracking/`](tracking/README.md).
@@ -103,7 +103,7 @@ whichever reader happened to run while the machine was busy. The naive reader
 gets fewer repetitions because each takes a second or more, and they are spread
 across the run rather than bunched at the front.
 
-Interleaving also removes an artefact. Thirty-one back-to-back repetitions of
+Interleaving also removes an artifact. Thirty-one back-to-back repetitions of
 the same reader leave a 24.5 MB grid sitting in the CPU's last-level cache, so
 the reader is timed against L3 rather than against main memory. That is not
 what an application does: it reads a grid once. With the readers interleaved,
@@ -206,7 +206,7 @@ Useful options:
 - `--skip-naive` drop the slow naive reader (it dominates the wall-clock time).
 - `--priming-reads N` untimed warm-cache priming reads (default 3).
 - `--cache-state warm|cold`, `--drop-caches-cmd CMD`, `--caches-dropped-manually`.
-- `--gfortran-flags "-O2"` optimisation flags for the Fortran baseline. Recorded
+- `--gfortran-flags "-O2"` optimization flags for the Fortran baseline. Recorded
   in the result file. (Flags barely matter here: `-O0` through
   `-O3 -march=native` span 3.5 to 5.3 ms on the `raw` mode.)
 - `--bootstrap-resamples N` (default 10 000).
@@ -280,7 +280,7 @@ single-precision block transpose by about 40 percent and wins the
 double-precision padded-array-plus-bounds reconstruction by about 75 percent,
 because NumPy's copy and reduction kernels beat a straightforward hand-written
 Fortran loop nest on that awkward strided scatter. The old "10x slower than
-Fortran" and "within 30 percent of Fortran" figures were both artefacts, of the
+Fortran" and "within 30 percent of Fortran" figures were both artifacts, of the
 workload mismatch and of the cold cache respectively.
 
 **One machine is not enough.** These are single-machine numbers and the summary
@@ -314,7 +314,7 @@ model, logical and physical core counts, total RAM, the filesystem type and
 device backing the benchmark directory and a coarse storage class
 (`nvme`, `ssd-or-nvme`, `rotational`, `memory-backed`, `overlay (container)`,
 `network-or-fuse`), Python version and implementation, NumPy version, gfortran
-version and the exact compile command including optimisation flags, the load
+version and the exact compile command including optimization flags, the load
 average at the start of the run, the grid's block shapes, point count and byte
 size, the declared cache state and whether it was verified, the priming-read
 count, the repetition and warmup counts, and the machine label.

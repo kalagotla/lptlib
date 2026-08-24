@@ -6,7 +6,7 @@ told apart. Everything gathered here is written into the header of each result
 file: OS and kernel, CPU model and core count, total RAM, the filesystem the
 benchmark directory lives on and whether it looks like rotating rust, SSD/NVMe,
 a RAM-backed filesystem, or a network mount, the Python and NumPy versions, and
-the gfortran version and exact optimisation flags.
+the gfortran version and exact optimization flags.
 
 The storage class matters more than usual for this particular benchmark. The
 readers under test are dominated by file I/O when the page cache is cold and by

@@ -1,6 +1,6 @@
 # Particle-tracking benchmarks
 
-These benchmarks characterise lptlib's Lagrangian inertial-particle tracking,
+These benchmarks characterize lptlib's Lagrangian inertial-particle tracking,
 which is the library's central capability, along three axes: accuracy against a
 trusted reference, throughput, and a physics-matched cross-code comparison
 against OpenFOAM. They complement the PLOT3D I/O benchmark in the parent
@@ -25,7 +25,7 @@ fluid velocity is uniform at 12 m/s, ramps linearly to 4 m/s, then stays at
 piecewise-linear nodal velocity exactly, and uniform density and temperature
 keep the viscosity and Stokes relaxation time constant, so a reference solution
 is clean. A particle seeded in the uniform upstream advects with zero slip, then
-relaxes across the ramp, which is the same behaviour a tracer shows crossing a
+relaxes across the ramp, which is the same behavior a tracer shows crossing a
 shock.
 
 ## Accuracy verification

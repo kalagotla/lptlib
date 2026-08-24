@@ -74,7 +74,7 @@ print(f'temperature ratio  : {shock.temperature_ratio[0]:.3f}')
 # Synthesize a structured 3D grid and the matching PLOT3D flow state
 osd = ObliqueShockData()
 osd.oblique_shock = shock
-osd.nx_max, osd.ny_max, osd.nz_max = 5e-3, 30e-3, 1e-4   # metres
+osd.nx_max, osd.ny_max, osd.nz_max = 5e-3, 30e-3, 1e-4   # meters
 osd.inlet_temperature = 48.20         # K
 osd.inlet_density = 0.07747           # kg/m^3
 osd.xpoints, osd.ypoints, osd.zpoints = 20, 60, 5

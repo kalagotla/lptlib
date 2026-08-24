@@ -9,7 +9,7 @@ with the time step, and the three physical-space schemes agree with each other
 in the uniform upstream region.
 
 Note the differing return signatures of ``Integration.compute``, which the
-helpers below normalise: ``p-space`` and ``c-space`` return a bare point,
+helpers below normalize: ``p-space`` and ``c-space`` return a bare point,
 ``pRK2``/``pRK4`` return ``(point, fluid velocity)``, and ``cRK2``/``cRK4``
 return a computational-space point plus two velocities.
 

@@ -172,7 +172,7 @@ class Streamlines:
         Every step of a tracking loop creates a fresh Search. Without a warm
         start each one falls back to a nearest-node scan over the whole block,
         which dominates the run time on large grids. Seeding from the previous
-        search on *this* instance keeps that optimisation while leaving the
+        search on *this* instance keeps that optimization while leaving the
         guess private to this particle -- the old module-global cache was
         shared by every thread and every particle.
         """
@@ -326,7 +326,7 @@ class Streamlines:
                     except (AttributeError, ValueError, NotImplementedError) as _err:
                         logger.debug('Could not remove velocity pcolormesh: %s', _err)
 
-                # Cell-centred velocity magnitude for smoother shading
+                # Cell-centered velocity magnitude for smoother shading
                 vel_cell = 0.25 * (
                     vel_mag[:-1, :-1]
                     + vel_mag[1:, :-1]

@@ -2,7 +2,7 @@
 
 It used to live in a module global, which made results depend on which point
 had been searched last -- across particles, across threads, and across tests.
-These tests pin the fixed behaviour: the cache is an instance attribute, two
+These tests pin the fixed behavior: the cache is an instance attribute, two
 instances never see each other's guess, and concurrent searches agree with
 serial ones.
 """

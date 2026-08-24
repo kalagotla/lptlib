@@ -4,7 +4,7 @@ The carrier velocity is uniform / linear-ramp / uniform in x, identical to the
 lptlib verification field: u = 12 m/s for x <= 1e-4, linear down to 4 m/s by
 x = 2e-4, then 4 m/s downstream. v = w = 0.
 
-It reads the cell-centre x-coordinates from 0/Cx (produced by
+It reads the cell-center x-coordinates from 0/Cx (produced by
 ``postProcess -func writeCellCentres``) so the internalField order matches the
 mesh exactly, then writes 0/U as a nonuniform field. This avoids depending on
 setExprFields or swak4Foam and works on any OpenFOAM build.

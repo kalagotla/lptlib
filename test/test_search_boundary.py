@@ -1,7 +1,7 @@
 """A point on the far i/j/k boundary must be located, not crash the search.
 
 ``Search._cell_nodes`` builds a cell from its lowest node and that node's
-``+1`` neighbours. A point landing exactly on the maximum index along an axis
+``+1`` neighbors. A point landing exactly on the maximum index along an axis
 asked for a cell starting at the last node -- a cell that does not exist -- and
 ``Search.p2c`` raised ``IndexError: index 500 is out of bounds`` while looking
 up the grid metrics. That is what killed ``main.py`` on its last particle, and

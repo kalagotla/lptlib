@@ -48,7 +48,7 @@ def test_search_recognizes_a_node(synthetic_grid):
 def test_search_methods_agree_on_cell(synthetic_grid):
     """The p-space and distance searches select the same cell for a point.
 
-    A point at the centre of a cell (rather than on a shared node or face) has
+    A point at the center of a cell (rather than on a shared node or face) has
     an unambiguous owning cell, so the two independent search strategies must
     agree on it.
     """
@@ -123,7 +123,7 @@ def test_all_interpolation_methods_recover_upstream_state(
     """Every interpolation scheme returns the exact upstream state.
 
     Physical-space, computational-space, both radial-basis variants, and the
-    nearest-neighbour oblique-shock scheme must all reproduce the constant
+    nearest-neighbor oblique-shock scheme must all reproduce the constant
     pre-shock conserved-variable vector in the uniform upstream region.
     """
     idx = Search(synthetic_grid, list(upstream_point))
@@ -201,7 +201,7 @@ def test_particle_relaxes_toward_the_fluid(synthetic_flow, synthetic_grid,
 
     Launching a particle with a velocity that differs from the fluid, one drag
     step reduces the slip magnitude and increases the particle speed toward the
-    fluid speed, the expected behaviour of a relaxing inertial tracer.
+    fluid speed, the expected behavior of a relaxing inertial tracer.
     """
     idx = Search(synthetic_grid, list(upstream_point))
     idx.compute(method="p-space")

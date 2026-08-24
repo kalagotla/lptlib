@@ -122,7 +122,7 @@ def test_plots_creates_its_own_axis_when_none_is_given(plots):
                                     "plot_fluid_velocity", "plot_relative_mach",
                                     "plot_relative_reynolds"])
 def test_plot_methods_run_and_draw(plots, method):
-    """Each single-series plot method returns a labelled axis with data on it."""
+    """Each single-series plot method returns a labeled axis with data on it."""
     ax = getattr(plots, method)()
     assert _drawn(ax), method
     assert ax.get_xlabel() == "x"
@@ -168,7 +168,7 @@ def test_plot_drag_honours_particle_density(plots):
 
 
 def test_color_by_builds_a_colour_mapped_line(plots):
-    """``color_by`` switches ``plots`` onto the per-segment coloured path."""
+    """``color_by`` switches ``plots`` onto the per-segment colored path."""
     ax = plots.plot_paths(color_by="relative_mach")
     assert _drawn(ax)
     # One line per segment, plus the colorbar axis on the figure.
@@ -177,7 +177,7 @@ def test_color_by_builds_a_colour_mapped_line(plots):
 
 
 def test_get_color_code_returns_no_mapping_without_kwargs(plots):
-    """Plain calls take the fast path: no colour map, no scalar mappable."""
+    """Plain calls take the fast path: no color map, no scalar mappable."""
     first, second = plots.get_color_code()
     assert first is None
     assert second is None

@@ -496,7 +496,7 @@ class Variables:
                 #
                 # FIXED: the Re > 1 branch used to redefine Kn as M/sqrt(Re),
                 # which made Cd step by 15.0% at M = 0.1 and 33.4% at M = 0.5
-                # across Re = 1. That was a defect, not a modelling seam:
+                # across Re = 1. That was a defect, not a modeling seam:
                 #   (a) Kn = sqrt(pi*gamma/2) * M/Re is THE kinetic-theory
                 #       relation for a hard-sphere gas with Kn built on the
                 #       particle diameter. Verified against four independent
@@ -642,7 +642,7 @@ class Variables:
                 #   compatibility. Chapter, page and equation numbers were not
                 #   verified -- no accessible copy.
                 # The four arms are named published correlations; each is
-                # labelled at its branch below.
+                # labeled at its branch below.
                 if _re < 1e-9:
                     return 0
 

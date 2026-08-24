@@ -15,9 +15,9 @@ try:  # mpi4py needs a system MPI runtime; keep it optional at import time
     # Importing mpi4py.MPI calls MPI_Init by default, so merely importing lptlib
     # would turn the interpreter into an MPI singleton. That breaks any process
     # that later wants to launch mpiexec itself (the gated MPI tests do exactly
-    # that). Defer initialisation to _init_mpi(), which the MPI entry points
+    # that). Defer initialization to _init_mpi(), which the MPI entry points
     # call. finalize stays enabled so that MPI_Finalize still runs at exit once
-    # we have initialised; disabling it makes ranks exit abnormally.
+    # we have initialized; disabling it makes ranks exit abnormally.
     mpi4py.rc.initialize = False
     mpi4py.rc.finalize = True
     from mpi4py import MPI
@@ -47,14 +47,14 @@ def _require_mpi():
 
 def _init_mpi():
     """
-    Ensure MPI is available *and* initialised before any communicator is used.
+    Ensure MPI is available *and* initialized before any communicator is used.
 
     ``mpi4py.rc.initialize`` is turned off at import time so that importing
     lptlib has no side effects, which means the first MPI entry point reached
     has to call ``MPI_Init`` itself.
 
     Returns:
-        The imported ``mpi4py.MPI`` module, with MPI initialised.
+        The imported ``mpi4py.MPI`` module, with MPI initialized.
     """
     _require_mpi()
     if not MPI.Is_initialized():

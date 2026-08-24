@@ -166,7 +166,7 @@ def test_local_fractions_are_inside_the_unit_cell_on_a_cartesian_grid(
 
     The oblique-shock fixture has ``dz = 2.5e-5``, so the 1e-6 that
     ``_cell_index`` used to hard-code as its octant threshold was 4 per cent of
-    a cell: points that close to a node were placed in the neighbouring cell
+    a cell: points that close to a node were placed in the neighboring cell
     and the weights ran to 1.038. The threshold is a fraction of the local cell
     now, so the excursion is at round-off.
     """
@@ -317,7 +317,7 @@ def test_interpolation_does_not_warn_about_extrapolation(
 
 def test_interpolating_the_coordinate_field_recovers_the_query_point(
         curvilinear_stretched_grid, curvilinear_coordinate_flow):
-    """The sharpest statement of the defect, in metres.
+    """The sharpest statement of the defect, in meters.
 
     Sampling ``q = (x, y, z)`` at the nodes and interpolating it asks where the
     interpolation thinks the query point is. With the correct cell the
@@ -494,7 +494,7 @@ def test_the_exact_node_is_still_within_the_relative_tolerance(synthetic_grid):
     """Tightening the node tolerance must not lose actual nodes.
 
     The counterpart to the test above: on the same fine grid, the node itself
-    is still recognised.
+    is still recognized.
     """
     ni, nj, nk = (int(synthetic_grid.ni[0]), int(synthetic_grid.nj[0]),
                   int(synthetic_grid.nk[0]))
@@ -542,7 +542,7 @@ def test_no_containment_decision_turns_on_the_size_of_the_pad(
     box contains it, so no miss is positive at all and no decision can turn on
     the pad. That is stronger than it used to be. ``_cell_index`` picks one of
     the eight cells around the nearest node by Cartesian octant, which on a
-    curved block can name a neighbouring cell; the search used to stop there
+    curved block can name a neighboring cell; the search used to stop there
     and report the point as out of domain, which rejected 15 per cent of this
     sweep. It now tries the other cells touching that node
     (``Search._relocate_near_node``) and finds the one that holds the point.
@@ -562,7 +562,7 @@ def test_no_containment_decision_turns_on_the_size_of_the_pad(
         f"{int(np.sum(misses > 0.0))} in-domain points are located in a cell "
         f"that does not contain them, the worst by {misses.max():.3e} of a "
         f"cell")
-    # The margin is not an artefact of every point sitting deep inside a cell:
+    # The margin is not an artifact of every point sitting deep inside a cell:
     # some sit exactly on a face, where a positive pad would be the only thing
     # keeping them in the domain, and they are accepted without needing one.
     assert np.any(misses == 0.0), "the sweep no longer reaches any cell face"
@@ -574,7 +574,7 @@ def test_integration_reads_the_metrics_of_the_containing_cell(
 
     The c-space integrator takes its inverse Jacobian from the node at
     ``cell[0]``. That node is now the origin of the cell the point is in
-    rather than a node of a neighbouring cell, so the check here is simply
+    rather than a node of a neighboring cell, so the check here is simply
     that it is the node the computational coordinate points at.
     """
     grid = curvilinear_stretched_grid

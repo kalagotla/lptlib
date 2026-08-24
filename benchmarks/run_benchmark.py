@@ -397,7 +397,7 @@ def _result_checksum(result):
 
 
 def summarize(times):
-    """Median-centred summary of a timing sample.
+    """Median-centered summary of a timing sample.
 
     The mean is deliberately absent from the headline fields. It is kept as
     ``mean_s`` only so a reader can see how far the distribution is skewed;
@@ -572,7 +572,7 @@ def build_parser():
     parser.add_argument("--keep-grid", action="store_true",
                         help="do not delete the generated grid file at the end")
     parser.add_argument("--gfortran-flags", default=None,
-                        help="optimisation flags for the Fortran baseline "
+                        help="optimization flags for the Fortran baseline "
                              "(default -O2, or $GFORTRAN_FLAGS)")
     parser.add_argument("--skip-naive", action="store_true",
                         help="skip the slow naive Python reader")

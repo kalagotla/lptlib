@@ -145,7 +145,7 @@ def main():
         print("\n🎉 Release completed successfully!")
         
     except KeyboardInterrupt:
-        print("\n❌ Release cancelled by user")
+        print("\n❌ Release canceled by user")
         sys.exit(1)
     except Exception as e:
         print(f"\n❌ Release failed: {e}")

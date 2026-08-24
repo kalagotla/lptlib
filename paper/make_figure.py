@@ -13,10 +13,10 @@ Run from the repository root:
 Parameters
 ----------
 MACH, DEFLECTION   free-stream Mach number and wedge deflection, degrees
-DIAMETERS          tracer diameters, metres
+DIAMETERS          tracer diameters, meters
 DENSITY            tracer material density, kg/m^3
 DRAG_MODEL         drag closure used for every inertial particle
-SEED               release point, metres, upstream of the shock at x = 0
+SEED               release point, meters, upstream of the shock at x = 0
 """
 
 import os

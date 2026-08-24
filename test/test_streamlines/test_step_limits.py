@@ -202,7 +202,7 @@ def test_shock_crossing_particle_terminates(oblique_case, monkeypatch):
     """The reported reproducer runs to completion instead of spinning.
 
     A heavy particle driven at the shock with the Loth drag law and
-    nearest-neighbour shock interpolation is exactly the configuration that
+    nearest-neighbor shock interpolation is exactly the configuration that
     tripped the blow-up guard on every iteration.
     """
     calls = {"n": 0}
