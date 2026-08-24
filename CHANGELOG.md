@@ -11,26 +11,9 @@ contemporaneous release note.
 
 ## [Unreleased]
 
-
-### Fixed
-
-- `ObliqueShockData.create_flow` no longer consumes the `ObliqueShock` it is
-  given. It selected the weak or strong branch by overwriting the two-element
-  ratio arrays in place, so the shock object was single-use and a shock shared
-  between two instances silently gave the second one the first one's branch.
-  Output is bit-identical for a single call.
-- `test_dataio_reduction.py::test_compute_reduces_to_grid_shapes` now skips
-  rather than errors when `mpi4py` is absent. `DataIO.compute` runs its whole
-  body through a communicator, and `mpi4py` lives in the optional `mpi` extra,
-  so a checkout installed with `[test]` alone reported a failure on healthy code.
-
-### Removed
-
-- `DataIO.__init__`'s `read_file` parameter, which was accepted and never
-  assigned. Passing it now raises `TypeError` rather than being ignored.
 Nothing yet.
 
-## [0.2.0] - 2026-08-22
+## [0.2.0] - 2026-08-24
 
 ### Added
 
@@ -79,6 +62,20 @@ Nothing yet.
   `__all__` instead of using star imports, so `lptlib.streamlines` resolves to
   the subpackage rather than to the module of the same name.
 
+### Fixed
+
+- `ObliqueShockData.create_flow` no longer consumes the `ObliqueShock` it is
+  given. It selected the weak or strong branch by overwriting the two-element
+  ratio arrays in place, so the shock object was single-use and a shock shared
+  between two instances silently gave the second one the first one's branch.
+  Output is bit-identical for a single call.
+- `test_dataio_reduction.py::test_compute_reduces_to_grid_shapes` now skips
+  rather than errors when `mpi4py` is absent. `DataIO.compute` runs its whole
+  body through a communicator, and `mpi4py` lives in the optional `mpi` extra,
+  so a checkout installed with `[test]` alone reported a failure on healthy code.
+- The `max_steps` warning no longer prints `Particle None` when no task label is
+  set, which is the default in the documented quickstart examples.
+
 ### Removed
 
 - The `gpu` optional extra and the PyTorch CUDA index it resolved from. Neither
@@ -95,6 +92,8 @@ Nothing yet.
 - `seaborn` from the runtime dependencies; it is used only by `main.py` and moved
   to the `examples` extra.
 - `JOSS_SUBMISSION_CHECKLIST.md`, an internal working document.
+- `DataIO.__init__`'s `read_file` parameter, which was accepted and never
+  assigned. Passing it now raises `TypeError` rather than being ignored.
 
 ## [0.1.0] - 2026-08-19
 

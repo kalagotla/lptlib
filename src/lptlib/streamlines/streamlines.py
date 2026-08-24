@@ -191,9 +191,10 @@ class Streamlines:
         if self.max_steps is None or len(self.streamline) < self.max_steps:
             return False
         _where = self.point if location is None else location
-        logger.warning('Particle %s: maximum step count (%s) reached at %s. '
+        _who = 'Particle' if self.task is None else 'Particle %s' % (self.task,)
+        logger.warning('%s: maximum step count (%s) reached at %s. '
                        'Stopping integration.',
-                       self.task, self.max_steps, np.asarray(_where).tolist())
+                       _who, self.max_steps, np.asarray(_where).tolist())
         return True
 
     def _reduce_step_after_blowup(self):

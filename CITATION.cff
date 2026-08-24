@@ -23,6 +23,7 @@ authors:
     orcid: "https://orcid.org/0000-0003-4090-4031"
     affiliation: "Department of Aerospace Engineering and Engineering Mechanics, University of Cincinnati, Cincinnati, OH, USA"
 version: 0.2.0
+date-released: 2026-08-24
 doi: 10.5281/zenodo.22006302
 license: MIT
 repository-code: "https://github.com/kalagotla/lptlib"
