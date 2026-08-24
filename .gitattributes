@@ -1,0 +1,20 @@
+# Line endings.
+#
+# Without this file the repository stores LF while a Windows checkout holds
+# CRLF, so the same working tree reads as clean on Windows and as a hundred
+# modified files from Linux or macOS. Normalizing here settles it for every
+# contributor and for CI.
+#
+# `text=auto` lets git detect text and store it as LF. `eol=lf` also checks it
+# out as LF on every platform, which matters for benchmarks/tracking/openfoam
+# where Allrun is a shell script and the dictionaries are read by OpenFOAM on
+# Linux; CRLF breaks both.
+* text=auto eol=lf
+
+# PLOT3D grid and solution files are unformatted binary. Never transform them.
+*.x  binary
+*.q  binary
+
+# Other binary formats.
+*.png binary
+*.pdf binary
