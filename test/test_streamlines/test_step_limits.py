@@ -59,10 +59,10 @@ def _streamlines(point, **kwargs):
     return sl
 
 
-def _budgeted(monkeypatch, behaviour, budget=CALL_BUDGET):
-    """Replace ``compute_ppath`` with ``behaviour`` under a hard call budget.
+def _budgeted(monkeypatch, behavior, budget=CALL_BUDGET):
+    """Replace ``compute_ppath`` with ``behavior`` under a hard call budget.
 
-    ``behaviour(intg, call_number, kwargs)`` returns the triple
+    ``behavior(intg, call_number, kwargs)`` returns the triple
     ``compute_ppath`` would. Exceeding ``budget`` calls raises, which is how a
     non-terminating loop is reported as a test failure instead of hanging the
     suite.
@@ -75,7 +75,7 @@ def _budgeted(monkeypatch, behaviour, budget=CALL_BUDGET):
             raise AssertionError(
                 f"compute_ppath called more than {budget} times: the "
                 f"integration loop is not terminating")
-        return behaviour(self, calls["n"], kwargs)
+        return behavior(self, calls["n"], kwargs)
 
     monkeypatch.setattr(Integration, "compute_ppath", _patched)
     return calls

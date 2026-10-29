@@ -380,12 +380,12 @@ class Variables:
             case 'sphere':
                 # Piecewise standard drag curve for a rigid sphere; incompressible.
                 # ref: Fluid Mechanics, Frank M. White
-                # This was decided by trail-and-error from VISUAL3 code
+                # This was decided by trial-and-error from VISUAL3 code
                 #   (maintainer's note, kept: the branch points below were tuned
                 #   by hand against the VISUAL3 code, so they are not lifted
                 #   verbatim from White. No edition or equation number was
                 #   recorded, and White is not in paper.bib for that reason.)
-                # The individual arms are recognisable published forms:
+                # The individual arms are recognizable published forms:
                 #   Re < 1e-3        -- Stokes drag, Cd = 24/Re.
                 #   1e-3 <= Re < 1   -- Oseen's correction, Cd = 24/Re (1 + 3Re/16);
                 #                       see Oseen (1927), the 'oseen' case below.
