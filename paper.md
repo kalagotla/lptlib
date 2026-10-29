@@ -12,14 +12,18 @@ authors:
   - name: Dilip Kalagotla
     orcid: 0000-0002-5453-2585
     corresponding: true
-    affiliation: 1
+    affiliation: "1, 2"
   - name: Paul D. Orkwis
     orcid: 0000-0003-4090-4031
     affiliation: 1
 affiliations:
   - name: Department of Aerospace Engineering and Engineering Mechanics, University of Cincinnati, Cincinnati, OH, USA
     index: 1
-date: 24 August 2026
+    ror: 01e3m7079
+  - name: Florida Center for Advanced Aero-Propulsion, FAMU-FSU College of Engineering, Florida State University, Tallahassee, FL, USA
+    index: 2
+    ror: 05g3dte14
+date: 29 October 2026
 bibliography: paper.bib
 ---
 
@@ -37,7 +41,7 @@ Working from a simulated flow rather than an experiment makes the comparison pos
 
 Correcting inertial bias requires a drag law that stays valid across every regime a tracer visits while crossing a shock. A 1 micron alumina particle in a Mach 5 flow passes from continuum to slip to near-free-molecular conditions within a few particle diameters, and no single classical closure covers that path. The practical questions the community asks are consequently comparative. How much does the answer change if the tracer is 300 nanometers instead of 1 micron, or if Henderson's closure [@henderson1976drag] is used rather than Loth's [@loth2008compressibility]? Answering either requires a tool where particle properties and the drag closure are both free parameters over the same flow field and the same integrator.
 
-Such a tool has not been openly available. Researchers in this area have generally written their own single-purpose trackers, which are rarely released, rarely tested, and impossible to compare against one another. `lptlib` was built to close that gap. It exposes nine drag closures through a single argument, from Stokes and Oseen [@oseen1927hydrodynamik] creeping flow through the Schiller-Naumann [@schiller1933drag] and Melling [@melling1997tracer] continuum corrections and a Cunningham-type slip correction [@cunningham1910slip] to the compressible and rarefied models of Henderson, Loth, Tedeschi [@tedeschi1999motion], and Subramaniam and Balachandar [@subramaniam2022particle], with temperature-dependent viscosity from Keyes' correlation or Sutherland's law [@sutherland1893viscosity]. All nine share one integrator, and the results reduce to a gridded field that downstream synthetic-imaging tools can consume. Optical velocimetry motivated the library and is what its shipped test cases cover, but nothing in the tracker is specific to it. The drag closures, the integrator, and the Eulerian reduction apply unchanged wherever inertial particles are advected through a resolved compressible field, from particle dispersion to erosion and impingement. The intended users are therefore experimentalists interpreting high-speed PIV data, and computational researchers studying one-way coupled particle-laden compressible flow.
+Such a tool has not been openly available. Researchers in this area have generally written their own single-purpose trackers, which are rarely released, rarely tested, and impossible to compare against one another. `lptlib` was built to close that gap. It exposes nine drag closures through a single argument, from Stokes and Oseen [@oseen1927hydrodynamik] creeping flow through the Schiller-Naumann [@schiller1933drag] and Melling [@melling1997tracer] continuum corrections and a Cunningham-type slip correction [@cunningham1910slip] to the compressible and rarefied models of Henderson, Loth, Tedeschi [@tedeschi1999motion], and Subramaniam and Balachandar [@subramaniam2022particle], with temperature-dependent viscosity from Keyes' correlation [@keyes1951viscosity] or Sutherland's law [@sutherland1893viscosity]. All nine share one integrator, and the results reduce to a gridded field that downstream synthetic-imaging tools can consume. Optical velocimetry motivated the library and is what its shipped test cases cover, but nothing in the tracker is specific to it. The drag closures, the integrator, and the Eulerian reduction apply unchanged wherever inertial particles are advected through a resolved compressible field, from particle dispersion to erosion and impingement. The intended users are therefore experimentalists interpreting high-speed PIV data, and computational researchers studying one-way coupled particle-laden compressible flow.
 
 # State of the field
 
@@ -59,7 +63,7 @@ The second is one-way coupling. Particles do not act back on the fluid, which is
 
 The third concerns input throughput. An ensemble reads the flow once and shares it across every particle, so the cost that matters is unsteady tracking, where a run loads a whole directory of PLOT3D solution files before a single trajectory is advanced. The PLOT3D reader loads each file in one buffered `numpy.fromfile` call and reconstructs multi-block arrays by strided slicing and Fortran-order reshaping, avoiding Python-level iteration over grid points [@harris2020numpy; @virtanen2020scipy]. A reproducible benchmark under `benchmarks/` measures the effect, comparing readers only when they perform matched work. On a 2.04 million-point grid the strided reader beats an otherwise identical naive Python reader by a ratio of 27.8, with a 95 percent bootstrap interval of 26.1 to 28.8. Against a compiled Fortran reader doing the identical transpose it is about 1.4 times slower, while the full `read_grid`, which also builds the padded double-precision array and the per-block bounds, is about 1.75 times faster than Fortran doing that same work. Ratios rather than absolute times are reported, since absolute times move by more than an order of magnitude with page-cache state. `benchmarks/README.md` records the machine and explains how to add another.
 
-# Research impact
+# Research impact statement
 
 `lptlib` grew out of, and now underpins, a line of work on particle response and bias correction in supersonic PIV spanning 2020 to 2026. The methodology was first set out for turbomachinery CFD data in @kalagotla2020rotor37. The library then provided the tracking framework and PLOT3D post-processing interface of @kalagotla2023oop and @kalagotla2023api, produced the synthetic PIV data of @kalagotla2024synthetic, supplied the drag-model comparison and particle-size estimation of @kalagotla2024drag, and generated the training data behind the bias corrector of @kalagotla2025bias.
 
@@ -67,14 +71,14 @@ That thread has since appeared in peer-reviewed form. The neural bias corrector 
 
 Use now extends past the group that wrote the library. Two 2026 conference papers from Florida State University apply it to a supersonic wall-mounted hemisphere flow [@kalagotla2026hemisphere] and to uncertainty quantification of particle-inertia effects [@kalagotla2026uq], and the co-authors on those papers took no part in writing it. Adoption by a wholly independent party is not claimed, since the library's first author is common to all of this work.
 
-The library is installable from PyPI, documented, and covered by a test suite that runs on Linux and macOS across Python 3.10 to 3.13. Its verification tests check the implemented oblique-shock relations against an independently coded theta-beta-Mach solution and against published gas-dynamics tables. The particle integrator is checked against a high-accuracy reference integration of the same equation of motion, which it reproduces to a relative velocity error of about 0.1 percent under both Stokes and standard sphere drag, and a physics-matched cross-code comparison against OpenFOAM parcel tracking is provided under `benchmarks/tracking/`.
+The library is installable from PyPI, documented, and covered by a test suite that runs on Linux and macOS across Python 3.10 to 3.13. Its verification tests check the implemented oblique-shock relations against an independently coded theta-beta-Mach solution and against published gas-dynamics tables. The particle integrator is checked against a high-accuracy reference integration of the same equation of motion, which it reproduces to a relative L2 velocity error of about 0.04 percent under both Stokes and standard sphere drag, and a physics-matched cross-code comparison against OpenFOAM parcel tracking is provided under `benchmarks/tracking/`.
 
 # AI usage disclosure
 
-Generative AI coding assistants were used during the development of `lptlib`, in parts of the implementation, the test suite, the documentation, and the preparation of this paper. All such output was reviewed, corrected where necessary, and validated by the authors, who take full responsibility for the software and for the claims made here. The scientific formulation, the choice of models, the design decisions, and the interpretation of all results are the authors' own.
+Generative AI coding assistants were used during the development of `lptlib`, specifically the Cursor editor's agent mode and Anthropic's Claude Code with the Claude Opus 4.6 and Claude Opus 5 models. They assisted with parts of the implementation, the test suite, the benchmarks, the documentation, and the preparation of this paper. All such output was reviewed, corrected where necessary, and validated by the authors, who take full responsibility for the software and for the claims made here. The scientific formulation, the choice of models, the design decisions, and the interpretation of all results are the authors' own.
 
 # Acknowledgements
 
-The authors thank Harpreet Chhabra for contributions to early test cases, and Daniel Cuppoletti for discussions on the experimental context. This work was carried out in the Department of Aerospace Engineering and Engineering Mechanics at the University of Cincinnati.
+The authors thank Harpreet Chhabra for contributions to early test cases, and Daniel Cuppoletti for discussions on the experimental context. This work was carried out in the Department of Aerospace Engineering and Engineering Mechanics at the University of Cincinnati, which supported it financially. The University of Cincinnati had no involvement in the design of the software or in the preparation of this paper.
 
 # References
